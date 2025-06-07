@@ -1,11 +1,19 @@
+
 "use client";
 
-import type { Activity, ItineraryDay, TripDetails } from '@/lib/types';
+import type { Activity, ItineraryDay, TripDetails, ItineraryWeek } from '@/lib/types';
 import ActivityCard from './ActivityCard';
-import { format, parseISO, differenceInDays, addDays } from 'date-fns';
+import {
+  startOfWeek, endOfWeek, eachDayOfInterval, format, parseISO,
+  isWithinInterval, addDays, isBefore, isAfter, isSameDay
+} from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarDays, Plane,Briefcase } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { CalendarDays, Plane, Briefcase, CalendarRange, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 
 interface ActivityListProps {
   activities: Activity[];
@@ -14,108 +22,231 @@ interface ActivityListProps {
   onDeleteActivity: (activityId: string) => void;
 }
 
-const groupActivitiesByDay = (activities: Activity[], tripData: TripDetails): ItineraryDay[] => {
-  const grouped: Record<string, ItineraryDay> = {};
+const groupActivitiesByWeekAndDay = (
+  activities: Activity[],
+  tripData: TripDetails
+): ItineraryWeek[] => {
+  const weeks: ItineraryWeek[] = [];
+  if (!tripData.inicio || !tripData.fin) return weeks;
+
   const tripStartDate = parseISO(tripData.inicio);
   const tripEndDate = parseISO(tripData.fin);
-  const totalDays = differenceInDays(tripEndDate, tripStartDate) + 1;
+  const today = new Date(); // Current real-world date
 
-  for (let i = 0; i < totalDays; i++) {
-    const currentDate = addDays(tripStartDate, i);
-    const dateStr = format(currentDate, 'yyyy-MM-dd'); // Corrected DD to dd
-    
-    const currentCity = tripData.ciudades.find(c => 
-        parseISO(c.arrivalDate) <= currentDate && parseISO(c.departureDate) >= currentDate
-    );
+  if (isBefore(tripEndDate, tripStartDate)) return weeks;
 
-    const cityInfo = currentCity ? `${currentCity.name}, ${currentCity.country}` : 'En tránsito / Sin ciudad asignada';
-    
-    // Check if it's a travel day (departure from one city or arrival to another)
-    const isTravelDay = tripData.ciudades.some(c => c.arrivalDate === dateStr || c.departureDate === dateStr);
-    
-    // Check if it's a work day
-    const isWorkDay = tripData.trabajo_ini && tripData.trabajo_fin &&
-                      parseISO(tripData.trabajo_ini) <= currentDate &&
-                      parseISO(tripData.trabajo_fin) >= currentDate;
+  let currentIteratingMonday = startOfWeek(tripStartDate, { weekStartsOn: 1 });
+  const firstTripWeekStartDateStr = format(startOfWeek(tripStartDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-    grouped[dateStr] = {
-      date: dateStr,
-      cityInfo,
-      activities: [],
-      isWorkDay: !!isWorkDay,
-      isTravelDay: !!isTravelDay,
-    };
-  }
-  
-  activities.sort((a, b) => a.time.localeCompare(b.time)).forEach(activity => {
-    if (grouped[activity.date]) {
-      grouped[activity.date].activities.push(activity);
-    } else {
-      // This case should ideally not happen if all dates are pre-initialized
-      // but as a fallback:
-      const activityDate = parseISO(activity.date);
-      const currentCity = tripData.ciudades.find(c => 
-        parseISO(c.arrivalDate) <= activityDate && parseISO(c.departureDate) >= activityDate
+  while (!isAfter(currentIteratingMonday, tripEndDate)) {
+    const weekStartDate = currentIteratingMonday;
+    const weekEndDate = endOfWeek(currentIteratingMonday, { weekStartsOn: 1 });
+    const weekStartDateStr = format(weekStartDate, 'yyyy-MM-dd');
+
+    const weekLabel = `Semana del ${format(weekStartDate, "d 'de' MMM", { locale: es })} al ${format(weekEndDate, "d 'de' MMM 'de' yyyy", { locale: es })}`;
+
+    const daysInThisWeek: ItineraryDay[] = [];
+    const daysInterval = eachDayOfInterval({ start: weekStartDate, end: weekEndDate });
+
+    for (const dayDate of daysInterval) {
+      if (!isWithinInterval(dayDate, { start: tripStartDate, end: tripEndDate })) {
+        continue;
+      }
+      const dateStr = format(dayDate, 'yyyy-MM-dd');
+      const activitiesForDay = activities
+        .filter(act => act.date === dateStr)
+        .sort((a, b) => a.time.localeCompare(b.time));
+
+      const currentCity = tripData.ciudades.find(c =>
+        !isBefore(dayDate, parseISO(c.arrivalDate)) && !isAfter(dayDate, parseISO(c.departureDate))
       );
       const cityInfo = currentCity ? `${currentCity.name}, ${currentCity.country}` : 'En tránsito / Sin ciudad asignada';
+      const isTravelDay = tripData.ciudades.some(c => c.arrivalDate === dateStr || c.departureDate === dateStr);
       const isWorkDay = tripData.trabajo_ini && tripData.trabajo_fin &&
-                      parseISO(tripData.trabajo_ini) <= activityDate &&
-                      parseISO(tripData.trabajo_fin) >= activityDate;
+        !isBefore(dayDate, parseISO(tripData.trabajo_ini)) &&
+        !isAfter(dayDate, parseISO(tripData.trabajo_fin));
 
-      grouped[activity.date] = {
-        date: activity.date,
+      daysInThisWeek.push({
+        date: dateStr,
         cityInfo,
-        activities: [activity],
+        activities: activitiesForDay,
         isWorkDay: !!isWorkDay,
-        isTravelDay: false, // Cannot reliably determine this for out-of-range dates
-      };
+        isTravelDay: !!isTravelDay,
+      });
     }
-  });
-  
-  return Object.values(grouped).sort((a,b) => a.date.localeCompare(b.date));
+
+    if (daysInThisWeek.length > 0) {
+      const totalWeeklyCost = daysInThisWeek.reduce((sum, day) =>
+        sum + day.activities.reduce((daySum, act) => daySum + (act.cost || 0), 0), 0);
+
+      let isDefaultExpanded = false;
+      if (isBefore(today, tripStartDate)) { // Today is before trip starts
+        if (weekStartDateStr === firstTripWeekStartDateStr) {
+          isDefaultExpanded = true;
+        }
+      } else if (!isAfter(today, tripEndDate)) { // Today is during the trip (or trip start/end day)
+        if (isWithinInterval(today, { start: weekStartDate, end: weekEndDate })) {
+          isDefaultExpanded = true;
+        }
+      }
+      // If today is after trip end, nothing expanded by default
+
+      weeks.push({
+        weekStartDate: weekStartDateStr,
+        weekEndDate: format(weekEndDate, 'yyyy-MM-dd'),
+        weekLabel,
+        days: daysInThisWeek,
+        totalWeeklyCost,
+        isDefaultExpanded,
+      });
+    }
+    currentIteratingMonday = addDays(currentIteratingMonday, 7);
+  }
+  return weeks;
 };
 
 
 export default function ActivityList({ activities, tripData, onEditActivity, onDeleteActivity }: ActivityListProps) {
-  const dailyItinerary = groupActivitiesByDay(activities, tripData);
+  const [processedWeeks, setProcessedWeeks] = useState<ItineraryWeek[]>([]);
+  const [openWeekKeys, setOpenWeekKeys] = useState<string[]>([]);
+  const [openDayKeys, setOpenDayKeys] = useState<Record<string, string[]>>({});
 
-  if (dailyItinerary.length === 0) {
+  useEffect(() => {
+    const newProcessedWeeks = groupActivitiesByWeekAndDay(activities, tripData);
+    setProcessedWeeks(newProcessedWeeks);
+
+    const defaultOpenWeeks = newProcessedWeeks
+      .filter(week => week.isDefaultExpanded)
+      .map(week => week.weekStartDate);
+    setOpenWeekKeys(defaultOpenWeeks);
+
+    // By default, days within an expanded week remain collapsed, user can expand them.
+    // If you want to expand all days of the default expanded week:
+    /*
+    const initialOpenDays: Record<string, string[]> = {};
+    if (defaultOpenWeeks.length > 0) {
+      const defaultExpandedWeekData = newProcessedWeeks.find(w => w.weekStartDate === defaultOpenWeeks[0]);
+      if (defaultExpandedWeekData) {
+        initialOpenDays[defaultOpenWeeks[0]] = defaultExpandedWeekData.days.map(d => d.date);
+      }
+    }
+    setOpenDayKeys(initialOpenDays);
+    */
+  }, [activities, tripData]);
+
+  const handleToggleAllWeeks = (expand: boolean) => {
+    if (expand) {
+      setOpenWeekKeys(processedWeeks.map(w => w.weekStartDate));
+      // Optionally expand all days too
+      /*
+      const allDaysExpanded: Record<string, string[]> = {};
+      processedWeeks.forEach(week => {
+        allDaysExpanded[week.weekStartDate] = week.days.map(d => d.date);
+      });
+      setOpenDayKeys(allDaysExpanded);
+      */
+    } else {
+      setOpenWeekKeys([]);
+      setOpenDayKeys({}); // Collapse all days when collapsing all weeks
+    }
+  };
+
+  const handleDayAccordionChange = (weekKey: string, newOpenDays: string[]) => {
+    setOpenDayKeys(prev => ({ ...prev, [weekKey]: newOpenDays }));
+  };
+
+  if (processedWeeks.length === 0 && activities.length > 0) {
+     return <p className="text-muted-foreground text-center py-8">Procesando itinerario...</p>;
+  }
+  if (processedWeeks.length === 0) {
     return <p className="text-muted-foreground text-center py-8">No hay actividades planificadas todavía.</p>;
   }
 
   return (
-    <div className="space-y-8">
-      {dailyItinerary.map((day) => (
-        <Card key={day.date} className="rounded-2xl shadow-lg overflow-hidden">
-          <CardHeader className="bg-muted/50">
-            <CardTitle className="font-headline text-2xl text-primary flex flex-col sm:flex-row justify-between items-start sm:items-center">
-              <span className="flex items-center">
-                <CalendarDays size={24} className="mr-3" />
-                {format(parseISO(day.date), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
-              </span>
-              <div className="text-sm font-normal text-muted-foreground mt-1 sm:mt-0 flex items-center gap-2">
-                {day.isTravelDay && <Plane size={16} className="text-accent" />}
-                {day.isWorkDay && <Briefcase size={16} className="text-secondary-foreground" />}
-                <span>{day.cityInfo}</span>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 md:p-6">
-            {day.activities.length > 0 ? (
-              day.activities.map(activity => (
-                <ActivityCard 
-                  key={activity.id} 
-                  activity={activity} 
-                  onEdit={onEditActivity}
-                  onDelete={onDeleteActivity}
-                />
-              ))
-            ) : (
-              <p className="text-muted-foreground py-4">Día libre o sin actividades específicas.</p>
-            )}
-          </CardContent>
-        </Card>
-      ))}
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-end gap-2 mb-4">
+        <Button variant="outline" size="sm" onClick={() => handleToggleAllWeeks(true)}>
+          <ChevronDown className="mr-2 h-4 w-4" /> Expandir Semanas
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => handleToggleAllWeeks(false)}>
+          <ChevronUp className="mr-2 h-4 w-4" /> Colapsar Semanas
+        </Button>
+      </div>
+      <Accordion type="multiple" value={openWeekKeys} onValueChange={setOpenWeekKeys} className="w-full space-y-4">
+        {processedWeeks.map((week) => (
+          <AccordionItem key={week.weekStartDate} value={week.weekStartDate} className="border-none">
+            <Card className="rounded-2xl shadow-lg overflow-hidden bg-card">
+              <AccordionTrigger className="w-full p-0 hover:no-underline data-[state=closed]:hover:bg-muted/40 data-[state=open]:hover:bg-muted/70 rounded-t-2xl transition-colors data-[state=open]:bg-muted/50 data-[state=closed]:bg-muted/20">
+                <div className="flex justify-between items-center w-full px-4 py-3 sm:px-6 sm:py-4">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <CalendarRange size={20} sm-size={22} className="text-primary shrink-0" />
+                    <span className="font-headline text-base sm:text-lg md:text-xl text-primary text-left">{week.weekLabel}</span>
+                  </div>
+                  <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                    <Badge variant="secondary" className="text-xs sm:text-sm whitespace-nowrap">
+                      Gastos: {week.totalWeeklyCost.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                    </Badge>
+                    {/* Default Accordion Chevron will be rendered here */}
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="p-0">
+                <div className="border-t border-border p-2 sm:p-4 md:p-6">
+                  {week.days.length > 0 ? (
+                    <Accordion
+                      type="multiple"
+                      value={openDayKeys[week.weekStartDate] || []}
+                      onValueChange={(days) => handleDayAccordionChange(week.weekStartDate, days)}
+                      className="w-full space-y-2"
+                    >
+                      {week.days.map((day) => (
+                        <AccordionItem key={day.date} value={day.date} className="border-none">
+                          <Card className="rounded-xl shadow-md overflow-hidden bg-background">
+                             <AccordionTrigger className="w-full p-0 hover:no-underline data-[state=closed]:hover:bg-accent/10 data-[state=open]:hover:bg-accent/20 data-[state=open]:bg-accent/10 rounded-t-xl transition-colors">
+                                <div className="flex justify-between items-center w-full px-3 py-2 sm:px-4 sm:py-3">
+                                  <div className="flex items-center gap-2">
+                                    <CalendarDays size={18} className="text-secondary-foreground shrink-0" />
+                                    <span className="font-semibold text-sm sm:text-md text-secondary-foreground text-left">
+                                      {format(parseISO(day.date), "EEEE, d 'de' MMMM", { locale: es })}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs font-normal text-muted-foreground flex items-center gap-1 sm:gap-2 shrink-0">
+                                    {day.isTravelDay && <Plane size={14} className="text-blue-500" />}
+                                    {day.isWorkDay && <Briefcase size={14} className="text-green-500" />}
+                                    <span className="truncate max-w-[100px] sm:max-w-[150px] md:max-w-xs text-right">{day.cityInfo}</span>
+                                     {/* Default Accordion Chevron for day */}
+                                  </div>
+                                </div>
+                             </AccordionTrigger>
+                             <AccordionContent className="p-0">
+                                <div className="border-t border-border p-2 sm:p-3 md:p-4">
+                                  {day.activities.length > 0 ? (
+                                    day.activities.map(activity => (
+                                      <ActivityCard
+                                        key={activity.id}
+                                        activity={activity}
+                                        onEdit={onEditActivity}
+                                        onDelete={onDeleteActivity}
+                                      />
+                                    ))
+                                  ) : (
+                                    <p className="text-muted-foreground text-sm py-3 px-1">Día libre o sin actividades específicas.</p>
+                                  )}
+                                </div>
+                             </AccordionContent>
+                          </Card>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  ) : (
+                    <p className="text-muted-foreground text-center py-4">No hay días planificados en esta semana.</p>
+                  )}
+                </div>
+              </AccordionContent>
+            </Card>
+          </AccordionItem>
+        ))}
+      </Accordion>
     </div>
   );
 }

@@ -54,7 +54,7 @@ export interface WeatherData {
   city: string;
   temperature: number;
   description: string;
-  iconUrl?: string; 
+  iconUrl?: string;
   alert?: string;
 }
 
@@ -70,3 +70,12 @@ export type BudgetPerCity = {
   city: string;
   totalCost: number;
 };
+
+export interface ItineraryWeek {
+  weekStartDate: string; // YYYY-MM-DD, Monday
+  weekEndDate: string; // YYYY-MM-DD, Sunday
+  weekLabel: string;
+  days: ItineraryDay[];
+  totalWeeklyCost: number;
+  isDefaultExpanded: boolean;
+}
