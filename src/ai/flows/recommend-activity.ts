@@ -42,7 +42,7 @@ Trip Details: {{{tripDetails}}}
 City: {{{city}}}
 Interests: {{{interests}}}
 
-Respond with the activity, the reason, and the suggested time.
+Respond with the activity, the reason, and the suggested time. IMPORTANT: Your entire response (activity, reason, and suggestedTime if provided) MUST be in Spanish.
 `,
 });
 
