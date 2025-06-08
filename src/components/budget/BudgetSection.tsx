@@ -1,12 +1,15 @@
+
 "use client";
 
 import type { TripDetails, Expense } from '@/lib/types';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import SectionCard from '@/components/ui/SectionCard';
 import BudgetChart from './BudgetChart';
-import { PiggyBank, PlusCircle, ListOrdered, Euro } from 'lucide-react';
+import CumulativeBudgetChart from './CumulativeBudgetChart'; // Import new chart
+import { PiggyBank, PlusCircle, ListOrdered, Euro, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '../ui/badge';
@@ -15,6 +18,13 @@ import { Badge } from '../ui/badge';
 
 interface BudgetSectionProps {
   initialTripData: TripDetails;
+}
+
+interface GroupedExpenses {
+  [category: string]: {
+    expenses: Expense[];
+    total: number;
+  };
 }
 
 export default function BudgetSection({ initialTripData }: BudgetSectionProps) {
@@ -27,7 +37,19 @@ export default function BudgetSection({ initialTripData }: BudgetSectionProps) {
     // setIsExpenseFormOpen(false);
   };
 
-  const totalOverallCost = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const totalOverallCost = useMemo(() => expenses.reduce((sum, exp) => sum + exp.amount, 0), [expenses]);
+
+  const groupedExpenses = useMemo((): GroupedExpenses => {
+    return expenses.reduce((acc: GroupedExpenses, expense: Expense) => {
+      const category = expense.category;
+      if (!acc[category]) {
+        acc[category] = { expenses: [], total: 0 };
+      }
+      acc[category].expenses.push(expense);
+      acc[category].total += expense.amount;
+      return acc;
+    }, {});
+  }, [expenses]);
 
   const headerActions = (
     <Button onClick={() => alert("Próximamente: Añadir nuevo gasto")} disabled>
@@ -47,33 +69,63 @@ export default function BudgetSection({ initialTripData }: BudgetSectionProps) {
     >
       <div className="space-y-8">
         <BudgetChart expenses={expenses} />
+        <CumulativeBudgetChart expenses={expenses} />
         
         <Card className="rounded-xl shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline text-xl text-primary flex items-center">
               <ListOrdered size={22} className="mr-2" />
-              Lista de Gastos
+              Lista de Gastos por Categoría
             </CardTitle>
-            <CardDescription>Detalle de todos los gastos registrados.</CardDescription>
+            <CardDescription>Detalle de todos los gastos registrados, agrupados por categoría.</CardDescription>
           </CardHeader>
           <CardContent>
-            {expenses.length > 0 ? (
-              <ul className="space-y-3">
-                {expenses.map(expense => (
-                  <li key={expense.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-muted/30 rounded-lg">
-                    <div>
-                      <p className="font-semibold text-foreground">{expense.description}</p>
-                      <p className="text-sm text-muted-foreground">
-                        <span className="capitalize">{expense.category}</span> en {expense.city} - {format(parseISO(expense.date), "d MMM yyyy", { locale: es })}
-                      </p>
-                    </div>
-                    <Badge variant="secondary" className="mt-2 sm:mt-0 text-base px-3 py-1 bg-primary/10 text-primary border-primary/20">
-                      <Euro size={14} className="mr-1"/>
-                      {expense.amount.toLocaleString('es-ES')}
-                    </Badge>
-                  </li>
+            {Object.keys(groupedExpenses).length > 0 ? (
+              <Accordion type="multiple" className="w-full space-y-2">
+                {Object.entries(groupedExpenses).map(([category, data]) => (
+                  <AccordionItem key={category} value={category} className="border-none">
+                     <Card className="rounded-xl shadow-md overflow-hidden bg-muted/20">
+                      <AccordionTrigger className="w-full p-0 hover:no-underline data-[state=closed]:hover:bg-accent/10 data-[state=open]:hover:bg-accent/20 data-[state=open]:bg-accent/10 rounded-t-xl transition-colors">
+                        <div className="flex justify-between items-center w-full px-3 py-2 sm:px-4 sm:py-3">
+                          <div className="flex items-center gap-2">
+                            <Tag size={18} className="text-secondary-foreground shrink-0" />
+                            <span className="font-semibold text-sm sm:text-md text-secondary-foreground text-left capitalize">
+                              {category}
+                            </span>
+                          </div>
+                          <Badge variant="secondary" className="text-base px-3 py-1 bg-primary/10 text-primary border-primary/20">
+                            Total: {data.total.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                          </Badge>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="p-0">
+                        <div className="border-t border-border p-2 sm:p-3 md:p-4 bg-background">
+                          {data.expenses.length > 0 ? (
+                             <ul className="space-y-3">
+                              {data.expenses.sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime()).map(expense => (
+                                <li key={expense.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-muted/30 rounded-lg shadow-sm">
+                                  <div>
+                                    <p className="font-semibold text-foreground">{expense.description}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                      En {expense.city} - {format(parseISO(expense.date), "d MMM yyyy", { locale: es })}
+                                    </p>
+                                  </div>
+                                  <Badge variant="outline" className="mt-2 sm:mt-0 text-sm px-2.5 py-1">
+                                    <Euro size={12} className="mr-1"/>
+                                    {expense.amount.toLocaleString('es-ES')}
+                                  </Badge>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                             <p className="text-muted-foreground text-sm py-3 px-1">No hay gastos en esta categoría.</p>
+                          )}
+                        </div>
+                      </AccordionContent>
+                    </Card>
+                  </AccordionItem>
                 ))}
-              </ul>
+              </Accordion>
             ) : (
                <p className="text-muted-foreground text-center py-4">No hay gastos registrados.</p>
             )}
@@ -92,3 +144,4 @@ export default function BudgetSection({ initialTripData }: BudgetSectionProps) {
     </SectionCard>
   );
 }
+
