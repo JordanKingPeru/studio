@@ -34,7 +34,6 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
   const { toast } = useToast();
 
   useEffect(() => {
-    // Set current date on mount and update every minute
     setCurrentDate(new Date());
     const timer = setInterval(() => setCurrentDate(new Date()), 60000);
     return () => clearInterval(timer);
@@ -70,7 +69,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
   const currentTripDataForWidgets = useMemo((): TripDetails => ({
     ...initialStaticTripData,
     activities: activities, 
-    expenses: initialStaticTripData.expenses || [], // Ensure expenses is always an array
+    expenses: initialStaticTripData.expenses || [], 
   }), [initialStaticTripData, activities]);
 
 
@@ -88,35 +87,26 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     const activityId = activity.id && !activity.id.startsWith('temp-') ? activity.id : doc(collection(db, "trips", TRIP_ID, "activities")).id;
     const activityRef = doc(db, "trips", TRIP_ID, "activities", activityId);
     
-    const activityBaseData: Partial<Activity> = {
-      ...activity,
-      id: activityId, 
-      updatedAt: serverTimestamp() as FieldValue,
-    };
+    const activityBaseData: Partial<Activity> = { ...activity, id: activityId };
 
+    // Sanitize data for Firestore: remove undefined fields
+    const activityDataForFirestore: Record<string, any> = {};
+    for (const key in activityBaseData) {
+      if (Object.prototype.hasOwnProperty.call(activityBaseData, key)) {
+        const typedKey = key as keyof Activity;
+        if (activityBaseData[typedKey] !== undefined) {
+          activityDataForFirestore[typedKey] = activityBaseData[typedKey];
+        }
+      }
+    }
+    
+    activityDataForFirestore.updatedAt = serverTimestamp();
     if (!activities.find(a => a.id === activityId)) { 
-        activityBaseData.createdAt = serverTimestamp() as FieldValue;
+        activityDataForFirestore.createdAt = serverTimestamp();
     }
-
-    // Prepare data for Firestore, ensuring 'cost' is not undefined
-    const dataToSave = { ...activityBaseData };
-    if (dataToSave.cost === undefined) {
-      delete dataToSave.cost;
-    }
-    // Ensure notes is not undefined (if it's an optional field you don't want to store as undefined)
-    if (dataToSave.notes === undefined) {
-        delete dataToSave.notes;
-    }
-    // Ensure attachments is not undefined. Firestore handles empty arrays fine.
-    if (dataToSave.attachments === undefined) {
-        delete dataToSave.attachments;
-    } else if (dataToSave.attachments === null) { // Also handle null if it could occur
-        delete dataToSave.attachments;
-    }
-
 
     try {
-      await setDoc(activityRef, dataToSave, { merge: true });
+      await setDoc(activityRef, activityDataForFirestore, { merge: true });
       toast({
         title: activity.id && !activity.id.startsWith('temp-') ? "Actividad Actualizada" : "Actividad Añadida",
         description: `"${activity.title}" ha sido guardada.`,
@@ -129,6 +119,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
         title: "Error al guardar actividad",
         description: `No se pudo guardar la actividad en la base de datos. Error: ${(error as Error).message}`,
       });
+      throw error; // Re-throw para que AISuggestionButton pueda manejarlo si es necesario
     }
   };
   
@@ -137,28 +128,51 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     updatedActivities.forEach(activity => {
       if (activity.id && !activity.id.startsWith('temp-')) {
         const activityRef = doc(db, "trips", TRIP_ID, "activities", activity.id);
-        const activityData: Partial<Activity> = { 
+        
+        const updatePayload: Partial<Activity> = { 
           order: activity.order, 
           time: activity.time,
           date: activity.date, 
           city: activity.city, 
+          cost: activity.cost, // Include cost in the payload
+          notes: activity.notes, // Include notes
+          attachments: activity.attachments, // Include attachments
           updatedAt: serverTimestamp() as FieldValue 
         };
-        // Defensively remove cost if undefined, though DND usually doesn't change it.
-        if (activity.cost === undefined) {
-            // If cost is part of what DND could change and it becomes undefined, delete it
-            // delete activityData.cost; // This line is commented as DND primarily affects order/time
-        } else {
-            activityData.cost = activity.cost;
+
+        // Sanitize payload: remove undefined fields
+        const sanitizedPayload: Record<string, any> = {};
+        for (const key in updatePayload) {
+          if (Object.prototype.hasOwnProperty.call(updatePayload, key)) {
+            const typedKey = key as keyof Activity;
+            if (updatePayload[typedKey] !== undefined) {
+                sanitizedPayload[typedKey] = updatePayload[typedKey];
+            }
+          }
         }
-        batch.update(activityRef, activityData);
+        if (Object.keys(sanitizedPayload).length > 0) {
+            batch.update(activityRef, sanitizedPayload);
+        }
       }
     });
 
     try {
       await batch.commit();
-      setActivities(updatedActivities); 
-      // fetchActivities(); // Optionally re-fetch to ensure full consistency
+      // Update local state to reflect changes immediately before re-fetch (optimistic update)
+      // Then re-fetch for consistency, or merge carefully
+      setActivities(prevActivities => {
+        return prevActivities.map(pa => {
+          const updatedVersion = updatedActivities.find(ua => ua.id === pa.id);
+          return updatedVersion ? { ...pa, ...updatedVersion } : pa;
+        }).sort((a,b) => { // Ensure consistent sorting locally
+            const dateComparison = a.date.localeCompare(b.date);
+            if (dateComparison !== 0) return dateComparison;
+            const timeComparison = a.time.localeCompare(b.time);
+            if (timeComparison !== 0) return timeComparison;
+            return (a.order ?? 0) - (b.order ?? 0);
+        });
+      });
+      // fetchActivities(); // Re-fetch for full consistency, or rely on optimistic update + future fetches.
     } catch (error) {
       console.error("Error batch updating activities:", error);
       toast({
@@ -264,3 +278,4 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     </div>
   );
 }
+
