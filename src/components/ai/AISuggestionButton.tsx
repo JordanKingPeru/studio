@@ -18,6 +18,7 @@ import type { City, Activity, ActivityCategory } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { format, parseISO } from 'date-fns';
+import { Label } from '@/components/ui/label'; // Import standard Label for manual use
 
 
 const suggestionSchema = z.object({
@@ -45,7 +46,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
   const [suggestedDate, setSuggestedDate] = useState('');
   const [suggestedTime, setSuggestedTime] = useState('12:00');
 
-  const defaultTripDetails = `Viaje para ${tripFamilia} desde ${tripDates.inicio} hasta ${tripDates.fin}.`;
+  const defaultTripDetails = `Viaje para ${tripFamilia} desde ${format(parseISO(tripDates.inicio), "dd/MM/yyyy")} hasta ${format(parseISO(tripDates.fin), "dd/MM/yyyy")}.`;
 
   const form = useForm<SuggestionFormData>({
     resolver: zodResolver(suggestionSchema),
@@ -56,6 +57,21 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
     },
   });
   
+  useEffect(() => {
+    if (isOpen) {
+        form.reset({
+            city: cities[0]?.name || '',
+            interests: '',
+            tripDetails: defaultTripDetails,
+        });
+        setSuggestion(null);
+        setError(null);
+        const initialDate = cities[0]?.arrivalDate || tripDates.inicio;
+        setSuggestedDate(initialDate);
+        setSuggestedTime("12:00");
+    }
+  }, [isOpen, cities, tripDates, form, defaultTripDetails]);
+
   const handleGenerateSuggestion: SubmitHandler<SuggestionFormData> = async (data) => {
     setIsLoading(true);
     setError(null);
@@ -64,13 +80,10 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
       const result = await recommendActivity(data);
       setSuggestion(result);
 
-      // Initialize date and time for the suggestion
       const selectedCityObject = cities.find(c => c.name === data.city);
-      let initialDate = tripDates.inicio; // Fallback to trip start date
-      if (selectedCityObject && selectedCityObject.arrivalDate) {
-        initialDate = selectedCityObject.arrivalDate;
-      }
-      setSuggestedDate(initialDate);
+      let initialDateForSuggestion = selectedCityObject?.arrivalDate || tripDates.inicio;
+      
+      setSuggestedDate(initialDateForSuggestion);
       setSuggestedTime(result.suggestedTime || '12:00');
 
     } catch (err) {
@@ -97,7 +110,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
         title: suggestion.activity,
         category: 'Ocio' as ActivityCategory, 
         notes: suggestion.reason,
-        // cost: undefined, // Firestore does not like undefined, handle in DashboardView
+        // cost: undefined, // This will be handled in DashboardView
         city: selectedCityName,
         order: Date.now(), 
         attachments: [],
@@ -109,7 +122,6 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
       });
       setSuggestion(null);
       setIsOpen(false);
-      form.reset({ city: cities[0]?.name || '', interests: '', tripDetails: defaultTripDetails });
     } else {
         toast({
             variant: "destructive",
@@ -121,14 +133,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
 
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => {
-      setIsOpen(open);
-      if (!open) { // Reset state when dialog closes
-        setSuggestion(null);
-        setError(null);
-        form.reset({ city: cities[0]?.name || '', interests: '', tripDetails: defaultTripDetails });
-      }
-    }}>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" className="bg-accent hover:bg-accent/90 text-accent-foreground border-accent-foreground/20">
           <Sparkles className="mr-2 h-5 w-5" />
@@ -153,6 +158,8 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
                   <Select 
                     onValueChange={(value) => {
                       field.onChange(value);
+                      const selectedCityObject = cities.find(c => c.name === value);
+                      setSuggestedDate(selectedCityObject?.arrivalDate || tripDates.inicio);
                     }} 
                     defaultValue={field.value}
                   >
@@ -218,24 +225,28 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
             </div>
             
             <div className="grid grid-cols-2 gap-4">
-                <FormItem>
-                    <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Fecha</FormLabel>
+                <div className="space-y-1">
+                    <Label htmlFor="suggestedDateAI" className="flex items-center text-sm font-medium"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Fecha</Label>
                     <Input 
+                        id="suggestedDateAI"
                         type="date" 
                         value={suggestedDate} 
                         onChange={(e) => setSuggestedDate(e.target.value)}
                         min={tripDates.inicio}
                         max={tripDates.fin}
+                        className="text-sm"
                     />
-                </FormItem>
-                <FormItem>
-                    <FormLabel className="flex items-center"><ClockIcon className="mr-2 h-4 w-4 text-muted-foreground" />Hora</FormLabel>
+                </div>
+                <div className="space-y-1">
+                    <Label htmlFor="suggestedTimeAI" className="flex items-center text-sm font-medium"><ClockIcon className="mr-2 h-4 w-4 text-muted-foreground" />Hora</Label>
                     <Input 
+                        id="suggestedTimeAI"
                         type="time" 
                         value={suggestedTime} 
                         onChange={(e) => setSuggestedTime(e.target.value)} 
+                        className="text-sm"
                     />
-                </FormItem>
+                </div>
             </div>
 
             <Button onClick={handleAddSuggestedActivity} className="w-full" variant="default">
@@ -247,9 +258,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
         <DialogFooter className="mt-4">
             <DialogClose asChild>
                 <Button type="button" variant="outline" onClick={() => { 
-                    setSuggestion(null); 
-                    setError(null); 
-                    form.reset({ city: cities[0]?.name || '', interests: '', tripDetails: defaultTripDetails }); 
+                    setIsOpen(false); // This will trigger useEffect to reset
                 }}>Cerrar</Button>
             </DialogClose>
         </DialogFooter>
