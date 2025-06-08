@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { TripDetails, Activity, City } from '@/lib/types';
+import type { TripDetails, Activity, City, Expense } from '@/lib/types'; // Added Expense
 import TripHeader from './TripHeader';
 import ItinerarySection from '@/components/itinerary/ItinerarySection';
 import CalendarSection from '@/components/calendar/CalendarSection';
@@ -15,16 +15,16 @@ import BudgetSnapshot from './BudgetSnapshot';
 import QuickActions from './QuickActions';
 import { parseISO, isWithinInterval } from 'date-fns';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, serverTimestamp, query, orderBy as firestoreOrderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, serverTimestamp, query, orderBy as firestoreOrderBy, FieldValue } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
 
 
 interface DashboardViewProps {
-  tripData: TripDetails; // This will primarily be for static trip info like name, dates, cities
+  tripData: TripDetails; 
 }
 
-const TRIP_ID = "defaultTrip"; // Fixed trip ID for now
+const TRIP_ID = "defaultTrip"; 
 
 export default function DashboardView({ tripData: initialStaticTripData }: DashboardViewProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -34,8 +34,9 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
   const { toast } = useToast();
 
   useEffect(() => {
+    // Set current date on mount and update every minute
     setCurrentDate(new Date());
-    const timer = setInterval(() => setCurrentDate(new Date()), 60000); // Update every minute
+    const timer = setInterval(() => setCurrentDate(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
 
@@ -68,7 +69,8 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
 
   const currentTripDataForWidgets = useMemo((): TripDetails => ({
     ...initialStaticTripData,
-    activities: activities, // Use the dynamic activities state
+    activities: activities, 
+    expenses: initialStaticTripData.expenses || [], // Ensure expenses is always an array
   }), [initialStaticTripData, activities]);
 
 
@@ -86,59 +88,77 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     const activityId = activity.id && !activity.id.startsWith('temp-') ? activity.id : doc(collection(db, "trips", TRIP_ID, "activities")).id;
     const activityRef = doc(db, "trips", TRIP_ID, "activities", activityId);
     
-    const activityData: Partial<Activity> = {
+    const activityBaseData: Partial<Activity> = {
       ...activity,
-      id: activityId, // Ensure ID is part of the data being set
-      updatedAt: serverTimestamp(),
+      id: activityId, 
+      updatedAt: serverTimestamp() as FieldValue,
     };
-    if (!activities.find(a => a.id === activityId)) { // New activity
-        activityData.createdAt = serverTimestamp();
+
+    if (!activities.find(a => a.id === activityId)) { 
+        activityBaseData.createdAt = serverTimestamp() as FieldValue;
     }
 
+    // Prepare data for Firestore, ensuring 'cost' is not undefined
+    const dataToSave = { ...activityBaseData };
+    if (dataToSave.cost === undefined) {
+      delete dataToSave.cost;
+    }
+    // Ensure notes is not undefined (if it's an optional field you don't want to store as undefined)
+    if (dataToSave.notes === undefined) {
+        delete dataToSave.notes;
+    }
+    // Ensure attachments is not undefined. Firestore handles empty arrays fine.
+    if (dataToSave.attachments === undefined) {
+        delete dataToSave.attachments;
+    } else if (dataToSave.attachments === null) { // Also handle null if it could occur
+        delete dataToSave.attachments;
+    }
+
+
     try {
-      await setDoc(activityRef, activityData, { merge: true });
+      await setDoc(activityRef, dataToSave, { merge: true });
       toast({
         title: activity.id && !activity.id.startsWith('temp-') ? "Actividad Actualizada" : "Actividad Añadida",
         description: `"${activity.title}" ha sido guardada.`,
       });
-      fetchActivities(); // Re-fetch to get the latest data including server timestamps
+      fetchActivities(); 
     } catch (error) {
       console.error("Error saving activity:", error);
       toast({
         variant: "destructive",
         title: "Error al guardar actividad",
-        description: "No se pudo guardar la actividad en la base de datos.",
+        description: `No se pudo guardar la actividad en la base de datos. Error: ${(error as Error).message}`,
       });
     }
   };
   
   const handleSetActivitiesBatchUpdate = async (updatedActivities: Activity[]) => {
-    // This function is called after DND or any operation that changes multiple activities' order/time
-    // It should update all affected activities in Firestore.
     const batch = writeBatch(db);
     updatedActivities.forEach(activity => {
       if (activity.id && !activity.id.startsWith('temp-')) {
         const activityRef = doc(db, "trips", TRIP_ID, "activities", activity.id);
-        batch.update(activityRef, { 
+        const activityData: Partial<Activity> = { 
           order: activity.order, 
           time: activity.time,
-          date: activity.date, // Ensure date is also updated if it can change via DND (though current DND is same-day)
-          city: activity.city, // Ensure city is also updated if it can change
-          updatedAt: serverTimestamp() 
-        });
-      } else {
-        // This case should ideally not happen if DND operates on existing activities.
-        // If new activities are part of `updatedActivities`, they should be handled by `handleAddOrUpdateActivity`.
-        console.warn("Attempting to batch update a new/temporary activity:", activity);
+          date: activity.date, 
+          city: activity.city, 
+          updatedAt: serverTimestamp() as FieldValue 
+        };
+        // Defensively remove cost if undefined, though DND usually doesn't change it.
+        if (activity.cost === undefined) {
+            // If cost is part of what DND could change and it becomes undefined, delete it
+            // delete activityData.cost; // This line is commented as DND primarily affects order/time
+        } else {
+            activityData.cost = activity.cost;
+        }
+        batch.update(activityRef, activityData);
       }
     });
 
     try {
       await batch.commit();
-      // No toast here to avoid too many notifications, or make it subtle
-      // Optimistically update local state for responsiveness, then re-fetch or rely on snapshot listener if implemented
       setActivities(updatedActivities); 
-      // fetchActivities(); // Or re-fetch to ensure consistency, though can cause UI flicker
+      // fetchActivities(); // Optionally re-fetch to ensure full consistency
     } catch (error) {
       console.error("Error batch updating activities:", error);
       toast({
@@ -160,7 +180,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
         title: "Actividad Eliminada",
         description: `"${activityToDelete.title}" ha sido eliminada de la base de datos.`,
       });
-      fetchActivities(); // Re-fetch activities
+      fetchActivities(); 
     } catch (error) {
       console.error("Error deleting activity:", error);
       toast({
@@ -191,8 +211,8 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
             </div>
           ) : (
             <ItinerarySection
-              initialTripData={currentTripDataForWidgets} // Pass static trip data like cities, trip dates
-              activities={activities} // Pass the dynamic activities state
+              initialTripData={currentTripDataForWidgets} 
+              activities={activities} 
               onAddOrUpdateActivity={handleAddOrUpdateActivity}
               onSetActivities={handleSetActivitiesBatchUpdate}
               onDeleteActivity={handleDeleteActivityInternal}
@@ -235,7 +255,9 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
           <div className="space-y-6">
             <UpcomingMilestone tripData={currentTripDataForWidgets} currentDate={currentDate} />
             <BudgetSnapshot expenses={currentTripDataForWidgets.expenses} currentCity={currentCityToday} />
-            <QuickActions onViewFullItinerary={() => setShowFullItinerary(true)} />
+            <QuickActions 
+                onViewFullItinerary={() => setShowFullItinerary(true)} 
+            />
           </div>
         </div>
       )}
