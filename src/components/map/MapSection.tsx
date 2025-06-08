@@ -10,13 +10,15 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { useState } from 'react';
 
 interface MapSectionProps {
-  tripData: TripDetails; // For overall trip context if needed, like start/end dates
-  cities: City[]; // The dynamic list of cities from Firestore
+  tripData: TripDetails; 
+  cities: City[]; 
   onAddCity: (cityData: Omit<City, 'id' | 'coordinates'> & { coordinates?: Partial<Coordinates> }) => Promise<void>;
   onDeleteCity: (cityId: string) => Promise<void>;
 }
@@ -32,6 +34,7 @@ const cityFormSchema = z.object({
 type CityFormData = z.infer<typeof cityFormSchema>;
 
 export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }: MapSectionProps) {
+  const [isCityFormOpen, setIsCityFormOpen] = useState(false);
   const form = useForm<CityFormData>({
     resolver: zodResolver(cityFormSchema),
     defaultValues: {
@@ -46,10 +49,111 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
   const handleAddCitySubmit = async (data: CityFormData) => {
     await onAddCity({
       ...data,
-      coordinates: { lat: 0, lng: 0 }, // Default coordinates for now
+      coordinates: { lat: 0, lng: 0 }, 
     });
-    form.reset(); // Reset form after submission
+    form.reset(); 
+    setIsCityFormOpen(false); // Close dialog on successful submission
   };
+
+  const headerActions = (
+    <Dialog open={isCityFormOpen} onOpenChange={setIsCityFormOpen}>
+      <DialogTrigger asChild>
+        <Button onClick={() => setIsCityFormOpen(true)}>
+          <PlusCircle size={20} className="mr-2" />
+          Añadir Ciudad
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg rounded-xl shadow-2xl">
+        <DialogHeader>
+          <DialogTitle className="font-headline text-2xl text-primary flex items-center">
+            <MapPin size={22} className="mr-2" />
+            Añadir Nueva Ciudad al Itinerario
+          </DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleAddCitySubmit)} className="space-y-6 py-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-muted-foreground" />Nombre Ciudad</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: París" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="country"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-muted-foreground" />País</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: Francia" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="arrivalDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Fecha Llegada</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="departureDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Fecha Salida</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center"><StickyNote className="mr-2 h-4 w-4 text-muted-foreground" />Notas (opcional)</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Añade detalles sobre la ciudad..." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter className="pt-4">
+              <DialogClose asChild>
+                <Button type="button" variant="outline" onClick={() => setIsCityFormOpen(false)}>Cancelar</Button>
+              </DialogClose>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Añadiendo...' : 'Añadir Ciudad al Viaje'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
 
   return (
     <SectionCard
@@ -57,96 +161,9 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
       title="Mapa de Viaje"
       icon={<Route size={32} />}
       description="Gestiona y visualiza las ciudades de tu itinerario."
+      headerActions={headerActions} 
     >
       <div className="space-y-8">
-        {/* Form to add a new city */}
-        <Card className="rounded-xl shadow-lg">
-          <CardHeader>
-            <CardTitle className="font-headline text-xl text-primary flex items-center">
-              <PlusCircle size={22} className="mr-2" />
-              Añadir Nueva Ciudad
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleAddCitySubmit)} className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-muted-foreground" />Nombre Ciudad</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ej: París" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="country"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-muted-foreground" />País</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ej: Francia" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="arrivalDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Fecha Llegada</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="departureDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Fecha Salida</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center"><StickyNote className="mr-2 h-4 w-4 text-muted-foreground" />Notas (opcional)</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Añade detalles sobre la ciudad..." {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? 'Añadiendo...' : 'Añadir Ciudad al Viaje'}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-
         {/* List of planned cities */}
         <div className="p-2 sm:p-0">
           <h3 className="text-xl font-headline text-secondary-foreground mb-4">Ciudades Planificadas</h3>
@@ -168,10 +185,6 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
                     {format(parseISO(city.arrivalDate), "d MMM", { locale: es })} - {format(parseISO(city.departureDate), "d MMM yyyy", { locale: es })}
                   </p>
                   {city.notes && <p className="text-xs text-accent-foreground/70 mt-1 italic">{city.notes}</p>}
-                   {/* You can display coordinates or budget if needed:
-                   <p className="text-xs text-muted-foreground mt-1">Coords: {city.coordinates.lat.toFixed(2)}, {city.coordinates.lng.toFixed(2)}</p>
-                   {typeof city.budget === 'number' && <p className="text-xs text-muted-foreground mt-1">Presupuesto: {city.budget.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</p>}
-                   */}
                 </li>
               ))}
             </ul>
@@ -191,3 +204,4 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
     </SectionCard>
   );
 }
+
