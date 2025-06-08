@@ -1,8 +1,8 @@
 
 "use client";
 
-import type { TripDetails, Activity } from '@/lib/types';
-import { useState, useEffect, useMemo } from 'react';
+import type { TripDetails, Activity, City } from '@/lib/types';
+import { useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import ActivitySummaryCard from './ActivitySummaryCard';
@@ -13,21 +13,11 @@ import { CalendarDays, Loader2 } from 'lucide-react';
 interface TodayViewProps {
   tripData: TripDetails;
   onAddActivity: (activity: Activity) => void;
+  currentCityForToday: City | undefined;
+  currentDate: Date | null;
 }
 
-export default function TodayView({ tripData, onAddActivity }: TodayViewProps) {
-  const [currentDate, setCurrentDate] = useState<Date | null>(null);
-
-  useEffect(() => {
-    // Set current date only on the client after hydration
-    setCurrentDate(new Date());
-
-    // Optional: if you want the component to re-check "today" if the app stays open past midnight
-    const timer = setInterval(() => {
-      setCurrentDate(new Date());
-    }, 60000); // Check every minute
-    return () => clearInterval(timer);
-  }, []);
+export default function TodayView({ tripData, onAddActivity, currentCityForToday, currentDate }: TodayViewProps) {
 
   const todayString = useMemo(() => {
     if (!currentDate) return '';
@@ -40,27 +30,13 @@ export default function TodayView({ tripData, onAddActivity }: TodayViewProps) {
   }, [currentDate]);
 
   const todaysActivities = useMemo(() => {
-    if (!currentDate) return []; // Don't filter until date is known
+    if (!currentDate) return []; 
     return tripData.activities
       .filter(act => act.date === todayString)
       .sort((a, b) => a.time.localeCompare(b.time));
   }, [tripData.activities, todayString, currentDate]);
 
-  const currentCityName = useMemo(() => {
-    if (!currentDate) return "Destino"; 
-    if (todaysActivities.length > 0) {
-      return todaysActivities[0].city;
-    }
-    // Fallback: find city for today from tripData.ciudades
-    const cityForToday = tripData.ciudades.find(city => {
-      const arrival = parseISO(city.arrivalDate);
-      const departure = parseISO(city.departureDate);
-      // Ensure currentDate is compared date-only with arrival/departure
-      const currentDateOnly = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
-      return currentDateOnly >= arrival && currentDateOnly <= departure;
-    });
-    return cityForToday?.name || "Itinerario"; // Default if no specific city found for today
-  }, [todaysActivities, tripData.ciudades, currentDate]);
+  const displayCityName = currentCityForToday?.name || "Destino";
 
   if (!currentDate) {
     return (
@@ -83,7 +59,7 @@ export default function TodayView({ tripData, onAddActivity }: TodayViewProps) {
       <CardHeader>
         <CardTitle className="font-headline text-xl text-primary flex items-center">
           <CalendarDays size={22} className="mr-2" />
-          Hoy en {currentCityName}
+          Hoy en {displayCityName}
         </CardTitle>
         <CardDescription>{formattedToday}</CardDescription>
       </CardHeader>

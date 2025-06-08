@@ -3,13 +3,14 @@
 
 import type { TripDetails, Activity, City } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plane, Hotel, MapPin, CalendarClock, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Plane, Hotel, MapPin, CalendarClock, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { format, parseISO, isFuture, isToday, isTomorrow, differenceInHours, formatDistanceToNowStrict, addHours, setHours, setMinutes, setSeconds } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useMemo } from 'react';
 
 interface UpcomingMilestoneProps {
   tripData: TripDetails;
+  currentDate: Date | null; // Pass current date from DashboardView
 }
 
 type MilestoneCandidate = {
@@ -31,26 +32,24 @@ const getIconForMilestone = (type: MilestoneCandidate['type'], category?: Activi
     case 'accommodation':
       return <Hotel size={24} className="text-purple-500" />;
     case 'activity':
-      // Add more specific icons based on activity category if needed
       return <CalendarClock size={24} className="text-orange-500" />;
     default:
       return <CalendarClock size={24} className="text-gray-500" />;
   }
 };
 
-export default function UpcomingMilestone({ tripData }: UpcomingMilestoneProps) {
-  const now = new Date();
-
+export default function UpcomingMilestone({ tripData, currentDate }: UpcomingMilestoneProps) {
   const upcomingMilestone = useMemo(() => {
+    if (!currentDate) return null; // Don't calculate if date isn't ready
+
+    const now = currentDate; // Use the passed-in currentDate
     const candidates: MilestoneCandidate[] = [];
-    const currentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Today at 00:00:00
-
-
+    
     // 1. Future Travel Activities
     tripData.activities
       .filter(act => {
         const actDateTime = parseISO(`${act.date}T${act.time}:00`);
-        return act.category === 'Viaje' && isFuture(actDateTime);
+        return act.category === 'Viaje' && isFuture(actDateTime) && actDateTime > now;
       })
       .forEach(act => {
         candidates.push({
@@ -66,15 +65,9 @@ export default function UpcomingMilestone({ tripData }: UpcomingMilestoneProps) 
 
     // 2. Future City Arrivals
     tripData.ciudades
-      .filter(city => {
-        const cityArrivalDateOnly = parseISO(city.arrivalDate);
-        // Consider arrivals from today if it's still in the future, or any day after today
-        return isFuture(cityArrivalDateOnly) || isToday(cityArrivalDateOnly);
-      })
       .forEach(city => {
-        // Assume arrival is at 12:00 PM for sorting purposes if no specific activity marks it
-        const arrivalDateTime = setSeconds(setMinutes(setHours(parseISO(city.arrivalDate), 12),0),0);
-        if (isFuture(arrivalDateTime)) { // Only add if the 12 PM mark is in the future
+        const arrivalDateTime = setSeconds(setMinutes(setHours(parseISO(city.arrivalDate), 12),0),0); // Arrival at noon
+        if (isFuture(arrivalDateTime) && arrivalDateTime > now) {
              candidates.push({
                 type: 'city_arrival',
                 title: `Llegada a ${city.name}`,
@@ -90,7 +83,7 @@ export default function UpcomingMilestone({ tripData }: UpcomingMilestoneProps) 
     tripData.activities
       .filter(act => {
          const actDateTime = parseISO(`${act.date}T${act.time}:00`);
-        return act.category === 'Alojamiento' && isFuture(actDateTime);
+        return act.category === 'Alojamiento' && isFuture(actDateTime) && actDateTime > now;
       })
       .forEach(act => {
         candidates.push({
@@ -104,17 +97,16 @@ export default function UpcomingMilestone({ tripData }: UpcomingMilestoneProps) 
         });
       });
     
-    // Sort candidates by date (earliest first)
-    // The priority is handled by the order of adding and then potentially by a more complex sort if needed.
-    // For now, simple date sort.
     candidates.sort((a, b) => a.date.getTime() - b.date.getTime());
     
     let selectedMilestone = candidates[0];
 
-    // 4. Fallback: First activity of any future day if no specific milestones found
     if (!selectedMilestone) {
       const futureActivities = tripData.activities
-        .filter(act => isFuture(parseISO(`${act.date}T${act.time}:00`)))
+        .filter(act => {
+            const actDateTime = parseISO(`${act.date}T${act.time}:00`);
+            return isFuture(actDateTime) && actDateTime > now;
+        })
         .sort((a,b) => parseISO(`${a.date}T${a.time}:00`).getTime() - parseISO(`${b.date}T${b.time}:00`).getTime());
 
       if (futureActivities.length > 0) {
@@ -133,26 +125,43 @@ export default function UpcomingMilestone({ tripData }: UpcomingMilestoneProps) 
     
     return selectedMilestone;
 
-  }, [tripData, now]); // now is a dependency to re-calculate if the component re-renders across a time boundary
+  }, [tripData, currentDate]); 
 
   const formatTimeRemaining = (milestoneDate: Date): string => {
+    if(!currentDate) return "";
+    const now = currentDate;
     const diffHoursTotal = differenceInHours(milestoneDate, now);
 
     if (isToday(milestoneDate) && diffHoursTotal >=0 ) {
        if (diffHoursTotal < 1 && diffHoursTotal >=0) {
-         const minutesRemaining = formatDistanceToNowStrict(milestoneDate, { locale: es, unit: 'minute', roundingMethod: 'ceil', addSuffix: true });
+         const minutesRemaining = formatDistanceToNowStrict(milestoneDate, { locale: es, unit: 'minute', roundingMethod: 'ceil', addSuffix: true, now });
          return `${minutesRemaining} (hoy a las ${format(milestoneDate, 'HH:mm')})`;
        }
-       return `hoy a las ${format(milestoneDate, 'HH:mm')} (${formatDistanceToNowStrict(milestoneDate, { locale: es, addSuffix: true })})`;
+       return `hoy a las ${format(milestoneDate, 'HH:mm')} (${formatDistanceToNowStrict(milestoneDate, { locale: es, addSuffix: true, now })})`;
     }
     if (isTomorrow(milestoneDate)) {
       return `mañana a las ${format(milestoneDate, 'HH:mm')}`;
     }
-    // For events further in the future
-    const distance = formatDistanceToNowStrict(milestoneDate, { locale: es, addSuffix: true, unit: 'day', roundingMethod: 'ceil' });
+    
+    const distance = formatDistanceToNowStrict(milestoneDate, { locale: es, addSuffix: true, unit: 'day', roundingMethod: 'ceil', now });
     return `${distance}, el ${format(milestoneDate, "EEEE d MMM 'a las' HH:mm", { locale: es })}`;
   };
 
+  if (!currentDate) {
+    return (
+      <Card className="rounded-xl shadow-lg">
+        <CardHeader>
+          <CardTitle className="font-headline text-xl text-primary flex items-center">
+            <CalendarClock size={22} className="mr-2" />
+            Próximamente
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center py-6">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="rounded-xl shadow-lg">
@@ -192,4 +201,3 @@ export default function UpcomingMilestone({ tripData }: UpcomingMilestoneProps) 
     </Card>
   );
 }
-

@@ -50,6 +50,10 @@
     --chart-3: 120 60% 60%; /* A contrasting green */
     --chart-4: 280 70% 70%; /* A contrasting purple */
     --chart-5: 0 80% 70%; /* A contrasting red/pink */
+
+    /* Custom Progress Bar Indicator Colors */
+    --progress-indicator-warning: 34 100% 65%; /* Warm Orange - Accent */
+    --progress-indicator-danger: 0 84.2% 60.2%; /* Destructive Red */
   }
 
   .dark {
@@ -97,6 +101,10 @@
     --chart-3: 120 50% 55%;
     --chart-4: 280 60% 65%;
     --chart-5: 0 70% 65%;
+
+    /* Custom Progress Bar Indicator Colors - Dark Theme */
+    --progress-indicator-warning: 34 95% 60%; /* Warm Orange - Accent (Dark) */
+    --progress-indicator-danger: 0 72.2% 50.6%; /* Destructive Red (Dark) */
   }
 }
 
@@ -107,5 +115,14 @@
   body {
     @apply bg-background text-foreground;
     /* Apply Poppins and PT Sans font families through tailwind.config.ts */
+  }
+}
+
+@layer components {
+  .progress-indicator-warning > div {
+    background-color: hsl(var(--progress-indicator-warning));
+  }
+  .progress-indicator-danger > div {
+    background-color: hsl(var(--progress-indicator-danger));
   }
 }
