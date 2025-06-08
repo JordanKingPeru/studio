@@ -36,6 +36,8 @@ export interface Activity {
   city: string; // Name of the city
   order: number; // For drag-and-drop reordering
   attachments?: ActivityAttachment[];
+  createdAt?: any; // Firestore Timestamp
+  updatedAt?: any; // Firestore Timestamp
 }
 
 export interface Expense {

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { TripDetails, Activity } from '@/lib/types';
 import SectionCard from '@/components/ui/SectionCard';
 import ActivityList from './ActivityList';
@@ -9,42 +9,28 @@ import ActivityForm from './ActivityForm';
 import AISuggestionButton from '@/components/ai/AISuggestionButton';
 import { Button } from '@/components/ui/button';
 import { ListChecks, PlusCircle } from 'lucide-react';
-import { useToast } from "@/hooks/use-toast";
+// Toast is handled by DashboardView now
 
 interface ItinerarySectionProps {
   initialTripData: TripDetails; // Contiene datos estáticos como ciudades, fechas del viaje.
   activities: Activity[]; // Lista de actividades, gestionada por DashboardView
-  onSetActivities: (activities: Activity[]) => void; // Función para actualizar la lista de actividades en DashboardView
+  onAddOrUpdateActivity: (activity: Activity) => Promise<void>; // Función para actualizar/crear actividades en Firestore
+  onSetActivities: (activities: Activity[]) => Promise<void>; // Función para actualizar la lista de actividades en Firestore (e.g., after DND)
+  onDeleteActivity: (activityId: string) => Promise<void>; // Función para eliminar actividad de Firestore
 }
 
-export default function ItinerarySection({ initialTripData, activities, onSetActivities }: ItinerarySectionProps) {
+export default function ItinerarySection({ 
+  initialTripData, 
+  activities, 
+  onAddOrUpdateActivity,
+  onSetActivities,
+  onDeleteActivity
+}: ItinerarySectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-  const { toast } = useToast();
   
-  const handleAddOrUpdateActivity = (activity: Activity) => {
-    let updatedActivitiesList;
-    // Ensure activity.id is final if it was a temp one or missing
-    const finalActivityId = activity.id && !activity.id.startsWith('temp-') 
-                            ? activity.id 
-                            : (editingActivity?.id && !editingActivity.id.startsWith('temp-') 
-                                ? editingActivity.id 
-                                : `act-${Date.now().toString()}`);
-
-    const activityWithFinalId = { ...activity, id: finalActivityId };
-
-    const existingActivity = activities.find(a => a.id === activityWithFinalId.id);
-
-    if (existingActivity) { // Edit existing
-      updatedActivitiesList = activities.map(a => a.id === activityWithFinalId.id ? activityWithFinalId : a);
-      toast({ title: "Actividad Actualizada", description: `"${activityWithFinalId.title}" ha sido actualizada.` });
-    } else { // Add new
-      const newActivityWithOrder = { ...activityWithFinalId, order: activityWithFinalId.order ?? Date.now() };
-      updatedActivitiesList = [...activities, newActivityWithOrder];
-      toast({ title: "Actividad Añadida", description: `"${activityWithFinalId.title}" ha sido añadida.` });
-    }
-    
-    onSetActivities(updatedActivitiesList); 
+  const handleFormSubmit = async (activity: Activity) => {
+    await onAddOrUpdateActivity(activity);
     setEditingActivity(null);
     setIsFormOpen(false);
   };
@@ -54,18 +40,9 @@ export default function ItinerarySection({ initialTripData, activities, onSetAct
     setIsFormOpen(true);
   };
 
-  const handleDeleteActivity = (activityId: string) => {
-    const activityToDelete = activities.find(a => a.id === activityId);
-    const updatedActivities = activities.filter(a => a.id !== activityId);
-    onSetActivities(updatedActivities); 
-    
-    if (activityToDelete) {
-      toast({ 
-        title: "Actividad Eliminada", 
-        description: `"${activityToDelete.title}" ha sido eliminada.`,
-        variant: "destructive" 
-      });
-    }
+  const handleDeleteActivityLocal = async (activityId: string) => {
+    await onDeleteActivity(activityId);
+    // No need to manually filter local state if DashboardView re-fetches or updates based on Firestore changes.
   };
   
   const headerActions = (
@@ -74,7 +51,7 @@ export default function ItinerarySection({ initialTripData, activities, onSetAct
         cities={initialTripData.ciudades} 
         tripFamilia={initialTripData.familia}
         tripDates={{ inicio: initialTripData.inicio, fin: initialTripData.fin }}
-        onAddActivity={handleAddOrUpdateActivity} 
+        onAddActivity={handleFormSubmit} // AI suggestions also go through the main submit handler
       />
       <Button onClick={() => handleOpenForm()} className="w-full sm:w-auto">
         <PlusCircle size={20} className="mr-2" />
@@ -95,13 +72,13 @@ export default function ItinerarySection({ initialTripData, activities, onSetAct
         activities={activities} 
         tripData={initialTripData} 
         onEditActivity={handleOpenForm}
-        onDeleteActivity={handleDeleteActivity}
-        onSetActivities={onSetActivities}
+        onDeleteActivity={handleDeleteActivityLocal}
+        onSetActivities={onSetActivities} // Pass this down for DND updates
       />
       <ActivityForm 
         isOpen={isFormOpen} 
         onClose={() => { setIsFormOpen(false); setEditingActivity(null); }} 
-        onSubmit={handleAddOrUpdateActivity}
+        onSubmit={handleFormSubmit}
         cities={initialTripData.ciudades}
         initialData={editingActivity}
       />
