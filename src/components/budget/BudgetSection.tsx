@@ -1,11 +1,11 @@
 
 "use client";
 
-import type { TripDetails, Expense } from '@/lib/types';
+import type { Expense, City } from '@/lib/types'; // Added City
 import { useState, useMemo } from 'react';
 import SectionCard from '@/components/ui/SectionCard';
 import BudgetChart from './BudgetChart';
-import CumulativeBudgetChart from './CumulativeBudgetChart'; // Import new chart
+import CumulativeBudgetChart from './CumulativeBudgetChart';
 import { PiggyBank, PlusCircle, ListOrdered, Euro, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -14,10 +14,11 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '../ui/badge';
 // Placeholder for ExpenseForm - can be a Dialog similar to ActivityForm
-// import ExpenseForm from './ExpenseForm'; 
+// import ExpenseForm from './ExpenseForm';
 
 interface BudgetSectionProps {
-  initialTripData: TripDetails;
+  expenses: Expense[];
+  tripCities: City[]; // Needed if we implement Add Expense Form later
 }
 
 interface GroupedExpenses {
@@ -27,15 +28,18 @@ interface GroupedExpenses {
   };
 }
 
-export default function BudgetSection({ initialTripData }: BudgetSectionProps) {
-  const [expenses, setExpenses] = useState<Expense[]>(initialTripData.expenses);
+export default function BudgetSection({ expenses, tripCities }: BudgetSectionProps) {
   // const [isExpenseFormOpen, setIsExpenseFormOpen] = useState(false);
   // const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
-  const handleAddExpense = (expense: Expense) => {
-    setExpenses(prev => [...prev, expense]);
-    // setIsExpenseFormOpen(false);
-  };
+  // const handleAddExpense = (expense: Expense) => {
+  //   // This would typically call a prop function to add/update in Firestore
+  //   // For now, if BudgetSection managed its own state (which it no longer does):
+  //   // setExpenses(prev => [...prev, expense]);
+  //   // setIsExpenseFormOpen(false);
+  //   // setEditingExpense(null);
+  //   alert("Simulating adding expense: " + expense.description);
+  // };
 
   const totalOverallCost = useMemo(() => expenses.reduce((sum, exp) => sum + exp.amount, 0), [expenses]);
 
@@ -60,9 +64,9 @@ export default function BudgetSection({ initialTripData }: BudgetSectionProps) {
 
 
   return (
-    <SectionCard 
-      id="budget" 
-      title="Presupuesto y Gastos" 
+    <SectionCard
+      id="budget"
+      title="Presupuesto y Gastos"
       icon={<PiggyBank size={32} />}
       description={`Sigue tus gastos y mantén el presupuesto bajo control. Total General: ${totalOverallCost.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}`}
       headerActions={headerActions}
@@ -70,7 +74,7 @@ export default function BudgetSection({ initialTripData }: BudgetSectionProps) {
       <div className="space-y-8">
         <BudgetChart expenses={expenses} />
         <CumulativeBudgetChart expenses={expenses} />
-        
+
         <Card className="rounded-xl shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline text-xl text-primary flex items-center">
@@ -132,11 +136,11 @@ export default function BudgetSection({ initialTripData }: BudgetSectionProps) {
           </CardContent>
         </Card>
         {/* Placeholder for ExpenseForm Dialog
-        <ExpenseForm 
-          isOpen={isExpenseFormOpen} 
-          onClose={() => setIsExpenseFormOpen(false)} 
+        <ExpenseForm
+          isOpen={isExpenseFormOpen}
+          onClose={() => setIsExpenseFormOpen(false)}
           onSubmit={handleAddExpense}
-          cities={initialTripData.ciudades}
+          cities={tripCities} // Pass tripCities here
           initialData={editingExpense}
         />
         */}
@@ -144,4 +148,3 @@ export default function BudgetSection({ initialTripData }: BudgetSectionProps) {
     </SectionCard>
   );
 }
-

@@ -21,14 +21,16 @@ import { Loader2 } from 'lucide-react';
 
 
 interface DashboardViewProps {
-  tripData: TripDetails; 
+  tripData: TripDetails;
 }
 
-const TRIP_ID = "defaultTrip"; 
+const TRIP_ID = "defaultTrip";
 
 export default function DashboardView({ tripData: initialStaticTripData }: DashboardViewProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoadingActivities, setIsLoadingActivities] = useState(true);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
   const [showFullItinerary, setShowFullItinerary] = useState(false);
   const [currentDate, setCurrentDate] = useState<Date | null>(null);
   const { toast } = useToast();
@@ -50,27 +52,52 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
         fetchedActivities.push({ id: doc.id, ...doc.data() } as Activity);
       });
       setActivities(fetchedActivities);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching activities:", error);
       toast({
         variant: "destructive",
         title: "Error al cargar actividades",
-        description: "No se pudieron cargar las actividades desde la base de datos.",
+        description: `No se pudieron cargar las actividades. ${error.message}`,
       });
     } finally {
       setIsLoadingActivities(false);
     }
   }, [toast]);
 
+  const fetchExpenses = useCallback(async () => {
+    setIsLoadingExpenses(true);
+    try {
+      const expensesCollectionRef = collection(db, "trips", TRIP_ID, "expenses");
+      // Order expenses by date, you might want to add more specific ordering if needed
+      const q = query(expensesCollectionRef, firestoreOrderBy("date", "desc"));
+      const querySnapshot = await getDocs(q);
+      const fetchedExpenses: Expense[] = [];
+      querySnapshot.forEach((doc) => {
+        fetchedExpenses.push({ id: doc.id, ...doc.data() } as Expense);
+      });
+      setExpenses(fetchedExpenses);
+    } catch (error: any) {
+      console.error("Error fetching expenses:", error);
+      toast({
+        variant: "destructive",
+        title: "Error al cargar gastos",
+        description: `No se pudieron cargar los gastos. ${error.message}`,
+      });
+    } finally {
+      setIsLoadingExpenses(false);
+    }
+  }, [toast]);
+
   useEffect(() => {
     fetchActivities();
-  }, [fetchActivities]);
+    fetchExpenses();
+  }, [fetchActivities, fetchExpenses]);
 
   const currentTripDataForWidgets = useMemo((): TripDetails => ({
     ...initialStaticTripData,
-    activities: activities, 
-    expenses: initialStaticTripData.expenses || [], 
-  }), [initialStaticTripData, activities]);
+    activities: activities,
+    expenses: expenses, // Use live expenses state
+  }), [initialStaticTripData, activities, expenses]);
 
 
   const currentCityToday = useMemo((): City | undefined => {
@@ -86,11 +113,10 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
   const handleAddOrUpdateActivity = async (activity: Activity) => {
     const activityId = activity.id && !activity.id.startsWith('temp-') ? activity.id : doc(collection(db, "trips", TRIP_ID, "activities")).id;
     const activityRef = doc(db, "trips", TRIP_ID, "activities", activityId);
-    
-    const activityBaseData: Partial<Activity> = { ...activity, id: activityId };
 
-    // Sanitize data for Firestore: remove undefined fields
+    const activityBaseData: Partial<Activity> = { ...activity, id: activityId };
     const activityDataForFirestore: Record<string, any> = {};
+
     for (const key in activityBaseData) {
       if (Object.prototype.hasOwnProperty.call(activityBaseData, key)) {
         const typedKey = key as keyof Activity;
@@ -99,9 +125,9 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
         }
       }
     }
-    
+
     activityDataForFirestore.updatedAt = serverTimestamp();
-    if (!activities.find(a => a.id === activityId)) { 
+    if (!activities.find(a => a.id === activityId)) {
         activityDataForFirestore.createdAt = serverTimestamp();
     }
 
@@ -111,7 +137,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
         title: activity.id && !activity.id.startsWith('temp-') ? "Actividad Actualizada" : "Actividad Añadida",
         description: `"${activity.title}" ha sido guardada.`,
       });
-      fetchActivities(); 
+      fetchActivities();
     } catch (error) {
       console.error("Error saving activity:", error);
       toast({
@@ -119,28 +145,27 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
         title: "Error al guardar actividad",
         description: `No se pudo guardar la actividad en la base de datos. Error: ${(error as Error).message}`,
       });
-      throw error; // Re-throw para que AISuggestionButton pueda manejarlo si es necesario
+      throw error;
     }
   };
-  
+
   const handleSetActivitiesBatchUpdate = async (updatedActivities: Activity[]) => {
     const batch = writeBatch(db);
     updatedActivities.forEach(activity => {
       if (activity.id && !activity.id.startsWith('temp-')) {
         const activityRef = doc(db, "trips", TRIP_ID, "activities", activity.id);
-        
-        const updatePayload: Partial<Activity> = { 
-          order: activity.order, 
+
+        const updatePayload: Partial<Activity> = {
+          order: activity.order,
           time: activity.time,
-          date: activity.date, 
-          city: activity.city, 
-          cost: activity.cost, // Include cost in the payload
-          notes: activity.notes, // Include notes
-          attachments: activity.attachments, // Include attachments
-          updatedAt: serverTimestamp() as FieldValue 
+          date: activity.date,
+          city: activity.city,
+          cost: activity.cost,
+          notes: activity.notes,
+          attachments: activity.attachments,
+          updatedAt: serverTimestamp() as FieldValue
         };
 
-        // Sanitize payload: remove undefined fields
         const sanitizedPayload: Record<string, any> = {};
         for (const key in updatePayload) {
           if (Object.prototype.hasOwnProperty.call(updatePayload, key)) {
@@ -150,6 +175,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
             }
           }
         }
+
         if (Object.keys(sanitizedPayload).length > 0) {
             batch.update(activityRef, sanitizedPayload);
         }
@@ -158,13 +184,11 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
 
     try {
       await batch.commit();
-      // Update local state to reflect changes immediately before re-fetch (optimistic update)
-      // Then re-fetch for consistency, or merge carefully
       setActivities(prevActivities => {
         return prevActivities.map(pa => {
           const updatedVersion = updatedActivities.find(ua => ua.id === pa.id);
           return updatedVersion ? { ...pa, ...updatedVersion } : pa;
-        }).sort((a,b) => { // Ensure consistent sorting locally
+        }).sort((a,b) => {
             const dateComparison = a.date.localeCompare(b.date);
             if (dateComparison !== 0) return dateComparison;
             const timeComparison = a.time.localeCompare(b.time);
@@ -172,7 +196,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
             return (a.order ?? 0) - (b.order ?? 0);
         });
       });
-      // fetchActivities(); // Re-fetch for full consistency, or rely on optimistic update + future fetches.
+      // fetchActivities(); // Optionally re-fetch for full consistency
     } catch (error) {
       console.error("Error batch updating activities:", error);
       toast({
@@ -194,7 +218,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
         title: "Actividad Eliminada",
         description: `"${activityToDelete.title}" ha sido eliminada de la base de datos.`,
       });
-      fetchActivities(); 
+      fetchActivities();
     } catch (error) {
       console.error("Error deleting activity:", error);
       toast({
@@ -205,6 +229,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     }
   };
 
+  const isLoading = isLoadingActivities || isLoadingExpenses;
 
   if (showFullItinerary) {
     return (
@@ -218,15 +243,15 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
             isDashboard={false}
             onReturnToDashboard={() => setShowFullItinerary(false)}
           />
-          {isLoadingActivities ? (
+          {isLoadingActivities ? ( // Keep specific loading for itinerary section if preferred
             <div className="flex justify-center items-center py-10">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2">Cargando itinerario...</p>
             </div>
           ) : (
             <ItinerarySection
-              initialTripData={currentTripDataForWidgets} 
-              activities={activities} 
+              initialTripData={currentTripDataForWidgets}
+              activities={activities}
               onAddOrUpdateActivity={handleAddOrUpdateActivity}
               onSetActivities={handleSetActivitiesBatchUpdate}
               onDeleteActivity={handleDeleteActivityInternal}
@@ -237,7 +262,14 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
           <Separator className="my-8 md:my-12" />
           <MapSection tripData={currentTripDataForWidgets} />
           <Separator className="my-8 md:my-12" />
-          <BudgetSection initialTripData={currentTripDataForWidgets} />
+          {isLoadingExpenses ? (
+             <div className="flex justify-center items-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="ml-2">Cargando presupuesto...</p>
+            </div>
+          ) : (
+            <BudgetSection expenses={expenses} tripCities={initialStaticTripData.ciudades} />
+          )}
         </main>
       </div>
     );
@@ -252,7 +284,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
         onViewFullItinerary={() => setShowFullItinerary(true)}
         isDashboard={true}
       />
-      {isLoadingActivities ? (
+      {isLoading ? (
         <div className="flex justify-center items-center py-10">
            <Loader2 className="h-12 w-12 animate-spin text-primary" />
         </div>
@@ -268,9 +300,9 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
           </div>
           <div className="space-y-6">
             <UpcomingMilestone tripData={currentTripDataForWidgets} currentDate={currentDate} />
-            <BudgetSnapshot expenses={currentTripDataForWidgets.expenses} currentCity={currentCityToday} />
-            <QuickActions 
-                onViewFullItinerary={() => setShowFullItinerary(true)} 
+            <BudgetSnapshot expenses={expenses} currentCity={currentCityToday} />
+            <QuickActions
+                onViewFullItinerary={() => setShowFullItinerary(true)}
             />
           </div>
         </div>
@@ -278,4 +310,3 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     </div>
   );
 }
-
