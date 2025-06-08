@@ -15,13 +15,13 @@ import BudgetSnapshot from './BudgetSnapshot';
 import QuickActions from './QuickActions';
 import { parseISO, isWithinInterval } from 'date-fns';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, serverTimestamp, query, orderBy as firestoreOrderBy, FieldValue } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, serverTimestamp, query, orderBy as firestoreOrderBy, FieldValue, addDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
 
 
 interface DashboardViewProps {
-  tripData: TripDetails;
+  tripData: TripDetails; // This will primarily be used for static trip details like name, overall dates
 }
 
 const TRIP_ID = "defaultTrip";
@@ -29,6 +29,8 @@ const TRIP_ID = "defaultTrip";
 export default function DashboardView({ tripData: initialStaticTripData }: DashboardViewProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoadingActivities, setIsLoadingActivities] = useState(true);
+  const [cities, setCities] = useState<City[]>(initialStaticTripData.ciudades); // Initialize with static, then fetch
+  const [isLoadingCities, setIsLoadingCities] = useState(true);
   const [showFullItinerary, setShowFullItinerary] = useState(false);
   const [currentDate, setCurrentDate] = useState<Date | null>(null);
   const { toast } = useToast();
@@ -62,49 +64,80 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     }
   }, [toast]);
 
+  const fetchCities = useCallback(async () => {
+    setIsLoadingCities(true);
+    try {
+      const citiesCollectionRef = collection(db, "trips", TRIP_ID, "cities");
+      const q = query(citiesCollectionRef, firestoreOrderBy("arrivalDate"));
+      const querySnapshot = await getDocs(q);
+      const fetchedCities: City[] = [];
+      querySnapshot.forEach((doc) => {
+        fetchedCities.push({ id: doc.id, ...doc.data() } as City);
+      });
+      if (fetchedCities.length > 0) {
+        setCities(fetchedCities);
+      } else {
+        // If Firestore is empty, keep using the initial static cities as a default
+        // or set to empty if that's preferred: setCities([]);
+        setCities(initialStaticTripData.ciudades); 
+      }
+    } catch (error: any) {
+      console.error("Error fetching cities:", error);
+      toast({
+        variant: "destructive",
+        title: "Error al cargar ciudades",
+        description: `No se pudieron cargar las ciudades. ${error.message}`,
+      });
+       // Fallback to static data on error
+      setCities(initialStaticTripData.ciudades);
+    } finally {
+      setIsLoadingCities(false);
+    }
+  }, [toast, initialStaticTripData.ciudades]);
 
   useEffect(() => {
     fetchActivities();
-  }, [fetchActivities]);
+    fetchCities();
+  }, [fetchActivities, fetchCities]);
 
   const derivedExpensesFromActivities = useMemo((): Expense[] => {
     return activities
       .filter(activity => typeof activity.cost === 'number' && activity.cost > 0)
       .map(activity => ({
-        id: `${activity.id}-expense`, // Create a unique ID for the derived expense
+        id: `${activity.id}-expense`, 
         city: activity.city,
         date: activity.date,
-        category: activity.category, // Use activity category, or a more generic one if needed
-        description: activity.title, // Use activity title as description
-        amount: activity.cost!, // Assert cost is a number due to filter
+        category: activity.category,
+        description: activity.title, 
+        amount: Number(activity.cost || 0), 
       }));
   }, [activities]);
 
   const currentTripDataForWidgets = useMemo((): TripDetails => ({
     ...initialStaticTripData,
     activities: activities,
+    ciudades: cities, // Use dynamic cities state
     expenses: derivedExpensesFromActivities,
-  }), [initialStaticTripData, activities, derivedExpensesFromActivities]);
+  }), [initialStaticTripData, activities, cities, derivedExpensesFromActivities]);
 
 
   const currentCityToday = useMemo((): City | undefined => {
-    if (!currentDate || !initialStaticTripData.ciudades) return undefined;
+    if (!currentDate || !cities) return undefined; // Use dynamic cities
     const currentDateOnly = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
-    return initialStaticTripData.ciudades.find(city => {
+    return cities.find(city => { // Use dynamic cities
       const arrival = parseISO(city.arrivalDate);
       const departure = parseISO(city.departureDate);
       return isWithinInterval(currentDateOnly, { start: arrival, end: departure });
     });
-  }, [currentDate, initialStaticTripData.ciudades]);
+  }, [currentDate, cities]); // Depend on dynamic cities
 
   const handleAddOrUpdateActivity = async (activity: Activity) => {
     const activityId = activity.id && !activity.id.startsWith('temp-') ? activity.id : doc(collection(db, "trips", TRIP_ID, "activities")).id;
     const activityRef = doc(db, "trips", TRIP_ID, "activities", activityId);
-
-    const activityBaseData: Partial<Activity> = { ...activity, id: activityId };
     const activityDataForFirestore: Record<string, any> = {};
 
-    for (const key in activityBaseData) {
+    const activityBaseData: Partial<Activity> = { ...activity, id: activityId};
+     for (const key in activityBaseData) {
       if (Object.prototype.hasOwnProperty.call(activityBaseData, key)) {
         const typedKey = key as keyof Activity;
         if (activityBaseData[typedKey] !== undefined) {
@@ -112,7 +145,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
         }
       }
     }
-
+    
     activityDataForFirestore.updatedAt = serverTimestamp();
     if (!activities.find(a => a.id === activityId)) {
         activityDataForFirestore.createdAt = serverTimestamp();
@@ -141,7 +174,6 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     updatedActivities.forEach(activity => {
       if (activity.id && !activity.id.startsWith('temp-')) {
         const activityRef = doc(db, "trips", TRIP_ID, "activities", activity.id);
-
         const updatePayload: Partial<Activity> = {
           order: activity.order,
           time: activity.time,
@@ -150,20 +182,20 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
           cost: activity.cost,
           notes: activity.notes,
           attachments: activity.attachments,
-          updatedAt: serverTimestamp() as FieldValue
         };
-
+        
         const sanitizedPayload: Record<string, any> = {};
         for (const key in updatePayload) {
-          if (Object.prototype.hasOwnProperty.call(updatePayload, key)) {
-            const typedKey = key as keyof Activity;
-            if (updatePayload[typedKey] !== undefined) {
-                sanitizedPayload[typedKey] = updatePayload[typedKey];
+            if (Object.prototype.hasOwnProperty.call(updatePayload, key)) {
+                const typedKey = key as keyof Activity;
+                if (updatePayload[typedKey] !== undefined) {
+                    sanitizedPayload[typedKey] = updatePayload[typedKey];
+                }
             }
-          }
         }
+        sanitizedPayload.updatedAt = serverTimestamp();
 
-        if (Object.keys(sanitizedPayload).length > 0) {
+        if (Object.keys(sanitizedPayload).length > 1) { // ensure there's more than just updatedAt
             batch.update(activityRef, sanitizedPayload);
         }
       }
@@ -171,6 +203,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
 
     try {
       await batch.commit();
+      // Optimistic update of local state to reflect DND changes immediately
       setActivities(prevActivities => {
         return prevActivities.map(pa => {
           const updatedVersion = updatedActivities.find(ua => ua.id === pa.id);
@@ -183,7 +216,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
             return (a.order ?? 0) - (b.order ?? 0);
         });
       });
-      // fetchActivities(); // Optionally re-fetch for full consistency
+       // fetchActivities(); // Optionally re-fetch for full consistency
     } catch (error) {
       console.error("Error batch updating activities:", error);
       toast({
@@ -216,7 +249,54 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     }
   };
 
-  const isLoading = isLoadingActivities; // Only depends on activities loading now
+  const handleAddCity = async (cityData: Omit<City, 'id' | 'coordinates'> & { coordinates?: Partial<Coordinates> }) => {
+    const newCityDoc: Omit<City, 'id'> = {
+      ...cityData,
+      coordinates: {
+        lat: cityData.coordinates?.lat ?? 0,
+        lng: cityData.coordinates?.lng ?? 0,
+      },
+    };
+    try {
+      const citiesCollectionRef = collection(db, "trips", TRIP_ID, "cities");
+      await addDoc(citiesCollectionRef, newCityDoc);
+      toast({
+        title: "Ciudad Añadida",
+        description: `${cityData.name} ha sido añadida al viaje.`,
+      });
+      fetchCities(); // Refetch cities to update the list
+    } catch (error) {
+      console.error("Error adding city:", error);
+      toast({
+        variant: "destructive",
+        title: "Error al añadir ciudad",
+        description: `No se pudo guardar la ciudad. Error: ${(error as Error).message}`,
+      });
+    }
+  };
+
+  const handleDeleteCity = async (cityId: string) => {
+    const cityToDelete = cities.find(c => c.id === cityId);
+    if (!cityToDelete) return;
+    try {
+      const cityRef = doc(db, "trips", TRIP_ID, "cities", cityId);
+      await deleteDoc(cityRef);
+      toast({
+        title: "Ciudad Eliminada",
+        description: `${cityToDelete.name} ha sido eliminada del viaje.`,
+      });
+      fetchCities(); // Refetch cities to update the list
+    } catch (error) {
+      console.error("Error deleting city:", error);
+      toast({
+        variant: "destructive",
+        title: "Error al eliminar ciudad",
+        description: `No se pudo eliminar ${cityToDelete.name}. Error: ${(error as Error).message}`,
+      });
+    }
+  };
+
+  const isLoading = isLoadingActivities || isLoadingCities; 
 
   if (showFullItinerary) {
     return (
@@ -247,15 +327,27 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
           <Separator className="my-8 md:my-12" />
           <CalendarSection tripData={currentTripDataForWidgets} />
           <Separator className="my-8 md:my-12" />
-          <MapSection tripData={currentTripDataForWidgets} />
+          {isLoadingCities ? (
+            <div className="flex justify-center items-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="ml-2">Cargando mapa y ciudades...</p>
+            </div>
+          ) : (
+            <MapSection 
+              tripData={currentTripDataForWidgets} 
+              cities={cities}
+              onAddCity={handleAddCity}
+              onDeleteCity={handleDeleteCity}
+            />
+          )}
           <Separator className="my-8 md:my-12" />
-          {isLoadingActivities ? ( // Budget section also depends on activities now
+          {isLoadingActivities ? ( 
              <div className="flex justify-center items-center py-10">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2">Cargando presupuesto...</p>
             </div>
           ) : (
-            <BudgetSection expenses={derivedExpensesFromActivities} tripCities={initialStaticTripData.ciudades} />
+            <BudgetSection expenses={derivedExpensesFromActivities} tripCities={cities} />
           )}
         </main>
       </div>

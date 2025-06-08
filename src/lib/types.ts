@@ -5,6 +5,7 @@ export interface Coordinates {
 }
 
 export interface City {
+  id: string; // Added for Firestore document ID
   name: string;
   country: string;
   arrivalDate: string; // YYYY-MM-DD
@@ -58,7 +59,7 @@ export interface TripDetails {
   ciudades: City[];
   paises: string[];
   activities: Activity[];
-  expenses: Expense[];
+  expenses: Expense[]; // This will be derived from activities with costs
 }
 
 export interface WeatherData {
