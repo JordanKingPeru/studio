@@ -24,11 +24,11 @@ const categoryColors: Record<ActivityCategory, string> = {
 
 export default function ActivityCard({ activity, onEdit, onDelete }: ActivityCardProps) {
   return (
-    <Card className="mb-4 shadow-md hover:shadow-lg transition-shadow duration-200 rounded-xl">
+    <Card className="mb-4 shadow-md hover:shadow-lg transition-all duration-200 ease-in-out transform hover:-translate-y-0.5 rounded-xl">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
-          <div className="flex-grow min-w-0 mr-2"> {/* Allow title div to grow and shrink, add margin for buttons */}
-            <CardTitle className="text-xl font-headline text-primary-foreground bg-primary py-2 px-3 rounded-t-md -mt-4 -mx-4 mb-2 truncate w-full"> {/* Removed w-max, added w-full */}
+          <div className="flex-grow min-w-0 mr-2">
+            <CardTitle className="text-xl font-headline text-primary-foreground bg-primary py-2 px-3 rounded-t-md -mt-4 -mx-4 mb-2 truncate w-full">
               {activity.title}
             </CardTitle>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
@@ -41,7 +41,7 @@ export default function ActivityCard({ activity, onEdit, onDelete }: ActivityCar
               )}
             </div>
           </div>
-          <div className="flex space-x-1 sm:space-x-2 shrink-0"> {/* Reduced space-x for very small screens */}
+          <div className="flex space-x-1 sm:space-x-2 shrink-0">
             <Button variant="ghost" size="icon" onClick={() => onEdit(activity)} aria-label="Edit activity">
               <Edit2 size={18} />
             </Button>
