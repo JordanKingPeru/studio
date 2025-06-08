@@ -5,15 +5,15 @@ import type { Activity, ItineraryDay, TripDetails, ItineraryWeek } from '@/lib/t
 import ActivityCard from './ActivityCard';
 import {
   startOfWeek, endOfWeek, eachDayOfInterval, format, parseISO,
-  isWithinInterval, addDays, isBefore, isAfter, isSameDay
+  isWithinInterval, addDays, isBefore, isAfter
 } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card'; // Removed CardHeader, CardTitle as they are not directly used here
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays, Plane, Briefcase, CalendarRange, ChevronDown, ChevronUp } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 
 interface ActivityListProps {
   activities: Activity[];
@@ -31,7 +31,7 @@ const groupActivitiesByWeekAndDay = (
 
   const tripStartDate = parseISO(tripData.inicio);
   const tripEndDate = parseISO(tripData.fin);
-  const today = new Date(); // Current real-world date
+  const today = new Date(); 
 
   if (isBefore(tripEndDate, tripStartDate)) return weeks;
 
@@ -43,7 +43,9 @@ const groupActivitiesByWeekAndDay = (
     const weekEndDate = endOfWeek(currentIteratingMonday, { weekStartsOn: 1 });
     const weekStartDateStr = format(weekStartDate, 'yyyy-MM-dd');
 
-    const weekLabel = `Semana del ${format(weekStartDate, "d 'de' MMM", { locale: es })} al ${format(weekEndDate, "d 'de' MMM 'de' yyyy", { locale: es })}`;
+    const weekLabelFull = `Semana del ${format(weekStartDate, "d 'de' MMM.", { locale: es })} al ${format(weekEndDate, "d 'de' MMM. 'de' yyyy", { locale: es })}`;
+    const weekLabelShort = `Sem: ${format(weekStartDate, "d MMM.", { locale: es })} - ${format(weekEndDate, "d MMM. yy", { locale: es })}`;
+
 
     const daysInThisWeek: ItineraryDay[] = [];
     const daysInterval = eachDayOfInterval({ start: weekStartDate, end: weekEndDate });
@@ -80,21 +82,22 @@ const groupActivitiesByWeekAndDay = (
         sum + day.activities.reduce((daySum, act) => daySum + (act.cost || 0), 0), 0);
 
       let isDefaultExpanded = false;
-      if (isBefore(today, tripStartDate)) { // Today is before trip starts
+      if (isBefore(today, tripStartDate)) { 
         if (weekStartDateStr === firstTripWeekStartDateStr) {
           isDefaultExpanded = true;
         }
-      } else if (!isAfter(today, tripEndDate)) { // Today is during the trip (or trip start/end day)
+      } else if (!isAfter(today, tripEndDate)) { 
         if (isWithinInterval(today, { start: weekStartDate, end: weekEndDate })) {
           isDefaultExpanded = true;
         }
       }
-      // If today is after trip end, nothing expanded by default
+      
 
       weeks.push({
         weekStartDate: weekStartDateStr,
         weekEndDate: format(weekEndDate, 'yyyy-MM-dd'),
-        weekLabel,
+        weekLabel: weekLabelFull, // Store full label, decide rendering in JSX
+        weekLabelShort: weekLabelShort, // Store short label
         days: daysInThisWeek,
         totalWeeklyCost,
         isDefaultExpanded,
@@ -119,35 +122,14 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
       .filter(week => week.isDefaultExpanded)
       .map(week => week.weekStartDate);
     setOpenWeekKeys(defaultOpenWeeks);
-
-    // By default, days within an expanded week remain collapsed, user can expand them.
-    // If you want to expand all days of the default expanded week:
-    /*
-    const initialOpenDays: Record<string, string[]> = {};
-    if (defaultOpenWeeks.length > 0) {
-      const defaultExpandedWeekData = newProcessedWeeks.find(w => w.weekStartDate === defaultOpenWeeks[0]);
-      if (defaultExpandedWeekData) {
-        initialOpenDays[defaultOpenWeeks[0]] = defaultExpandedWeekData.days.map(d => d.date);
-      }
-    }
-    setOpenDayKeys(initialOpenDays);
-    */
   }, [activities, tripData]);
 
   const handleToggleAllWeeks = (expand: boolean) => {
     if (expand) {
       setOpenWeekKeys(processedWeeks.map(w => w.weekStartDate));
-      // Optionally expand all days too
-      /*
-      const allDaysExpanded: Record<string, string[]> = {};
-      processedWeeks.forEach(week => {
-        allDaysExpanded[week.weekStartDate] = week.days.map(d => d.date);
-      });
-      setOpenDayKeys(allDaysExpanded);
-      */
     } else {
       setOpenWeekKeys([]);
-      setOpenDayKeys({}); // Collapse all days when collapsing all weeks
+      setOpenDayKeys({}); 
     }
   };
 
@@ -176,17 +158,20 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
         {processedWeeks.map((week) => (
           <AccordionItem key={week.weekStartDate} value={week.weekStartDate} className="border-none">
             <Card className="rounded-2xl shadow-lg overflow-hidden bg-card">
-              <AccordionTrigger className="w-full p-0 hover:no-underline data-[state=closed]:hover:bg-muted/40 data-[state=open]:hover:bg-muted/70 rounded-t-2xl transition-colors data-[state=open]:bg-muted/50 data-[state=closed]:bg-muted/20">
-                <div className="flex justify-between items-center w-full px-4 py-3 sm:px-6 sm:py-4">
+              <AccordionTrigger className="w-full px-4 py-3 sm:px-6 sm:py-4 hover:no-underline data-[state=closed]:hover:bg-muted/40 data-[state=open]:hover:bg-muted/70 rounded-t-2xl transition-colors data-[state=open]:bg-muted/50 data-[state=closed]:bg-muted/20">
+                <div className="flex justify-between items-center w-full">
                   <div className="flex items-center gap-2 sm:gap-3">
-                    <CalendarRange size={20} sm-size={22} className="text-primary shrink-0" />
-                    <span className="font-headline text-base sm:text-lg md:text-xl text-primary text-left">{week.weekLabel}</span>
+                    <CalendarRange size={20} className="text-primary shrink-0 sm:size-22" />
+                    <div className="text-left">
+                        <span className="font-headline text-sm sm:text-base md:text-lg text-primary hidden sm:inline">{week.weekLabel}</span>
+                        <span className="font-headline text-sm text-primary sm:hidden">{week.weekLabelShort}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                  <div className="flex items-center gap-2 sm:gap-4 shrink-0 ml-2">
                     <Badge variant="secondary" className="text-xs sm:text-sm whitespace-nowrap">
                       Gastos: {week.totalWeeklyCost.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
                     </Badge>
-                    {/* Default Accordion Chevron will be rendered here */}
+                    {/* Accordion Chevron is part of AccordionTrigger */}
                   </div>
                 </div>
               </AccordionTrigger>
@@ -202,19 +187,18 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
                       {week.days.map((day) => (
                         <AccordionItem key={day.date} value={day.date} className="border-none">
                           <Card className="rounded-xl shadow-md overflow-hidden bg-background">
-                             <AccordionTrigger className="w-full p-0 hover:no-underline data-[state=closed]:hover:bg-accent/10 data-[state=open]:hover:bg-accent/20 data-[state=open]:bg-accent/10 rounded-t-xl transition-colors">
-                                <div className="flex justify-between items-center w-full px-3 py-2 sm:px-4 sm:py-3">
+                             <AccordionTrigger className="w-full px-3 py-2 sm:px-4 sm:py-3 hover:no-underline data-[state=closed]:hover:bg-accent/10 data-[state=open]:hover:bg-accent/20 data-[state=open]:bg-accent/10 rounded-t-xl transition-colors">
+                                <div className="flex justify-between items-center w-full">
                                   <div className="flex items-center gap-2">
                                     <CalendarDays size={18} className="text-secondary-foreground shrink-0" />
                                     <span className="font-semibold text-sm sm:text-md text-secondary-foreground text-left">
                                       {format(parseISO(day.date), "EEEE, d 'de' MMMM", { locale: es })}
                                     </span>
                                   </div>
-                                  <div className="text-xs font-normal text-muted-foreground flex items-center gap-1 sm:gap-2 shrink-0">
+                                  <div className="text-xs font-normal text-muted-foreground flex items-center gap-1 sm:gap-2 shrink-0 ml-2">
                                     {day.isTravelDay && <Plane size={14} className="text-blue-500" />}
                                     {day.isWorkDay && <Briefcase size={14} className="text-green-500" />}
-                                    <span className="truncate max-w-[100px] sm:max-w-[150px] md:max-w-xs text-right">{day.cityInfo}</span>
-                                     {/* Default Accordion Chevron for day */}
+                                    <span className="truncate max-w-[80px] xs:max-w-[100px] sm:max-w-[150px] md:max-w-xs text-right">{day.cityInfo}</span>
                                   </div>
                                 </div>
                              </AccordionTrigger>
@@ -250,3 +234,4 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
     </div>
   );
 }
+

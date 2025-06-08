@@ -1,4 +1,5 @@
 
+
 export interface Coordinates {
   lat: number;
   lng: number;
@@ -74,8 +75,10 @@ export type BudgetPerCity = {
 export interface ItineraryWeek {
   weekStartDate: string; // YYYY-MM-DD, Monday
   weekEndDate: string; // YYYY-MM-DD, Sunday
-  weekLabel: string;
+  weekLabel: string; // Full label for larger screens
+  weekLabelShort: string; // Short label for smaller screens
   days: ItineraryDay[];
   totalWeeklyCost: number;
   isDefaultExpanded: boolean;
 }
+

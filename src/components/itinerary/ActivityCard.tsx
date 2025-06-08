@@ -1,5 +1,6 @@
+
 import type { Activity, ActivityCategory } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Clock, Tag, Edit2, Trash2, DollarSign, FileText } from 'lucide-react';
@@ -26,9 +27,11 @@ export default function ActivityCard({ activity, onEdit, onDelete }: ActivityCar
     <Card className="mb-4 shadow-md hover:shadow-lg transition-shadow duration-200 rounded-xl">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
-          <div>
-            <CardTitle className="text-xl font-headline text-primary-foreground bg-primary py-2 px-3 rounded-t-md -mt-4 -mx-4 mb-2 w-max max-w-full truncate" style={{backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))'}}>{activity.title}</CardTitle>
-            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+          <div className="flex-grow min-w-0 mr-2"> {/* Allow title div to grow and shrink, add margin for buttons */}
+            <CardTitle className="text-xl font-headline text-primary-foreground bg-primary py-2 px-3 rounded-t-md -mt-4 -mx-4 mb-2 truncate w-full"> {/* Removed w-max, added w-full */}
+              {activity.title}
+            </CardTitle>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
               <span className="flex items-center"><Clock size={16} className="mr-1.5" /> {activity.time}</span>
               <Badge variant="outline" className={cn("text-xs", categoryColors[activity.category] || categoryColors.Otro)}>
                 <Tag size={14} className="mr-1" />{activity.category}
@@ -38,7 +41,7 @@ export default function ActivityCard({ activity, onEdit, onDelete }: ActivityCar
               )}
             </div>
           </div>
-          <div className="flex space-x-2 shrink-0">
+          <div className="flex space-x-1 sm:space-x-2 shrink-0"> {/* Reduced space-x for very small screens */}
             <Button variant="ghost" size="icon" onClick={() => onEdit(activity)} aria-label="Edit activity">
               <Edit2 size={18} />
             </Button>
