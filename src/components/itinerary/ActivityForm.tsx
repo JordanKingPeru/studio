@@ -34,7 +34,7 @@ const activitySchema = z.object({
   category: z.custom<ActivityCategory>((val) => activityCategories.includes(val as ActivityCategory), "Categoría inválida"),
   city: z.string().min(1, "La ciudad es obligatoria"),
   notes: z.string().optional(),
-  cost: z.number().optional(),
+  cost: z.number().optional().nullable(), // Allow null as well for easier handling with parseFloat
   order: z.number().optional(),
   attachments: z.array(activityAttachmentSchema).optional(),
 });
@@ -114,7 +114,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
     setUploadProgress(0);
     setUploadError(null);
 
-    const activityIdForPath = form.getValues('id') || formActivityId; // Use ID from form or the memoized one
+    const activityIdForPath = form.getValues('id') || formActivityId; 
 
     if (!activityIdForPath) {
         setUploadError("No se pudo determinar el ID de la actividad para la subida.");
@@ -168,10 +168,6 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
     const currentAttachments = form.getValues('attachments') || [];
     const attachmentToRemove = currentAttachments[indexToRemove];
     
-    // For now, we only remove from the list. Deleting from storage can be added later.
-    // const fileStorageRef = storageRef(storage, attachmentToRemove.downloadURL); // This is not the storage path
-    // deleteObject(fileStorageRef).then(...).catch(...);
-    
     form.setValue('attachments', currentAttachments.filter((_, index) => index !== indexToRemove));
     toast({ title: "Adjunto Eliminado", description: `${attachmentToRemove.fileName} ha sido quitado de la lista.` });
   };
@@ -194,7 +190,6 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
     setUploadProgress(null);
     setUploadError(null);
     onClose();
-    // form.reset() is handled by useEffect or can be explicitly called if needed
   };
 
   return (
@@ -302,7 +297,18 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
                 <FormItem>
                   <FormLabel className="flex items-center"><DollarSign className="mr-2 h-4 w-4 text-muted-foreground" />Coste (opcional)</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="Ej: 25" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} />
+                    <Input
+                      type="number"
+                      placeholder="Ej: 25"
+                      {...field} // Spread field to pass name, ref, onBlur
+                      value={field.value ?? ''} // Ensure value is never undefined, default to empty string
+                      onChange={e => {
+                        const value = e.target.value;
+                        // If input is empty string, treat as undefined for react-hook-form
+                        // Otherwise, parse as float. parseFloat will return NaN for invalid numbers.
+                        field.onChange(value === '' ? undefined : parseFloat(value));
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -385,3 +391,4 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
     </Dialog>
   );
 }
+

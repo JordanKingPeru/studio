@@ -12,13 +12,12 @@ import { getStorage, type FirebaseStorage } from "firebase/storage";
 // 5. Copia los valores correspondientes y pégalos aquí abajo, reemplazando los marcadores.
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY", // Reemplaza esto con tu apiKey de Firebase
-  authDomain: "YOUR_AUTH_DOMAIN", // Reemplaza esto con tu authDomain de Firebase
-  projectId: "YOUR_PROJECT_ID", // Reemplaza esto con tu projectId de Firebase
-  storageBucket: "YOUR_STORAGE_BUCKET", // Reemplaza esto con tu storageBucket de Firebase
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID", // Reemplaza esto con tu messagingSenderId de Firebase
-  appId: "YOUR_APP_ID", // Reemplaza esto con tu appId de Firebase
-  measurementId: "YOUR_MEASUREMENT_ID" // Opcional: Reemplaza esto con tu measurementId si lo usas
+  apiKey: "AIzaSyBpmqOdoAl98RR4c1yQbTPUdPj6s4yYWvE",
+  authDomain: "family-trip-planner-3qp79.firebaseapp.com",
+  projectId: "family-trip-planner-3qp79",
+  storageBucket: "family-trip-planner-3qp79.firebasestorage.app",
+  messagingSenderId: "692025766813",
+  appId: "1:692025766813:web:f8600533efdfc07ee13574"
 };
 
 // Initialize Firebase
