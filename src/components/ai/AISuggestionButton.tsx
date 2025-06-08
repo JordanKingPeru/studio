@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -73,16 +74,27 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
 
   const handleAddSuggestedActivity = () => {
     if (suggestion && form.getValues("city")) {
+      const selectedCityName = form.getValues("city");
+      const selectedCityObject = cities.find(c => c.name === selectedCityName);
+      
+      let activityDate = new Date().toISOString().split('T')[0]; // Fallback: today
+      if (selectedCityObject && selectedCityObject.arrivalDate) {
+        activityDate = selectedCityObject.arrivalDate;
+      } else if (tripDates.inicio) {
+        activityDate = tripDates.inicio;
+      }
+
       const newActivity: Activity = {
         id: `ai-${Date.now()}`,
-        date: new Date().toISOString().split('T')[0], 
-        time: new Date().toTimeString().substring(0,5), 
+        date: activityDate, 
+        time: '12:00', // Default to noon
         title: suggestion.activity,
         category: 'Ocio' as ActivityCategory, 
         notes: suggestion.reason,
         cost: undefined, 
-        city: form.getValues("city"),
-        order: Date.now(), // Add default order for AI suggestions
+        city: selectedCityName,
+        order: Date.now(), 
+        attachments: [], // Initialize with empty attachments
       };
       onAddActivity(newActivity);
       toast({
@@ -119,7 +131,17 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Ciudad</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select 
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      // Optionally, update tripDetails if city changes, or handle this differently
+                      // const cityDetails = cities.find(c => c.name === value);
+                      // if (cityDetails) {
+                      //   form.setValue('tripDetails', `Viaje para ${tripFamilia} a ${value} desde ${tripDates.inicio} hasta ${tripDates.fin}.`);
+                      // }
+                    }} 
+                    defaultValue={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona una ciudad" />
@@ -193,3 +215,4 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
     </Dialog>
   );
 }
+
