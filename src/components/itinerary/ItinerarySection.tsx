@@ -15,19 +15,40 @@ interface ItinerarySectionProps {
 }
 
 export default function ItinerarySection({ initialTripData }: ItinerarySectionProps) {
-  const [activities, setActivities] = useState<Activity[]>(initialTripData.activities);
+  const [activities, setActivities] = useState<Activity[]>(
+    initialTripData.activities.sort((a, b) => {
+      const dateComparison = a.date.localeCompare(b.date);
+      if (dateComparison !== 0) return dateComparison;
+      const timeComparison = a.time.localeCompare(b.time);
+      if (timeComparison !== 0) return timeComparison;
+      return a.order - b.order;
+    })
+  );
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const { toast } = useToast();
 
   const handleAddOrUpdateActivity = (activity: Activity) => {
+    let updatedActivities;
     if (editingActivity) {
-      setActivities(prev => prev.map(a => a.id === activity.id ? activity : a));
+      updatedActivities = activities.map(a => a.id === activity.id ? activity : a);
       toast({ title: "Actividad Actualizada", description: `"${activity.title}" ha sido actualizada.` });
     } else {
-      setActivities(prev => [...prev, activity].sort((a,b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)));
+      // Ensure new activity has an order, if not provided (e.g., by AI suggestion already)
+      const newActivityWithOrder = { ...activity, order: activity.order ?? Date.now() };
+      updatedActivities = [...activities, newActivityWithOrder];
       toast({ title: "Actividad Añadida", description: `"${activity.title}" ha sido añadida.` });
     }
+    
+    updatedActivities.sort((a, b) => {
+      const dateComparison = a.date.localeCompare(b.date);
+      if (dateComparison !== 0) return dateComparison;
+      const timeComparison = a.time.localeCompare(b.time);
+      if (timeComparison !== 0) return timeComparison;
+      return a.order - b.order;
+    });
+
+    setActivities(updatedActivities);
     setEditingActivity(null);
     setIsFormOpen(false);
   };
@@ -78,6 +99,7 @@ export default function ItinerarySection({ initialTripData }: ItinerarySectionPr
         onEditActivity={handleOpenForm}
         onDeleteActivity={handleDeleteActivity}
       />
+      {/* Placeholder for dnd-kit integration for reordering activities */}
       <ActivityForm 
         isOpen={isFormOpen} 
         onClose={() => { setIsFormOpen(false); setEditingActivity(null); }} 

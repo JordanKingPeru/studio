@@ -3,7 +3,7 @@
 import * as React from 'react';
 import type { Activity, ActivityCategory, City } from '@/lib/types';
 import { activityCategories } from '@/lib/types';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ const activitySchema = z.object({
   city: z.string().min(1, "La ciudad es obligatoria"),
   notes: z.string().optional(),
   cost: z.number().optional(),
+  order: z.number().optional(), // Added order field
 });
 
 type ActivityFormData = z.infer<typeof activitySchema>;
@@ -40,6 +41,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
     defaultValues: initialData ? {
       ...initialData,
       cost: initialData.cost ?? undefined,
+      order: initialData.order ?? Date.now(),
     } : {
       title: '',
       date: new Date().toISOString().split('T')[0],
@@ -48,6 +50,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
       city: cities[0]?.name || '',
       notes: '',
       cost: undefined,
+      order: Date.now(),
     },
   });
 
@@ -56,6 +59,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
       form.reset({
         ...initialData,
         cost: initialData.cost ?? undefined,
+        order: initialData.order ?? Date.now(),
       });
     } else {
        form.reset({
@@ -66,6 +70,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
         city: cities[0]?.name || '',
         notes: '',
         cost: undefined,
+        order: Date.now(),
       });
     }
   }, [initialData, form, cities]);
@@ -74,8 +79,9 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
   const handleSubmit = (data: ActivityFormData) => {
     onSubmit({
       ...data,
-      id: initialData?.id || Date.now().toString(), // Generate new ID or use existing
+      id: initialData?.id || Date.now().toString(), 
       cost: data.cost ? Number(data.cost) : undefined,
+      order: data.order ?? Date.now(), // Ensure order is set
     });
     onClose();
   };

@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Activity, ItineraryDay, TripDetails, ItineraryWeek } from '@/lib/types';
@@ -8,7 +7,7 @@ import {
   isWithinInterval, addDays, isBefore, isAfter
 } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Card, CardContent } from '@/components/ui/card'; // Removed CardHeader, CardTitle as they are not directly used here
+import { Card } from '@/components/ui/card'; 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -57,7 +56,11 @@ const groupActivitiesByWeekAndDay = (
       const dateStr = format(dayDate, 'yyyy-MM-dd');
       const activitiesForDay = activities
         .filter(act => act.date === dateStr)
-        .sort((a, b) => a.time.localeCompare(b.time));
+        .sort((a, b) => {
+          const timeComparison = a.time.localeCompare(b.time);
+          if (timeComparison !== 0) return timeComparison;
+          return a.order - b.order; // Sort by new order field
+        });
 
       const currentCity = tripData.ciudades.find(c =>
         !isBefore(dayDate, parseISO(c.arrivalDate)) && !isAfter(dayDate, parseISO(c.departureDate))
@@ -96,8 +99,8 @@ const groupActivitiesByWeekAndDay = (
       weeks.push({
         weekStartDate: weekStartDateStr,
         weekEndDate: format(weekEndDate, 'yyyy-MM-dd'),
-        weekLabel: weekLabelFull, // Store full label, decide rendering in JSX
-        weekLabelShort: weekLabelShort, // Store short label
+        weekLabel: weekLabelFull, 
+        weekLabelShort: weekLabelShort, 
         days: daysInThisWeek,
         totalWeeklyCost,
         isDefaultExpanded,
@@ -144,6 +147,7 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
     return <p className="text-muted-foreground text-center py-8">No hay actividades planificadas todavía.</p>;
   }
 
+  // Placeholder for dnd-kit DndContext
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-end gap-2 mb-4">
@@ -156,6 +160,7 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
       </div>
       <Accordion type="multiple" value={openWeekKeys} onValueChange={setOpenWeekKeys} className="w-full space-y-4">
         {processedWeeks.map((week) => (
+          // Placeholder: This <AccordionItem> could be a droppable area for activities between weeks (complex)
           <AccordionItem key={week.weekStartDate} value={week.weekStartDate} className="border-none">
             <Card className="rounded-2xl shadow-lg overflow-hidden bg-card">
               <AccordionTrigger className="w-full px-4 py-3 sm:px-6 sm:py-4 hover:no-underline data-[state=closed]:hover:bg-muted/40 data-[state=open]:hover:bg-muted/70 rounded-t-2xl transition-colors data-[state=open]:bg-muted/50 data-[state=closed]:bg-muted/20">
@@ -171,12 +176,12 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
                     <Badge variant="secondary" className="text-xs sm:text-sm whitespace-nowrap">
                       Gastos: {week.totalWeeklyCost.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
                     </Badge>
-                    {/* Accordion Chevron is part of AccordionTrigger */}
                   </div>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="p-0">
                 <div className="border-t border-border p-2 sm:p-4 md:p-6">
+                  {/* Placeholder: This div could be a droppable area for activities within the week */}
                   {week.days.length > 0 ? (
                     <Accordion
                       type="multiple"
@@ -185,6 +190,7 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
                       className="w-full space-y-2"
                     >
                       {week.days.map((day) => (
+                        // Placeholder: This <AccordionItem> for a day is a primary droppable area for activities
                         <AccordionItem key={day.date} value={day.date} className="border-none">
                           <Card className="rounded-xl shadow-md overflow-hidden bg-background">
                              <AccordionTrigger className="w-full px-3 py-2 sm:px-4 sm:py-3 hover:no-underline data-[state=closed]:hover:bg-accent/10 data-[state=open]:hover:bg-accent/20 data-[state=open]:bg-accent/10 rounded-t-xl transition-colors">
@@ -204,8 +210,10 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
                              </AccordionTrigger>
                              <AccordionContent className="p-0">
                                 <div className="border-t border-border p-2 sm:p-3 md:p-4">
+                                  {/* Placeholder: This div is the list of draggable ActivityCards */}
                                   {day.activities.length > 0 ? (
                                     day.activities.map(activity => (
+                                      // Placeholder: ActivityCard will become a draggable item
                                       <ActivityCard
                                         key={activity.id}
                                         activity={activity}
@@ -234,4 +242,3 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
     </div>
   );
 }
-

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { CalendarHeart, ListChecks, MapPin, PiggyBank, Briefcase } from 'lucide-react';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function Header() {
   const navItems = [
@@ -16,19 +17,21 @@ export default function Header() {
           <Briefcase className="h-7 w-7 text-primary" />
           <span className="font-headline text-2xl font-bold text-foreground">Family Trip Planner</span>
         </Link>
-        <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
-          {navItems.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className="flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-primary"
-            >
-              {item.icon}
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        {/* Placeholder for Mobile Menu Trigger & Theme Toggle if needed */}
+        <div className="flex items-center space-x-4">
+          <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
+            {navItems.map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className="flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-primary"
+              >
+                {item.icon}
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );

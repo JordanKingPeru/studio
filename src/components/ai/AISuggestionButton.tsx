@@ -75,13 +75,14 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
     if (suggestion && form.getValues("city")) {
       const newActivity: Activity = {
         id: `ai-${Date.now()}`,
-        date: new Date().toISOString().split('T')[0], // Default to today, user should adjust
-        time: new Date().toTimeString().substring(0,5), // Default to now, user should adjust
+        date: new Date().toISOString().split('T')[0], 
+        time: new Date().toTimeString().substring(0,5), 
         title: suggestion.activity,
-        category: 'Ocio' as ActivityCategory, // Default category
+        category: 'Ocio' as ActivityCategory, 
         notes: suggestion.reason,
-        cost: undefined, // AI doesn't provide cost
+        cost: undefined, 
         city: form.getValues("city"),
+        order: Date.now(), // Add default order for AI suggestions
       };
       onAddActivity(newActivity);
       toast({

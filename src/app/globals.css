@@ -53,47 +53,47 @@
   }
 
   .dark {
-    --background: 220 15% 10%; /* Darker grayish blue */
-    --foreground: 0 0% 98%; /* Light Gray/White text */
+    --background: 216 28% 14%; /* #1A202C */
+    --foreground: 210 25% 97%; /* #F7FAFC */
 
-    --card: 220 15% 15%; /* Slightly lighter than dark background */
-    --card-foreground: 0 0% 98%;
+    --card: 215 21% 23%; /* #2D3748 */
+    --card-foreground: 210 25% 97%;
 
-    --popover: 220 15% 15%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 215 21% 23%; /* #2D3748 */
+    --popover-foreground: 210 25% 97%;
 
-    --primary: 207 80% 65%; /* Soft Blue, slightly adjusted for dark */
-    --primary-foreground: 207 100% 97%; /* Light blue/white */
+    --primary: 207 82% 66%; /* #63B3ED */
+    --primary-foreground: 210 25% 97%; /* Adjusted for new primary */
 
-    --secondary: 220 15% 25%; /* Lighter dark blue-gray */
+    --secondary: 220 15% 25%; /* Kept existing dark secondary */
     --secondary-foreground: 0 0% 95%;
 
-    --muted: 220 15% 25%;
-    --muted-foreground: 0 0% 63.9%;
+    --muted: 215 21% 23%; /* #2D3748 */
+    --muted-foreground: 213 19% 72%; /* #A0AEC0 */
 
-    --accent: 34 95% 60%; /* Warm Orange, slightly adjusted for dark */
-    --accent-foreground: 34 100% 10%; /* Dark Brown/Black */
+    --accent: 34 95% 60%; /* Kept existing dark accent (Warm Orange) */
+    --accent-foreground: 34 100% 10%; 
 
-    --destructive: 0 72.2% 50.6%; /* Adjusted destructive for dark */
+    --destructive: 0 72.2% 50.6%; /* Kept existing dark destructive */
     --destructive-foreground: 0 0% 98%;
 
-    --border: 220 15% 25%;
-    --input: 220 15% 25%;
-    --ring: 207 80% 65%;
+    --border: 215 21% 28%; /* Derived from #2D3748 */
+    --input: 215 21% 28%; /* Derived from #2D3748 */
+    --ring: 207 82% 66%; /* #63B3ED */
 
     /* Sidebar specific colors - dark theme */
-    --sidebar-background: 220 15% 10%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 207 80% 65%;
-    --sidebar-primary-foreground: 207 100% 97%;
-    --sidebar-accent: 34 95% 60%;
+    --sidebar-background: 216 28% 14%;
+    --sidebar-foreground: 210 25% 97%;
+    --sidebar-primary: 207 82% 66%;
+    --sidebar-primary-foreground: 210 25% 97%;
+    --sidebar-accent: 34 95% 60%; 
     --sidebar-accent-foreground: 34 100% 10%;
-    --sidebar-border: 220 15% 25%;
-    --sidebar-ring: 207 80% 65%;
+    --sidebar-border: 215 21% 28%;
+    --sidebar-ring: 207 82% 66%;
 
-    /* Chart colors - dark theme */
-    --chart-1: 207 80% 65%; /* Primary */
-    --chart-2: 34 95% 60%; /* Accent */
+    /* Chart colors - dark theme (kept existing for now) */
+    --chart-1: 207 80% 65%; 
+    --chart-2: 34 95% 60%; 
     --chart-3: 120 50% 55%;
     --chart-4: 280 60% 65%;
     --chart-5: 0 70% 65%;

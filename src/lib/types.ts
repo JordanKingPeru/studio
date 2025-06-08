@@ -28,6 +28,7 @@ export interface Activity {
   notes?: string;
   cost?: number;
   city: string; // Name of the city
+  order: number; // For drag-and-drop reordering
 }
 
 export interface Expense {
@@ -81,4 +82,3 @@ export interface ItineraryWeek {
   totalWeeklyCost: number;
   isDefaultExpanded: boolean;
 }
-
