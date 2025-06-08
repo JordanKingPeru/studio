@@ -33,7 +33,7 @@ interface AISuggestionButtonProps {
   cities: City[];
   tripFamilia: string;
   tripDates: { inicio: string; fin: string };
-  onAddActivity: (activity: Activity) => Promise<void>; // Make sure this prop expects a Promise
+  onAddActivity: (activity: Activity) => Promise<void>;
 }
 
 export default function AISuggestionButton({ cities, tripFamilia, tripDates, onAddActivity }: AISuggestionButtonProps) {
@@ -46,33 +46,41 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
   const [suggestedDate, setSuggestedDate] = useState('');
   const [suggestedTime, setSuggestedTime] = useState('12:00');
 
-  const defaultTripDetails = `Viaje para ${tripFamilia} desde ${format(parseISO(tripDates.inicio), "dd/MM/yyyy")} hasta ${format(parseISO(tripDates.fin), "dd/MM/yyyy")}.`;
+  const defaultTripDetailsGlobal = `Viaje para ${tripFamilia} desde ${format(parseISO(tripDates.inicio), "dd/MM/yyyy")} hasta ${format(parseISO(tripDates.fin), "dd/MM/yyyy")}.`;
 
   const form = useForm<SuggestionFormData>({
     resolver: zodResolver(suggestionSchema),
     defaultValues: {
       city: cities[0]?.name || '',
       interests: '',
-      tripDetails: defaultTripDetails,
+      tripDetails: defaultTripDetailsGlobal,
     },
   });
   
   useEffect(() => {
     if (isOpen) {
+        const initialCityName = cities[0]?.name || '';
+        const initialCityData = cities.find(c => c.name === initialCityName);
+        
+        let currentTripDetailsText = defaultTripDetailsGlobal;
+        if (initialCityData) {
+            currentTripDetailsText = `Viaje para ${tripFamilia} a ${initialCityData.name} (llegada: ${format(parseISO(initialCityData.arrivalDate), "dd/MM/yyyy")}, salida: ${format(parseISO(initialCityData.departureDate), "dd/MM/yyyy")}).`;
+        }
+
         form.reset({
-            city: cities[0]?.name || '',
+            city: initialCityName,
             interests: '',
-            tripDetails: defaultTripDetails,
+            tripDetails: currentTripDetailsText,
         });
         setSuggestion(null);
         setError(null);
-        const selectedCityInForm = form.getValues('city'); // Get current city in form
-        const cityForDate = cities.find(c => c.name === selectedCityInForm) || cities[0];
-        const initialDate = cityForDate?.arrivalDate || tripDates.inicio;
-        setSuggestedDate(initialDate);
+        
+        const cityForDate = initialCityData || (cities[0] ? cities[0] : undefined);
+        const initialDateForOutput = cityForDate?.arrivalDate || tripDates.inicio;
+        setSuggestedDate(initialDateForOutput);
         setSuggestedTime("12:00");
     }
-  }, [isOpen, cities, tripDates, form, defaultTripDetails]);
+  }, [isOpen, cities, tripDates.inicio, tripDates.fin, form, tripFamilia, defaultTripDetailsGlobal]);
 
   const handleGenerateSuggestion: SubmitHandler<SuggestionFormData> = async (data) => {
     setIsLoading(true);
@@ -82,10 +90,11 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
       const result = await recommendActivity(data);
       setSuggestion(result);
 
-      const selectedCityObject = cities.find(c => c.name === data.city);
-      let initialDateForSuggestion = selectedCityObject?.arrivalDate || tripDates.inicio;
+      const selectedCityInForm = form.getValues('city');
+      const selectedCityObject = cities.find(c => c.name === selectedCityInForm);
+      let initialDateForSuggestionOutput = selectedCityObject?.arrivalDate || tripDates.inicio;
       
-      setSuggestedDate(initialDateForSuggestion);
+      setSuggestedDate(initialDateForSuggestionOutput);
       setSuggestedTime(result.suggestedTime || '12:00');
 
     } catch (err) {
@@ -106,20 +115,19 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
       const selectedCityName = form.getValues("city");
       
       const newActivity: Activity = {
-        id: `ai-${Date.now()}`, // Firestore will generate ID if this is new, or use existing if editing
+        id: `ai-${Date.now()}`,
         date: suggestedDate, 
         time: suggestedTime,
         title: suggestion.activity,
         category: 'Ocio' as ActivityCategory, 
         notes: suggestion.reason,
-        // cost: undefined, // Will be handled by DashboardView to omit if undefined
         city: selectedCityName,
         order: Date.now(), 
         attachments: [],
       };
 
       try {
-        await onAddActivity(newActivity); // Await the async operation
+        await onAddActivity(newActivity);
         toast({
           title: "Actividad Añadida",
           description: `"${suggestion.activity}" ha sido añadida al itinerario.`,
@@ -132,8 +140,8 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
           description: `No se pudo añadir la actividad sugerida. Error: ${(err as Error).message}`,
         });
       } finally {
-        setSuggestion(null); // Reset suggestion state
-        setIsOpen(false);    // Close dialog (this will trigger useEffect to reset date/time)
+        setSuggestion(null); 
+        setIsOpen(false);    
       }
 
     } else {
@@ -171,11 +179,17 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
                   <FormLabel>Ciudad</FormLabel>
                   <Select 
                     onValueChange={(value) => {
-                      field.onChange(value);
+                      field.onChange(value); // Update RHF city field
                       const selectedCityObject = cities.find(c => c.name === value);
-                      // Update suggestedDate when city changes in the RHF form
-                      // This keeps the date input relevant if user changes city *before* generating suggestion
-                      setSuggestedDate(selectedCityObject?.arrivalDate || tripDates.inicio);
+                      setSuggestedDate(selectedCityObject?.arrivalDate || tripDates.inicio); // Update output date picker
+                      
+                      // Dynamically update tripDetails in the form
+                      if (selectedCityObject) {
+                        const citySpecificTripDetails = `Viaje para ${tripFamilia} a ${selectedCityObject.name} (llegada: ${format(parseISO(selectedCityObject.arrivalDate), "dd/MM/yyyy")}, salida: ${format(parseISO(selectedCityObject.departureDate), "dd/MM/yyyy")}).`;
+                        form.setValue('tripDetails', citySpecificTripDetails, { shouldValidate: true, shouldDirty: true });
+                      } else {
+                        form.setValue('tripDetails', defaultTripDetailsGlobal, { shouldValidate: true, shouldDirty: true });
+                      }
                     }} 
                     defaultValue={field.value}
                   >
@@ -215,6 +229,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
                   <FormControl>
                     <Textarea rows={3} {...field} />
                   </FormControl>
+                  <FormDescription>Contexto para la IA. Se actualiza al cambiar de ciudad.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -265,7 +280,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
                 </div>
             </div>
 
-            <Button onClick={handleAddSuggestedActivity} className="w-full" variant="default">
+            <Button onClick={handleAddSuggestedActivity} className="w-full" variant="default" disabled={isLoading}>
               Añadir al Itinerario
             </Button>
           </div>
