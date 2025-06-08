@@ -1,12 +1,13 @@
+
 import type { TripDetails, Activity, Expense } from './types';
 
 const initialActivities: Activity[] = [
-  { id: 'act1', date: '2025-09-12', time: '10:00', title: 'Llegada a Madrid y Check-in Hotel', category: 'Alojamiento', notes: 'Recoger maletas, taxi al hotel NH Collection Madrid Eurobuilding.', cost: 50, city: 'Madrid', order: 0 },
-  { id: 'act2', date: '2025-09-12', time: '14:00', title: 'Almuerzo en Lateral Castellana', category: 'Comida', notes: 'Tapas y comida española.', cost: 75, city: 'Madrid', order: 1 },
-  { id: 'act3', date: '2025-09-12', time: '16:00', title: 'Paseo por el Parque del Retiro', category: 'Ocio', notes: 'Alquilar barca en el estanque.', cost: 10, city: 'Madrid', order: 2 },
-  { id: 'act4', date: '2025-09-13', time: '09:30', title: 'Visita Museo del Prado', category: 'Cultural', notes: 'Comprar entradas con antelación. Ver Las Meninas.', cost: 30, city: 'Madrid', order: 0 },
-  { id: 'act5', date: '2025-09-13', time: '13:00', title: 'Comida en Mercado de San Miguel', category: 'Comida', notes: 'Probar distintas tapas y vinos.', cost: 60, city: 'Madrid', order: 1 },
-  { id: 'act6', date: '2025-09-15', time: '09:00', title: 'Inicio jornada laboral (Remoto)', category: 'Trabajo', notes: 'Reuniones y tareas asignadas.', city: 'Madrid', order: 0 },
+  { id: 'act1', date: '2025-09-12', time: '10:00', title: 'Llegada a Madrid y Check-in Hotel', category: 'Alojamiento', notes: 'Recoger maletas, taxi al hotel NH Collection Madrid Eurobuilding.', cost: 50, city: 'Madrid', order: 0, attachments: [] },
+  { id: 'act2', date: '2025-09-12', time: '14:00', title: 'Almuerzo en Lateral Castellana', category: 'Comida', notes: 'Tapas y comida española.', cost: 75, city: 'Madrid', order: 1, attachments: [] },
+  { id: 'act3', date: '2025-09-12', time: '16:00', title: 'Paseo por el Parque del Retiro', category: 'Ocio', notes: 'Alquilar barca en el estanque.', cost: 10, city: 'Madrid', order: 2, attachments: [] },
+  { id: 'act4', date: '2025-09-13', time: '09:30', title: 'Visita Museo del Prado', category: 'Cultural', notes: 'Comprar entradas con antelación. Ver Las Meninas.', cost: 30, city: 'Madrid', order: 0, attachments: [] },
+  { id: 'act5', date: '2025-09-13', time: '13:00', title: 'Comida en Mercado de San Miguel', category: 'Comida', notes: 'Probar distintas tapas y vinos.', cost: 60, city: 'Madrid', order: 1, attachments: [] },
+  { id: 'act6', date: '2025-09-15', time: '09:00', title: 'Inicio jornada laboral (Remoto)', category: 'Trabajo', notes: 'Reuniones y tareas asignadas.', city: 'Madrid', order: 0, attachments: [] },
 ];
 
 const initialExpenses: Expense[] = [

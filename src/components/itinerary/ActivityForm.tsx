@@ -1,7 +1,8 @@
+
 "use client";
 
-import * as React from 'react';
-import type { Activity, ActivityCategory, City } from '@/lib/types';
+import React, { useState, useEffect } from 'react';
+import type { Activity, ActivityCategory, City, ActivityAttachment } from '@/lib/types';
 import { activityCategories } from '@/lib/types';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,10 +12,22 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { CalendarIcon, DollarSign, Edit3, TagIcon, TextIcon, ClockIcon, MapPinIcon } from 'lucide-react';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Progress } from '@/components/ui/progress';
+import { CalendarIcon, DollarSign, Edit3, TagIcon, TextIcon, ClockIcon, MapPinIcon, Paperclip, UploadCloud, Trash2, FileText, Loader2 } from 'lucide-react';
+import { storage } from '@/lib/firebase'; // Import Firebase storage instance
+import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import { useToast } from "@/hooks/use-toast";
+
+const activityAttachmentSchema = z.object({
+  fileName: z.string(),
+  downloadURL: z.string().url(),
+  uploadedAt: z.string().datetime(),
+  fileType: z.string(),
+});
 
 const activitySchema = z.object({
+  id: z.string().optional(), // Will be set on creation
   title: z.string().min(1, "El título es obligatorio"),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido (YYYY-MM-DD)"),
   time: z.string().regex(/^\d{2}:\d{2}$/, "Formato de hora inválido (HH:MM)"),
@@ -22,7 +35,8 @@ const activitySchema = z.object({
   city: z.string().min(1, "La ciudad es obligatoria"),
   notes: z.string().optional(),
   cost: z.number().optional(),
-  order: z.number().optional(), // Added order field
+  order: z.number().optional(),
+  attachments: z.array(activityAttachmentSchema).optional(),
 });
 
 type ActivityFormData = z.infer<typeof activitySchema>;
@@ -36,13 +50,24 @@ interface ActivityFormProps {
 }
 
 export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initialData }: ActivityFormProps) {
+  const [uploadingFile, setUploadingFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const { toast } = useToast();
+  
+  const formActivityId = React.useMemo(() => initialData?.id || `temp-${Date.now().toString()}`, [initialData?.id]);
+
+
   const form = useForm<ActivityFormData>({
     resolver: zodResolver(activitySchema),
     defaultValues: initialData ? {
       ...initialData,
+      id: initialData.id,
       cost: initialData.cost ?? undefined,
       order: initialData.order ?? Date.now(),
+      attachments: initialData.attachments || [],
     } : {
+      id: formActivityId,
       title: '',
       date: new Date().toISOString().split('T')[0],
       time: new Date().toTimeString().substring(0,5),
@@ -51,18 +76,23 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
       notes: '',
       cost: undefined,
       order: Date.now(),
+      attachments: [],
     },
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
+    const newActivityId = initialData?.id || `temp-${Date.now().toString()}`;
     if (initialData) {
       form.reset({
         ...initialData,
+        id: initialData.id,
         cost: initialData.cost ?? undefined,
         order: initialData.order ?? Date.now(),
+        attachments: initialData.attachments || [],
       });
     } else {
        form.reset({
+        id: newActivityId,
         title: '',
         date: new Date().toISOString().split('T')[0],
         time: new Date().toTimeString().substring(0,5),
@@ -71,23 +101,104 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
         notes: '',
         cost: undefined,
         order: Date.now(),
+        attachments: [],
       });
     }
   }, [initialData, form, cities]);
 
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingFile(file);
+    setUploadProgress(0);
+    setUploadError(null);
+
+    const activityIdForPath = form.getValues('id') || formActivityId; // Use ID from form or the memoized one
+
+    if (!activityIdForPath) {
+        setUploadError("No se pudo determinar el ID de la actividad para la subida.");
+        setUploadingFile(null);
+        return;
+    }
+    
+    const filePath = `trips/defaultTrip/attachments/${activityIdForPath}/${file.name}`;
+    const fileStorageRef = storageRef(storage, filePath);
+
+    try {
+      const uploadTask = uploadBytesResumable(fileStorageRef, file);
+
+      uploadTask.on('state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(progress);
+        },
+        (error) => {
+          console.error("Upload failed:", error);
+          setUploadError(`Error al subir: ${error.message}`);
+          setUploadingFile(null);
+          setUploadProgress(null);
+          toast({ variant: "destructive", title: "Error de Subida", description: error.message });
+        },
+        async () => {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          const newAttachment: ActivityAttachment = {
+            fileName: file.name,
+            downloadURL,
+            uploadedAt: new Date().toISOString(),
+            fileType: file.type,
+          };
+          const currentAttachments = form.getValues('attachments') || [];
+          form.setValue('attachments', [...currentAttachments, newAttachment]);
+          setUploadingFile(null);
+          setUploadProgress(null);
+          toast({ title: "Archivo Subido", description: `${file.name} se ha subido correctamente.` });
+        }
+      );
+    } catch (error: any) {
+        console.error("Error starting upload:", error);
+        setUploadError(`Error al iniciar subida: ${error.message}`);
+        setUploadingFile(null);
+        setUploadProgress(null);
+        toast({ variant: "destructive", title: "Error de Subida", description: error.message });
+    }
+  };
+
+  const handleRemoveAttachment = (indexToRemove: number) => {
+    const currentAttachments = form.getValues('attachments') || [];
+    const attachmentToRemove = currentAttachments[indexToRemove];
+    
+    // For now, we only remove from the list. Deleting from storage can be added later.
+    // const fileStorageRef = storageRef(storage, attachmentToRemove.downloadURL); // This is not the storage path
+    // deleteObject(fileStorageRef).then(...).catch(...);
+    
+    form.setValue('attachments', currentAttachments.filter((_, index) => index !== indexToRemove));
+    toast({ title: "Adjunto Eliminado", description: `${attachmentToRemove.fileName} ha sido quitado de la lista.` });
+  };
 
   const handleSubmit = (data: ActivityFormData) => {
+    const finalActivityId = data.id && data.id.startsWith('temp-') ? (initialData?.id || Date.now().toString()) : (data.id || Date.now().toString());
+    
     onSubmit({
       ...data,
-      id: initialData?.id || Date.now().toString(), 
+      id: finalActivityId,
       cost: data.cost ? Number(data.cost) : undefined,
-      order: data.order ?? Date.now(), // Ensure order is set
+      order: data.order ?? Date.now(),
+      attachments: data.attachments || [],
     });
+    onCloseAndReset();
+  };
+
+  const onCloseAndReset = () => {
+    setUploadingFile(null);
+    setUploadProgress(null);
+    setUploadError(null);
     onClose();
+    // form.reset() is handled by useEffect or can be explicitly called if needed
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onCloseAndReset()}>
       <DialogContent className="sm:max-w-[525px] rounded-xl shadow-2xl">
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl text-primary flex items-center">
@@ -210,11 +321,61 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
                 </FormItem>
               )}
             />
+
+            {/* Attachments Section */}
+            <div className="space-y-3">
+              <FormLabel className="flex items-center"><Paperclip className="mr-2 h-4 w-4 text-muted-foreground" />Adjuntos</FormLabel>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('file-upload-input')?.click()} disabled={!!uploadingFile}>
+                  <UploadCloud className="mr-2 h-4 w-4" />
+                  {uploadingFile ? 'Subiendo...' : 'Seleccionar Archivo'}
+                </Button>
+                <Input 
+                    id="file-upload-input"
+                    type="file" 
+                    className="hidden" 
+                    onChange={handleFileSelect}
+                    disabled={!!uploadingFile}
+                />
+              </div>
+
+              {uploadingFile && uploadProgress !== null && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="truncate max-w-[200px]">{uploadingFile.name}</span>
+                    <span>{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-2" />
+                </div>
+              )}
+              {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
+
+              {(form.watch('attachments')?.length || 0) > 0 && (
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-muted-foreground">Archivos adjuntos:</p>
+                  <ul className="list-none space-y-1">
+                    {form.watch('attachments')?.map((att, index) => (
+                      <li key={index} className="flex items-center justify-between p-1.5 bg-muted/50 rounded-md text-sm">
+                        <a href={att.downloadURL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline truncate">
+                          <FileText className="h-4 w-4 shrink-0" />
+                          <span className="truncate" title={att.fileName}>{att.fileName}</span>
+                        </a>
+                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive/80" onClick={() => handleRemoveAttachment(index)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
             <DialogFooter className="pt-4">
               <DialogClose asChild>
-                <Button type="button" variant="outline">Cancelar</Button>
+                <Button type="button" variant="outline" onClick={onCloseAndReset}>Cancelar</Button>
               </DialogClose>
-              <Button type="submit" variant="default">
+              <Button type="submit" variant="default" disabled={!!uploadingFile}>
+                {uploadingFile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {initialData ? 'Guardar Cambios' : 'Añadir Actividad'}
               </Button>
             </DialogFooter>

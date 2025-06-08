@@ -1,5 +1,4 @@
 
-
 export interface Coordinates {
   lat: number;
   lng: number;
@@ -18,6 +17,12 @@ export type ActivityCategory = 'Viaje' | 'Comida' | 'Cultural' | 'Ocio' | 'Traba
 
 export const activityCategories: ActivityCategory[] = ['Viaje', 'Comida', 'Cultural', 'Ocio', 'Trabajo', 'Alojamiento', 'Otro'];
 
+export interface ActivityAttachment {
+  fileName: string;
+  downloadURL: string;
+  uploadedAt: string; // ISO string
+  fileType: string; // e.g., 'application/pdf', 'image/jpeg'
+}
 
 export interface Activity {
   id: string;
@@ -29,6 +34,7 @@ export interface Activity {
   cost?: number;
   city: string; // Name of the city
   order: number; // For drag-and-drop reordering
+  attachments?: ActivityAttachment[];
 }
 
 export interface Expense {

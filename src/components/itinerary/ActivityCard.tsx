@@ -1,9 +1,9 @@
 
-import type { Activity, ActivityCategory } from '@/lib/types';
+import type { Activity, ActivityCategory, ActivityAttachment } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clock, Tag, Edit2, Trash2, DollarSign, FileText, GripVertical } from 'lucide-react';
+import { Clock, Tag, Edit2, Trash2, DollarSign, FileText, GripVertical, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -37,9 +37,11 @@ export default function ActivityCard({ activity, onEdit, onDelete }: ActivityCar
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    zIndex: isDragging ? 10 : undefined, // Elevate while dragging
+    zIndex: isDragging ? 10 : undefined,
     opacity: isDragging ? 0.8 : 1,
   };
+
+  const hasAttachments = activity.attachments && activity.attachments.length > 0;
 
   return (
     <div ref={setNodeRef} style={style} className="mb-4 touch-none">
@@ -59,7 +61,7 @@ export default function ActivityCard({ activity, onEdit, onDelete }: ActivityCar
                 <GripVertical size={20} />
               </button>
               <div className='flex-grow min-w-0'>
-                <CardTitle className="text-lg font-headline text-primary-foreground bg-primary py-1.5 px-3 rounded-t-md -mt-1 -mx-3 mb-1.5 truncate w-full">
+                <CardTitle className="text-lg font-headline text-primary-foreground bg-primary py-1.5 px-3 rounded-t-md -mt-1 -mx-3 mb-1.5 truncate">
                   {activity.title}
                 </CardTitle>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
@@ -67,10 +69,15 @@ export default function ActivityCard({ activity, onEdit, onDelete }: ActivityCar
                   <Badge variant="outline" className={cn("text-xs font-medium py-0.5 px-1.5", categoryColors[activity.category] || categoryColors.Otro)}>
                     <Tag size={13} className="mr-1" />{activity.category}
                   </Badge>
-                  {activity.cost != null && ( // Check for null or undefined specifically
-                    <span className="flex items-center font-semibold">
-                      <DollarSign size={15} className="mr-0.5 text-accent" />
-                      <span className="text-accent">{activity.cost.toLocaleString()}</span>
+                  {activity.cost != null && (
+                    <span className="flex items-center font-semibold text-accent">
+                      <DollarSign size={15} className="mr-0.5" />
+                      {activity.cost.toLocaleString()}
+                    </span>
+                  )}
+                   {hasAttachments && (
+                    <span className="flex items-center text-muted-foreground" title={`${activity.attachments?.length} adjunto(s)`}>
+                      <Paperclip size={14} className="mr-0.5" />
                     </span>
                   )}
                 </div>
@@ -86,12 +93,34 @@ export default function ActivityCard({ activity, onEdit, onDelete }: ActivityCar
             </div>
           </div>
         </CardHeader>
-        {activity.notes && (
-          <CardContent className="pt-0 pb-3">
-            <p className="text-sm text-foreground/80 flex items-start">
-              <FileText size={15} className="mr-1.5 mt-0.5 shrink-0 text-muted-foreground" /> 
-              {activity.notes}
-            </p>
+        {(activity.notes || hasAttachments) && (
+          <CardContent className="pt-0 pb-3 space-y-2">
+            {activity.notes && (
+              <p className="text-sm text-foreground/80 flex items-start">
+                <FileText size={15} className="mr-1.5 mt-0.5 shrink-0 text-muted-foreground" /> 
+                {activity.notes}
+              </p>
+            )}
+            {hasAttachments && (
+              <div>
+                <h4 className="text-xs font-semibold text-muted-foreground mb-1">Adjuntos:</h4>
+                <ul className="space-y-1">
+                  {activity.attachments?.map((att, index) => (
+                    <li key={index} className="text-sm">
+                      <a
+                        href={att.downloadURL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center text-primary hover:underline hover:text-primary/80"
+                      >
+                        <FileText size={14} className="mr-1.5 shrink-0" />
+                        <span className="truncate" title={att.fileName}>{att.fileName}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </CardContent>
         )}
       </Card>

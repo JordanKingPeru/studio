@@ -30,8 +30,6 @@ export default function ItinerarySection({ initialTripData }: ItinerarySectionPr
   const { toast } = useToast();
 
   const handleSetActivities = (updatedActivities: Activity[]) => {
-    // The list from ActivityList should already be sorted if necessary by date/time/order
-    // However, a final sort here ensures consistency if any direct manipulation happens
     const sortedActivities = [...updatedActivities].sort((a, b) => {
         const dateComparison = a.date.localeCompare(b.date);
         if (dateComparison !== 0) return dateComparison;
@@ -44,16 +42,21 @@ export default function ItinerarySection({ initialTripData }: ItinerarySectionPr
   
   const handleAddOrUpdateActivity = (activity: Activity) => {
     let updatedActivitiesList;
+    // Ensure activity.id is final if it was a temp one
+    const finalActivityId = activity.id && activity.id.startsWith('temp-') ? (editingActivity?.id || Date.now().toString()) : activity.id;
+
+    const activityWithFinalId = { ...activity, id: finalActivityId };
+
     if (editingActivity) {
-      updatedActivitiesList = activities.map(a => a.id === activity.id ? activity : a);
-      toast({ title: "Actividad Actualizada", description: `"${activity.title}" ha sido actualizada.` });
+      updatedActivitiesList = activities.map(a => a.id === activityWithFinalId.id ? activityWithFinalId : a);
+      toast({ title: "Actividad Actualizada", description: `"${activityWithFinalId.title}" ha sido actualizada.` });
     } else {
-      const newActivityWithOrder = { ...activity, order: activity.order ?? Date.now() };
+      const newActivityWithOrder = { ...activityWithFinalId, order: activityWithFinalId.order ?? Date.now() };
       updatedActivitiesList = [...activities, newActivityWithOrder];
-      toast({ title: "Actividad Añadida", description: `"${activity.title}" ha sido añadida.` });
+      toast({ title: "Actividad Añadida", description: `"${activityWithFinalId.title}" ha sido añadida.` });
     }
     
-    handleSetActivities(updatedActivitiesList); // Use the central setter/sorter
+    handleSetActivities(updatedActivitiesList);
     setEditingActivity(null);
     setIsFormOpen(false);
   };
@@ -65,8 +68,9 @@ export default function ItinerarySection({ initialTripData }: ItinerarySectionPr
 
   const handleDeleteActivity = (activityId: string) => {
     const activityToDelete = activities.find(a => a.id === activityId);
+    // TODO: Delete associated attachments from Firebase Storage if any
     const updatedActivities = activities.filter(a => a.id !== activityId);
-    handleSetActivities(updatedActivities); // Use the central setter
+    handleSetActivities(updatedActivities); 
     
     if (activityToDelete) {
       toast({ 
@@ -105,7 +109,7 @@ export default function ItinerarySection({ initialTripData }: ItinerarySectionPr
         tripData={initialTripData} 
         onEditActivity={handleOpenForm}
         onDeleteActivity={handleDeleteActivity}
-        onSetActivities={handleSetActivities} // Pass the updater function
+        onSetActivities={handleSetActivities}
       />
       <ActivityForm 
         isOpen={isFormOpen} 
@@ -117,4 +121,3 @@ export default function ItinerarySection({ initialTripData }: ItinerarySectionPr
     </SectionCard>
   );
 }
-
