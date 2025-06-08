@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { TripDetails, Activity } from '@/lib/types';
 import SectionCard from '@/components/ui/SectionCard';
 import ActivityList from './ActivityList';
@@ -15,40 +16,44 @@ interface ItinerarySectionProps {
 }
 
 export default function ItinerarySection({ initialTripData }: ItinerarySectionProps) {
-  const [activities, setActivities] = useState<Activity[]>(
+  const [activities, setActivities] = useState<Activity[]>(() => 
     initialTripData.activities.sort((a, b) => {
       const dateComparison = a.date.localeCompare(b.date);
       if (dateComparison !== 0) return dateComparison;
       const timeComparison = a.time.localeCompare(b.time);
       if (timeComparison !== 0) return timeComparison;
-      return a.order - b.order;
+      return (a.order ?? 0) - (b.order ?? 0);
     })
   );
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const { toast } = useToast();
 
+  const handleSetActivities = (updatedActivities: Activity[]) => {
+    // The list from ActivityList should already be sorted if necessary by date/time/order
+    // However, a final sort here ensures consistency if any direct manipulation happens
+    const sortedActivities = [...updatedActivities].sort((a, b) => {
+        const dateComparison = a.date.localeCompare(b.date);
+        if (dateComparison !== 0) return dateComparison;
+        const timeComparison = a.time.localeCompare(b.time);
+        if (timeComparison !== 0) return timeComparison;
+        return (a.order ?? Date.now()) - (b.order ?? Date.now());
+      });
+    setActivities(sortedActivities);
+  };
+  
   const handleAddOrUpdateActivity = (activity: Activity) => {
-    let updatedActivities;
+    let updatedActivitiesList;
     if (editingActivity) {
-      updatedActivities = activities.map(a => a.id === activity.id ? activity : a);
+      updatedActivitiesList = activities.map(a => a.id === activity.id ? activity : a);
       toast({ title: "Actividad Actualizada", description: `"${activity.title}" ha sido actualizada.` });
     } else {
-      // Ensure new activity has an order, if not provided (e.g., by AI suggestion already)
       const newActivityWithOrder = { ...activity, order: activity.order ?? Date.now() };
-      updatedActivities = [...activities, newActivityWithOrder];
+      updatedActivitiesList = [...activities, newActivityWithOrder];
       toast({ title: "Actividad Añadida", description: `"${activity.title}" ha sido añadida.` });
     }
     
-    updatedActivities.sort((a, b) => {
-      const dateComparison = a.date.localeCompare(b.date);
-      if (dateComparison !== 0) return dateComparison;
-      const timeComparison = a.time.localeCompare(b.time);
-      if (timeComparison !== 0) return timeComparison;
-      return a.order - b.order;
-    });
-
-    setActivities(updatedActivities);
+    handleSetActivities(updatedActivitiesList); // Use the central setter/sorter
     setEditingActivity(null);
     setIsFormOpen(false);
   };
@@ -60,7 +65,9 @@ export default function ItinerarySection({ initialTripData }: ItinerarySectionPr
 
   const handleDeleteActivity = (activityId: string) => {
     const activityToDelete = activities.find(a => a.id === activityId);
-    setActivities(prev => prev.filter(a => a.id !== activityId));
+    const updatedActivities = activities.filter(a => a.id !== activityId);
+    handleSetActivities(updatedActivities); // Use the central setter
+    
     if (activityToDelete) {
       toast({ 
         title: "Actividad Eliminada", 
@@ -98,8 +105,8 @@ export default function ItinerarySection({ initialTripData }: ItinerarySectionPr
         tripData={initialTripData} 
         onEditActivity={handleOpenForm}
         onDeleteActivity={handleDeleteActivity}
+        onSetActivities={handleSetActivities} // Pass the updater function
       />
-      {/* Placeholder for dnd-kit integration for reordering activities */}
       <ActivityForm 
         isOpen={isFormOpen} 
         onClose={() => { setIsFormOpen(false); setEditingActivity(null); }} 
@@ -110,3 +117,4 @@ export default function ItinerarySection({ initialTripData }: ItinerarySectionPr
     </SectionCard>
   );
 }
+
