@@ -55,7 +55,6 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
   const [uploadError, setUploadError] = useState<string | null>(null);
   const { toast } = useToast();
   
-  // Stable ID for new activities using useMemo, depends only on initialData
   const formActivityId = React.useMemo(() => initialData?.id || `temp-${Date.now().toString()}`, [initialData?.id]);
 
 
@@ -68,7 +67,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
       order: initialData.order ?? Date.now(),
       attachments: initialData.attachments || [],
     } : {
-      id: formActivityId, // Use the memoized formActivityId for new forms
+      id: formActivityId, 
       title: '',
       date: new Date().toISOString().split('T')[0],
       time: new Date().toTimeString().substring(0,5),
@@ -82,19 +81,19 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
   });
 
   useEffect(() => {
-    const idToUseInForm = initialData?.id || formActivityId; // Use stable formActivityId for new items
+    const idToUseInForm = initialData?.id || formActivityId; 
 
     if (initialData) {
       form.reset({
         ...initialData,
-        id: initialData.id, // Use the existing ID
+        id: initialData.id, 
         cost: initialData.cost ?? undefined,
         order: initialData.order ?? Date.now(),
         attachments: initialData.attachments || [],
       });
     } else {
-       form.reset({ // For new activities
-        id: idToUseInForm, // Use the stable temp ID from useMemo
+       form.reset({ 
+        id: idToUseInForm, 
         title: '',
         date: new Date().toISOString().split('T')[0],
         time: new Date().toTimeString().substring(0,5),
@@ -106,13 +105,12 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
         attachments: [],
       });
     }
-  }, [initialData, form, cities, formActivityId]); // Added formActivityId to ensure effect runs if it changes (though it's stable per form instance)
+  }, [initialData, form, cities, formActivityId]); 
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Check if storage is available (basic check)
     if (!storage || typeof storage.app !== 'object') {
         toast({
             variant: "destructive",
@@ -149,19 +147,27 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
           setUploadProgress(progress);
         },
-        (error) => {
-          console.error("Upload failed:", error);
-          // More detailed error messages for common storage errors
-          let description = error.message;
-          if (error.code === 'storage/unauthorized') {
-            description = "Permiso denegado. Revisa las reglas de Firebase Storage.";
-          } else if (error.code === 'storage/object-not-found') {
-            description = "Error en la ruta del archivo. Contacta soporte.";
+        (error: any) => { // Explicitly type error as any
+          console.error("Upload failed. Full error object:", error);
+          if (error.serverResponse) {
+            console.error("Server response:", error.serverResponse);
           }
-          setUploadError(`Error al subir: ${description}`);
+          
+          let descriptionToast = "Ocurrió un error desconocido al subir el archivo. Revisa la consola del navegador para más detalles técnicos.";
+          if (error.code === 'storage/unauthorized') {
+            descriptionToast = "Permiso denegado para subir el archivo. Revisa las reglas de Firebase Storage y la configuración CORS de tu bucket.";
+          } else if (error.code === 'storage/object-not-found') {
+            descriptionToast = "Error en la ruta del archivo al intentar subir. Contacta soporte.";
+          } else if (error.code === 'storage/unknown' && error.serverResponse) {
+            descriptionToast = `Error del servidor: ${JSON.stringify(error.serverResponse)}. Revisa la consola para detalles y verifica la configuración CORS de tu bucket.`;
+          } else if (error.code === 'storage/unknown') {
+            descriptionToast = "Error desconocido de Storage. Verifica la configuración CORS de tu bucket, las reglas de Storage y la conexión de red. Revisa la consola para más detalles.";
+          }
+          
+          setUploadError(`Error al subir: ${error.message || descriptionToast}`);
           setUploadingFile(null);
           setUploadProgress(null);
-          toast({ variant: "destructive", title: "Error de Subida", description });
+          toast({ variant: "destructive", title: "Error de Subida", description: descriptionToast });
         },
         async () => {
           try {
@@ -185,7 +191,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
           }
         }
       );
-    } catch (error: any) { // Catches synchronous errors when setting up the upload
+    } catch (error: any) { 
         console.error("Error starting upload:", error);
         setUploadError(`Error al iniciar subida: ${error.message}`);
         setUploadingFile(null);
@@ -198,17 +204,11 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
     const currentAttachments = form.getValues('attachments') || [];
     const attachmentToRemove = currentAttachments[indexToRemove];
     
-    // Note: This does not delete the file from Firebase Storage.
-    // For actual deletion, you would need to call deleteObject(storageRef(storage, filePathToDelete))
-    // and handle its promise/errors.
     form.setValue('attachments', currentAttachments.filter((_, index) => index !== indexToRemove));
     toast({ title: "Adjunto Eliminado de la Lista", description: `${attachmentToRemove.fileName} ha sido quitado.` });
   };
 
   const handleSubmit = (data: ActivityFormData) => {
-    // Ensure the ID is final, especially if it was a temp one.
-    // If editing, initialData.id should be used. If new, formActivityId (stable temp) or a newly generated one.
-    // The `id` in `data` should already be the correct one due to form.reset logic.
     const finalActivityId = data.id || (initialData?.id || formActivityId); 
     
     onSubmit({
@@ -362,7 +362,6 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
               )}
             />
 
-            {/* Attachments Section */}
             <div className="space-y-3">
               <FormLabel className="flex items-center"><Paperclip className="mr-2 h-4 w-4 text-muted-foreground" />Adjuntos</FormLabel>
               <div className="flex items-center gap-2">
