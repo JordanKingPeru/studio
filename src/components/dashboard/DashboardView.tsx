@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { TripDetails, Activity, City, Expense } from '@/lib/types'; // Added Expense
+import type { TripDetails, Activity, City, Expense } from '@/lib/types';
 import TripHeader from './TripHeader';
 import ItinerarySection from '@/components/itinerary/ItinerarySection';
 import CalendarSection from '@/components/calendar/CalendarSection';
@@ -28,9 +28,7 @@ const TRIP_ID = "defaultTrip";
 
 export default function DashboardView({ tripData: initialStaticTripData }: DashboardViewProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoadingActivities, setIsLoadingActivities] = useState(true);
-  const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
   const [showFullItinerary, setShowFullItinerary] = useState(false);
   const [currentDate, setCurrentDate] = useState<Date | null>(null);
   const { toast } = useToast();
@@ -64,40 +62,29 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     }
   }, [toast]);
 
-  const fetchExpenses = useCallback(async () => {
-    setIsLoadingExpenses(true);
-    try {
-      const expensesCollectionRef = collection(db, "trips", TRIP_ID, "expenses");
-      // Order expenses by date, you might want to add more specific ordering if needed
-      const q = query(expensesCollectionRef, firestoreOrderBy("date", "desc"));
-      const querySnapshot = await getDocs(q);
-      const fetchedExpenses: Expense[] = [];
-      querySnapshot.forEach((doc) => {
-        fetchedExpenses.push({ id: doc.id, ...doc.data() } as Expense);
-      });
-      setExpenses(fetchedExpenses);
-    } catch (error: any) {
-      console.error("Error fetching expenses:", error);
-      toast({
-        variant: "destructive",
-        title: "Error al cargar gastos",
-        description: `No se pudieron cargar los gastos. ${error.message}`,
-      });
-    } finally {
-      setIsLoadingExpenses(false);
-    }
-  }, [toast]);
 
   useEffect(() => {
     fetchActivities();
-    fetchExpenses();
-  }, [fetchActivities, fetchExpenses]);
+  }, [fetchActivities]);
+
+  const derivedExpensesFromActivities = useMemo((): Expense[] => {
+    return activities
+      .filter(activity => typeof activity.cost === 'number' && activity.cost > 0)
+      .map(activity => ({
+        id: `${activity.id}-expense`, // Create a unique ID for the derived expense
+        city: activity.city,
+        date: activity.date,
+        category: activity.category, // Use activity category, or a more generic one if needed
+        description: activity.title, // Use activity title as description
+        amount: activity.cost!, // Assert cost is a number due to filter
+      }));
+  }, [activities]);
 
   const currentTripDataForWidgets = useMemo((): TripDetails => ({
     ...initialStaticTripData,
     activities: activities,
-    expenses: expenses, // Use live expenses state
-  }), [initialStaticTripData, activities, expenses]);
+    expenses: derivedExpensesFromActivities,
+  }), [initialStaticTripData, activities, derivedExpensesFromActivities]);
 
 
   const currentCityToday = useMemo((): City | undefined => {
@@ -229,7 +216,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     }
   };
 
-  const isLoading = isLoadingActivities || isLoadingExpenses;
+  const isLoading = isLoadingActivities; // Only depends on activities loading now
 
   if (showFullItinerary) {
     return (
@@ -243,7 +230,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
             isDashboard={false}
             onReturnToDashboard={() => setShowFullItinerary(false)}
           />
-          {isLoadingActivities ? ( // Keep specific loading for itinerary section if preferred
+          {isLoadingActivities ? ( 
             <div className="flex justify-center items-center py-10">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2">Cargando itinerario...</p>
@@ -262,13 +249,13 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
           <Separator className="my-8 md:my-12" />
           <MapSection tripData={currentTripDataForWidgets} />
           <Separator className="my-8 md:my-12" />
-          {isLoadingExpenses ? (
+          {isLoadingActivities ? ( // Budget section also depends on activities now
              <div className="flex justify-center items-center py-10">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2">Cargando presupuesto...</p>
             </div>
           ) : (
-            <BudgetSection expenses={expenses} tripCities={initialStaticTripData.ciudades} />
+            <BudgetSection expenses={derivedExpensesFromActivities} tripCities={initialStaticTripData.ciudades} />
           )}
         </main>
       </div>
@@ -300,7 +287,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
           </div>
           <div className="space-y-6">
             <UpcomingMilestone tripData={currentTripDataForWidgets} currentDate={currentDate} />
-            <BudgetSnapshot expenses={expenses} currentCity={currentCityToday} />
+            <BudgetSnapshot expenses={derivedExpensesFromActivities} currentCity={currentCityToday} />
             <QuickActions
                 onViewFullItinerary={() => setShowFullItinerary(true)}
             />
