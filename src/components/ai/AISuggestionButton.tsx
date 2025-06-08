@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { SubmitHandler } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,11 +12,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Sparkles, BrainCircuit, Lightbulb, Loader2 } from 'lucide-react';
+import { Sparkles, BrainCircuit, Lightbulb, Loader2, CalendarIcon, ClockIcon } from 'lucide-react';
 import { recommendActivity, type RecommendActivityInput, type RecommendActivityOutput } from '@/ai/flows/recommend-activity';
 import type { City, Activity, ActivityCategory } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { format, parseISO } from 'date-fns';
 
 
 const suggestionSchema = z.object({
@@ -41,6 +42,9 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
+  const [suggestedDate, setSuggestedDate] = useState('');
+  const [suggestedTime, setSuggestedTime] = useState('12:00');
+
   const defaultTripDetails = `Viaje para ${tripFamilia} desde ${tripDates.inicio} hasta ${tripDates.fin}.`;
 
   const form = useForm<SuggestionFormData>({
@@ -59,6 +63,16 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
     try {
       const result = await recommendActivity(data);
       setSuggestion(result);
+
+      // Initialize date and time for the suggestion
+      const selectedCityObject = cities.find(c => c.name === data.city);
+      let initialDate = tripDates.inicio; // Fallback to trip start date
+      if (selectedCityObject && selectedCityObject.arrivalDate) {
+        initialDate = selectedCityObject.arrivalDate;
+      }
+      setSuggestedDate(initialDate);
+      setSuggestedTime(result.suggestedTime || '12:00');
+
     } catch (err) {
       console.error("Error generating suggestion:", err);
       setError("No se pudo generar la sugerencia. Inténtalo de nuevo.");
@@ -73,28 +87,20 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
   };
 
   const handleAddSuggestedActivity = () => {
-    if (suggestion && form.getValues("city")) {
+    if (suggestion && form.getValues("city") && suggestedDate && suggestedTime) {
       const selectedCityName = form.getValues("city");
-      const selectedCityObject = cities.find(c => c.name === selectedCityName);
       
-      let activityDate = new Date().toISOString().split('T')[0]; // Fallback: today
-      if (selectedCityObject && selectedCityObject.arrivalDate) {
-        activityDate = selectedCityObject.arrivalDate;
-      } else if (tripDates.inicio) {
-        activityDate = tripDates.inicio;
-      }
-
       const newActivity: Activity = {
         id: `ai-${Date.now()}`,
-        date: activityDate, 
-        time: '12:00', // Default to noon
+        date: suggestedDate, 
+        time: suggestedTime,
         title: suggestion.activity,
         category: 'Ocio' as ActivityCategory, 
         notes: suggestion.reason,
-        cost: undefined, 
+        // cost: undefined, // Firestore does not like undefined, handle in DashboardView
         city: selectedCityName,
         order: Date.now(), 
-        attachments: [], // Initialize with empty attachments
+        attachments: [],
       };
       onAddActivity(newActivity);
       toast({
@@ -104,12 +110,25 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
       setSuggestion(null);
       setIsOpen(false);
       form.reset({ city: cities[0]?.name || '', interests: '', tripDetails: defaultTripDetails });
+    } else {
+        toast({
+            variant: "destructive",
+            title: "Faltan Datos",
+            description: "Por favor, asegúrate de que la fecha y la hora estén seleccionadas.",
+        });
     }
   };
 
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      setIsOpen(open);
+      if (!open) { // Reset state when dialog closes
+        setSuggestion(null);
+        setError(null);
+        form.reset({ city: cities[0]?.name || '', interests: '', tripDetails: defaultTripDetails });
+      }
+    }}>
       <DialogTrigger asChild>
         <Button variant="outline" className="bg-accent hover:bg-accent/90 text-accent-foreground border-accent-foreground/20">
           <Sparkles className="mr-2 h-5 w-5" />
@@ -134,11 +153,6 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
                   <Select 
                     onValueChange={(value) => {
                       field.onChange(value);
-                      // Optionally, update tripDetails if city changes, or handle this differently
-                      // const cityDetails = cities.find(c => c.name === value);
-                      // if (cityDetails) {
-                      //   form.setValue('tripDetails', `Viaje para ${tripFamilia} a ${value} desde ${tripDates.inicio} hasta ${tripDates.fin}.`);
-                      // }
                     }} 
                     defaultValue={field.value}
                   >
@@ -196,10 +210,34 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
           </Alert>
         )}
 
-        {suggestion && (
-          <div className="mt-6 p-4 border rounded-lg bg-muted/50 space-y-3">
-            <h3 className="text-lg font-semibold font-headline text-primary">{suggestion.activity}</h3>
-            <p className="text-sm text-foreground/80">{suggestion.reason}</p>
+        {suggestion && !isLoading && (
+          <div className="mt-6 p-4 border rounded-lg bg-muted/50 space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold font-headline text-primary">{suggestion.activity}</h3>
+              <p className="text-sm text-foreground/80">{suggestion.reason}</p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <FormItem>
+                    <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Fecha</FormLabel>
+                    <Input 
+                        type="date" 
+                        value={suggestedDate} 
+                        onChange={(e) => setSuggestedDate(e.target.value)}
+                        min={tripDates.inicio}
+                        max={tripDates.fin}
+                    />
+                </FormItem>
+                <FormItem>
+                    <FormLabel className="flex items-center"><ClockIcon className="mr-2 h-4 w-4 text-muted-foreground" />Hora</FormLabel>
+                    <Input 
+                        type="time" 
+                        value={suggestedTime} 
+                        onChange={(e) => setSuggestedTime(e.target.value)} 
+                    />
+                </FormItem>
+            </div>
+
             <Button onClick={handleAddSuggestedActivity} className="w-full" variant="default">
               Añadir al Itinerario
             </Button>
@@ -208,7 +246,11 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
         
         <DialogFooter className="mt-4">
             <DialogClose asChild>
-                <Button type="button" variant="outline" onClick={() => { setSuggestion(null); setError(null); form.reset({ city: cities[0]?.name || '', interests: '', tripDetails: defaultTripDetails }); }}>Cerrar</Button>
+                <Button type="button" variant="outline" onClick={() => { 
+                    setSuggestion(null); 
+                    setError(null); 
+                    form.reset({ city: cities[0]?.name || '', interests: '', tripDetails: defaultTripDetails }); 
+                }}>Cerrar</Button>
             </DialogClose>
         </DialogFooter>
       </DialogContent>

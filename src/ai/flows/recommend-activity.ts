@@ -1,3 +1,4 @@
+
 // src/ai/flows/recommend-activity.ts
 'use server';
 
@@ -22,6 +23,7 @@ export type RecommendActivityInput = z.infer<typeof RecommendActivityInputSchema
 const RecommendActivityOutputSchema = z.object({
   activity: z.string().describe('A recommended activity for the trip.'),
   reason: z.string().describe('Why this activity is recommended.'),
+  suggestedTime: z.string().optional().describe('A suggested time for the activity in HH:MM format. Example: "14:30"'),
 });
 export type RecommendActivityOutput = z.infer<typeof RecommendActivityOutputSchema>;
 
@@ -34,12 +36,14 @@ const recommendActivityPrompt = ai.definePrompt({
   input: {schema: RecommendActivityInputSchema},
   output: {schema: RecommendActivityOutputSchema},
   prompt: `You are a travel expert specializing in family trips. Based on the trip details, city, and interests, recommend one activity.
+Also suggest an ideal time (HH:MM format, e.g., "10:00" or "15:30") for this activity.
 
 Trip Details: {{{tripDetails}}}
 City: {{{city}}}
 Interests: {{{interests}}}
 
-Activity:`, // The response should contain both activity and reason.
+Respond with the activity, the reason, and the suggested time.
+`,
 });
 
 const recommendActivityFlow = ai.defineFlow(
@@ -53,3 +57,4 @@ const recommendActivityFlow = ai.defineFlow(
     return output!;
   }
 );
+
