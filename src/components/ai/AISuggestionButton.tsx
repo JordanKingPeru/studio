@@ -18,7 +18,7 @@ import type { City, Activity, ActivityCategory } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { format, parseISO } from 'date-fns';
-import { Label } from '@/components/ui/label'; // Import standard Label for manual use
+import { Label } from '@/components/ui/label';
 
 
 const suggestionSchema = z.object({
@@ -33,7 +33,7 @@ interface AISuggestionButtonProps {
   cities: City[];
   tripFamilia: string;
   tripDates: { inicio: string; fin: string };
-  onAddActivity: (activity: Activity) => void;
+  onAddActivity: (activity: Activity) => Promise<void>; // Make sure this prop expects a Promise
 }
 
 export default function AISuggestionButton({ cities, tripFamilia, tripDates, onAddActivity }: AISuggestionButtonProps) {
@@ -66,7 +66,9 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
         });
         setSuggestion(null);
         setError(null);
-        const initialDate = cities[0]?.arrivalDate || tripDates.inicio;
+        const selectedCityInForm = form.getValues('city'); // Get current city in form
+        const cityForDate = cities.find(c => c.name === selectedCityInForm) || cities[0];
+        const initialDate = cityForDate?.arrivalDate || tripDates.inicio;
         setSuggestedDate(initialDate);
         setSuggestedTime("12:00");
     }
@@ -99,29 +101,41 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
     }
   };
 
-  const handleAddSuggestedActivity = () => {
+  const handleAddSuggestedActivity = async () => {
     if (suggestion && form.getValues("city") && suggestedDate && suggestedTime) {
       const selectedCityName = form.getValues("city");
       
       const newActivity: Activity = {
-        id: `ai-${Date.now()}`,
+        id: `ai-${Date.now()}`, // Firestore will generate ID if this is new, or use existing if editing
         date: suggestedDate, 
         time: suggestedTime,
         title: suggestion.activity,
         category: 'Ocio' as ActivityCategory, 
         notes: suggestion.reason,
-        // cost: undefined, // This will be handled in DashboardView
+        // cost: undefined, // Will be handled by DashboardView to omit if undefined
         city: selectedCityName,
         order: Date.now(), 
         attachments: [],
       };
-      onAddActivity(newActivity);
-      toast({
-        title: "Actividad Añadida",
-        description: `"${suggestion.activity}" ha sido añadida al itinerario.`,
-      });
-      setSuggestion(null);
-      setIsOpen(false);
+
+      try {
+        await onAddActivity(newActivity); // Await the async operation
+        toast({
+          title: "Actividad Añadida",
+          description: `"${suggestion.activity}" ha sido añadida al itinerario.`,
+        });
+      } catch (err) {
+        console.error("Error adding AI suggested activity:", err);
+        toast({
+          variant: "destructive",
+          title: "Error al Añadir",
+          description: `No se pudo añadir la actividad sugerida. Error: ${(err as Error).message}`,
+        });
+      } finally {
+        setSuggestion(null); // Reset suggestion state
+        setIsOpen(false);    // Close dialog (this will trigger useEffect to reset date/time)
+      }
+
     } else {
         toast({
             variant: "destructive",
@@ -159,6 +173,8 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
                     onValueChange={(value) => {
                       field.onChange(value);
                       const selectedCityObject = cities.find(c => c.name === value);
+                      // Update suggestedDate when city changes in the RHF form
+                      // This keeps the date input relevant if user changes city *before* generating suggestion
                       setSuggestedDate(selectedCityObject?.arrivalDate || tripDates.inicio);
                     }} 
                     defaultValue={field.value}
@@ -258,7 +274,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
         <DialogFooter className="mt-4">
             <DialogClose asChild>
                 <Button type="button" variant="outline" onClick={() => { 
-                    setIsOpen(false); // This will trigger useEffect to reset
+                    setIsOpen(false); 
                 }}>Cerrar</Button>
             </DialogClose>
         </DialogFooter>
