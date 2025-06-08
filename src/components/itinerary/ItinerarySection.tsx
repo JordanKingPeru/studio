@@ -12,51 +12,39 @@ import { ListChecks, PlusCircle } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
 interface ItinerarySectionProps {
-  initialTripData: TripDetails;
+  initialTripData: TripDetails; // Contiene datos estáticos como ciudades, fechas del viaje.
+  activities: Activity[]; // Lista de actividades, gestionada por DashboardView
+  onSetActivities: (activities: Activity[]) => void; // Función para actualizar la lista de actividades en DashboardView
 }
 
-export default function ItinerarySection({ initialTripData }: ItinerarySectionProps) {
-  const [activities, setActivities] = useState<Activity[]>(() => 
-    initialTripData.activities.sort((a, b) => {
-      const dateComparison = a.date.localeCompare(b.date);
-      if (dateComparison !== 0) return dateComparison;
-      const timeComparison = a.time.localeCompare(b.time);
-      if (timeComparison !== 0) return timeComparison;
-      return (a.order ?? 0) - (b.order ?? 0);
-    })
-  );
+export default function ItinerarySection({ initialTripData, activities, onSetActivities }: ItinerarySectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const { toast } = useToast();
-
-  const handleSetActivities = (updatedActivities: Activity[]) => {
-    const sortedActivities = [...updatedActivities].sort((a, b) => {
-        const dateComparison = a.date.localeCompare(b.date);
-        if (dateComparison !== 0) return dateComparison;
-        const timeComparison = a.time.localeCompare(b.time);
-        if (timeComparison !== 0) return timeComparison;
-        return (a.order ?? Date.now()) - (b.order ?? Date.now());
-      });
-    setActivities(sortedActivities);
-  };
   
   const handleAddOrUpdateActivity = (activity: Activity) => {
     let updatedActivitiesList;
-    // Ensure activity.id is final if it was a temp one
-    const finalActivityId = activity.id && activity.id.startsWith('temp-') ? (editingActivity?.id || Date.now().toString()) : activity.id;
+    // Ensure activity.id is final if it was a temp one or missing
+    const finalActivityId = activity.id && !activity.id.startsWith('temp-') 
+                            ? activity.id 
+                            : (editingActivity?.id && !editingActivity.id.startsWith('temp-') 
+                                ? editingActivity.id 
+                                : `act-${Date.now().toString()}`);
 
     const activityWithFinalId = { ...activity, id: finalActivityId };
 
-    if (editingActivity) {
+    const existingActivity = activities.find(a => a.id === activityWithFinalId.id);
+
+    if (existingActivity) { // Edit existing
       updatedActivitiesList = activities.map(a => a.id === activityWithFinalId.id ? activityWithFinalId : a);
       toast({ title: "Actividad Actualizada", description: `"${activityWithFinalId.title}" ha sido actualizada.` });
-    } else {
+    } else { // Add new
       const newActivityWithOrder = { ...activityWithFinalId, order: activityWithFinalId.order ?? Date.now() };
       updatedActivitiesList = [...activities, newActivityWithOrder];
       toast({ title: "Actividad Añadida", description: `"${activityWithFinalId.title}" ha sido añadida.` });
     }
     
-    handleSetActivities(updatedActivitiesList);
+    onSetActivities(updatedActivitiesList); 
     setEditingActivity(null);
     setIsFormOpen(false);
   };
@@ -68,9 +56,8 @@ export default function ItinerarySection({ initialTripData }: ItinerarySectionPr
 
   const handleDeleteActivity = (activityId: string) => {
     const activityToDelete = activities.find(a => a.id === activityId);
-    // TODO: Delete associated attachments from Firebase Storage if any
     const updatedActivities = activities.filter(a => a.id !== activityId);
-    handleSetActivities(updatedActivities); 
+    onSetActivities(updatedActivities); 
     
     if (activityToDelete) {
       toast({ 
@@ -109,7 +96,7 @@ export default function ItinerarySection({ initialTripData }: ItinerarySectionPr
         tripData={initialTripData} 
         onEditActivity={handleOpenForm}
         onDeleteActivity={handleDeleteActivity}
-        onSetActivities={handleSetActivities}
+        onSetActivities={onSetActivities}
       />
       <ActivityForm 
         isOpen={isFormOpen} 
