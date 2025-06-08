@@ -55,6 +55,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
   const [uploadError, setUploadError] = useState<string | null>(null);
   const { toast } = useToast();
   
+  // Stable ID for new activities using useMemo, depends only on initialData
   const formActivityId = React.useMemo(() => initialData?.id || `temp-${Date.now().toString()}`, [initialData?.id]);
 
 
@@ -67,7 +68,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
       order: initialData.order ?? Date.now(),
       attachments: initialData.attachments || [],
     } : {
-      id: formActivityId,
+      id: formActivityId, // Use the memoized formActivityId for new forms
       title: '',
       date: new Date().toISOString().split('T')[0],
       time: new Date().toTimeString().substring(0,5),
@@ -81,18 +82,19 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
   });
 
   useEffect(() => {
-    const newActivityId = initialData?.id || `temp-${Date.now().toString()}`;
+    const idToUseInForm = initialData?.id || formActivityId; // Use stable formActivityId for new items
+
     if (initialData) {
       form.reset({
         ...initialData,
-        id: initialData.id,
+        id: initialData.id, // Use the existing ID
         cost: initialData.cost ?? undefined,
         order: initialData.order ?? Date.now(),
         attachments: initialData.attachments || [],
       });
     } else {
-       form.reset({
-        id: newActivityId,
+       form.reset({ // For new activities
+        id: idToUseInForm, // Use the stable temp ID from useMemo
         title: '',
         date: new Date().toISOString().split('T')[0],
         time: new Date().toTimeString().substring(0,5),
@@ -104,21 +106,35 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
         attachments: [],
       });
     }
-  }, [initialData, form, cities]);
+  }, [initialData, form, cities, formActivityId]); // Added formActivityId to ensure effect runs if it changes (though it's stable per form instance)
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Check if storage is available (basic check)
+    if (!storage || typeof storage.app !== 'object') {
+        toast({
+            variant: "destructive",
+            title: "Error de Configuración",
+            description: "Firebase Storage no está disponible. Verifica la configuración de Firebase en src/lib/firebase.ts.",
+        });
+        setUploadError("Firebase Storage no configurado.");
+        return;
+    }
+
     setUploadingFile(file);
     setUploadProgress(0);
     setUploadError(null);
 
-    const activityIdForPath = form.getValues('id') || formActivityId; 
+    const activityIdForPath = form.getValues('id'); 
 
     if (!activityIdForPath) {
-        setUploadError("No se pudo determinar el ID de la actividad para la subida.");
+        console.error("Activity ID is undefined in form. Cannot generate storage path.");
+        setUploadError("Error interno: No se pudo determinar el ID de la actividad para la subida.");
         setUploadingFile(null);
+        setUploadProgress(null);
+        toast({ variant: "destructive", title: "Error de Subida", description: "ID de actividad no encontrado en el formulario." });
         return;
     }
     
@@ -135,27 +151,41 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
         },
         (error) => {
           console.error("Upload failed:", error);
-          setUploadError(`Error al subir: ${error.message}`);
+          // More detailed error messages for common storage errors
+          let description = error.message;
+          if (error.code === 'storage/unauthorized') {
+            description = "Permiso denegado. Revisa las reglas de Firebase Storage.";
+          } else if (error.code === 'storage/object-not-found') {
+            description = "Error en la ruta del archivo. Contacta soporte.";
+          }
+          setUploadError(`Error al subir: ${description}`);
           setUploadingFile(null);
           setUploadProgress(null);
-          toast({ variant: "destructive", title: "Error de Subida", description: error.message });
+          toast({ variant: "destructive", title: "Error de Subida", description });
         },
         async () => {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          const newAttachment: ActivityAttachment = {
-            fileName: file.name,
-            downloadURL,
-            uploadedAt: new Date().toISOString(),
-            fileType: file.type,
-          };
-          const currentAttachments = form.getValues('attachments') || [];
-          form.setValue('attachments', [...currentAttachments, newAttachment]);
-          setUploadingFile(null);
-          setUploadProgress(null);
-          toast({ title: "Archivo Subido", description: `${file.name} se ha subido correctamente.` });
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            const newAttachment: ActivityAttachment = {
+              fileName: file.name,
+              downloadURL,
+              uploadedAt: new Date().toISOString(),
+              fileType: file.type,
+            };
+            const currentAttachments = form.getValues('attachments') || [];
+            form.setValue('attachments', [...currentAttachments, newAttachment]);
+            toast({ title: "Archivo Subido", description: `${file.name} se ha subido correctamente.` });
+          } catch (getUrlError: any) {
+            console.error("Error getting download URL:", getUrlError);
+            setUploadError(`Error al obtener URL: ${getUrlError.message}`);
+            toast({ variant: "destructive", title: "Error Post-Subida", description: `No se pudo obtener la URL del archivo: ${getUrlError.message}` });
+          } finally {
+            setUploadingFile(null);
+            setUploadProgress(null);
+          }
         }
       );
-    } catch (error: any) {
+    } catch (error: any) { // Catches synchronous errors when setting up the upload
         console.error("Error starting upload:", error);
         setUploadError(`Error al iniciar subida: ${error.message}`);
         setUploadingFile(null);
@@ -168,12 +198,18 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
     const currentAttachments = form.getValues('attachments') || [];
     const attachmentToRemove = currentAttachments[indexToRemove];
     
+    // Note: This does not delete the file from Firebase Storage.
+    // For actual deletion, you would need to call deleteObject(storageRef(storage, filePathToDelete))
+    // and handle its promise/errors.
     form.setValue('attachments', currentAttachments.filter((_, index) => index !== indexToRemove));
-    toast({ title: "Adjunto Eliminado", description: `${attachmentToRemove.fileName} ha sido quitado de la lista.` });
+    toast({ title: "Adjunto Eliminado de la Lista", description: `${attachmentToRemove.fileName} ha sido quitado.` });
   };
 
   const handleSubmit = (data: ActivityFormData) => {
-    const finalActivityId = data.id && data.id.startsWith('temp-') ? (initialData?.id || Date.now().toString()) : (data.id || Date.now().toString());
+    // Ensure the ID is final, especially if it was a temp one.
+    // If editing, initialData.id should be used. If new, formActivityId (stable temp) or a newly generated one.
+    // The `id` in `data` should already be the correct one due to form.reset logic.
+    const finalActivityId = data.id || (initialData?.id || formActivityId); 
     
     onSubmit({
       ...data,
@@ -300,12 +336,10 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
                     <Input
                       type="number"
                       placeholder="Ej: 25"
-                      {...field} // Spread field to pass name, ref, onBlur
-                      value={field.value ?? ''} // Ensure value is never undefined, default to empty string
+                      {...field} 
+                      value={field.value ?? ''} 
                       onChange={e => {
                         const value = e.target.value;
-                        // If input is empty string, treat as undefined for react-hook-form
-                        // Otherwise, parse as float. parseFloat will return NaN for invalid numbers.
                         field.onChange(value === '' ? undefined : parseFloat(value));
                       }}
                     />
@@ -333,7 +367,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
               <FormLabel className="flex items-center"><Paperclip className="mr-2 h-4 w-4 text-muted-foreground" />Adjuntos</FormLabel>
               <div className="flex items-center gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('file-upload-input')?.click()} disabled={!!uploadingFile}>
-                  <UploadCloud className="mr-2 h-4 w-4" />
+                  {uploadingFile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
                   {uploadingFile ? 'Subiendo...' : 'Seleccionar Archivo'}
                 </Button>
                 <Input 
@@ -366,7 +400,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
                           <FileText className="h-4 w-4 shrink-0" />
                           <span className="truncate" title={att.fileName}>{att.fileName}</span>
                         </a>
-                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive/80" onClick={() => handleRemoveAttachment(index)}>
+                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive/80" onClick={() => handleRemoveAttachment(index)} disabled={!!uploadingFile}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </li>
