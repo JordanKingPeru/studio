@@ -11,6 +11,7 @@ export interface City {
   departureDate: string; // YYYY-MM-DD
   coordinates: Coordinates;
   notes?: string;
+  budget?: number; // Added for BudgetSnapshot widget
 }
 
 export type ActivityCategory = 'Viaje' | 'Comida' | 'Cultural' | 'Ocio' | 'Trabajo' | 'Alojamiento' | 'Otro';
