@@ -20,7 +20,7 @@ export default function BudgetSnapshot({ expenses, currentCity }: BudgetSnapshot
     }
 
     const cityExpenses = expenses.filter(exp => exp.city === currentCity.name);
-    const totalSpentInCity = cityExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const totalSpentInCity = cityExpenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
     const budget = currentCity.budget;
     const percentageSpent = budget > 0 ? Math.min(Math.max((totalSpentInCity / budget) * 100, 0), 150) : 0; // Cap at 150% for visual
 

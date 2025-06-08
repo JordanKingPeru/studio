@@ -29,7 +29,7 @@ const processExpensesForCumulativeChart = (expenses: Expense[]): CumulativeChart
 
   const dailyTotals: Record<string, number> = {};
   sortedExpenses.forEach(expense => {
-    dailyTotals[expense.date] = (dailyTotals[expense.date] || 0) + expense.amount;
+    dailyTotals[expense.date] = (dailyTotals[expense.date] || 0) + Number(expense.amount || 0);
   });
 
   const uniqueSortedDates = Object.keys(dailyTotals).sort((a,b) => compareAsc(parseISO(a), parseISO(b)));
@@ -89,7 +89,7 @@ export default function CumulativeBudgetChart({ expenses }: CumulativeBudgetChar
                 labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 'bold' }}
                 formatter={(value: number, name: string) => {
                     if (name === "Gasto Acumulado") {
-                         return [`${value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}`, "Acumulado"];
+                         return [`${Number(value || 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}`, "Acumulado"];
                     }
                     return [value, name];
                 }}

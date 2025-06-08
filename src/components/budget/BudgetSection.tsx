@@ -41,7 +41,7 @@ export default function BudgetSection({ expenses, tripCities }: BudgetSectionPro
   //   alert("Simulating adding expense: " + expense.description);
   // };
 
-  const totalOverallCost = useMemo(() => expenses.reduce((sum, exp) => sum + exp.amount, 0), [expenses]);
+  const totalOverallCost = useMemo(() => expenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0), [expenses]);
 
   const groupedExpenses = useMemo((): GroupedExpenses => {
     return expenses.reduce((acc: GroupedExpenses, expense: Expense) => {
@@ -50,7 +50,7 @@ export default function BudgetSection({ expenses, tripCities }: BudgetSectionPro
         acc[category] = { expenses: [], total: 0 };
       }
       acc[category].expenses.push(expense);
-      acc[category].total += expense.amount;
+      acc[category].total += Number(expense.amount || 0);
       return acc;
     }, {});
   }, [expenses]);
@@ -116,7 +116,7 @@ export default function BudgetSection({ expenses, tripCities }: BudgetSectionPro
                                   </div>
                                   <Badge variant="outline" className="mt-2 sm:mt-0 text-sm px-2.5 py-1">
                                     <Euro size={12} className="mr-1"/>
-                                    {expense.amount.toLocaleString('es-ES')}
+                                    {Number(expense.amount || 0).toLocaleString('es-ES')}
                                   </Badge>
                                 </li>
                               ))}
