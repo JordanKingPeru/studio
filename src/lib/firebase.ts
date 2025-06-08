@@ -4,15 +4,21 @@ import { initializeApp, type FirebaseApp } from "firebase/app";
 import { getFirestore, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
-// TODO: Replace with your actual Firebase project configuration
+// INSTRUCCIONES:
+// 1. Ve a tu proyecto en la Consola de Firebase (https://console.firebase.google.com/).
+// 2. Entra en "Configuración del proyecto" (el ícono de engranaje).
+// 3. En la sección "Tus apps", selecciona tu aplicación web o añade una nueva.
+// 4. Busca el objeto de configuración del SDK de Firebase (firebaseConfig).
+// 5. Copia los valores correspondientes y pégalos aquí abajo, reemplazando los marcadores.
+
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
-  measurementId: "YOUR_MEASUREMENT_ID" // Optional
+  apiKey: "YOUR_API_KEY", // Reemplaza esto con tu apiKey de Firebase
+  authDomain: "YOUR_AUTH_DOMAIN", // Reemplaza esto con tu authDomain de Firebase
+  projectId: "YOUR_PROJECT_ID", // Reemplaza esto con tu projectId de Firebase
+  storageBucket: "YOUR_STORAGE_BUCKET", // Reemplaza esto con tu storageBucket de Firebase
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID", // Reemplaza esto con tu messagingSenderId de Firebase
+  appId: "YOUR_APP_ID", // Reemplaza esto con tu appId de Firebase
+  measurementId: "YOUR_MEASUREMENT_ID" // Opcional: Reemplaza esto con tu measurementId si lo usas
 };
 
 // Initialize Firebase
@@ -21,10 +27,19 @@ let db: Firestore;
 let storage: FirebaseStorage;
 
 try {
+  // Verifica que no se esté intentando inicializar con los placeholders
+  if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+    console.warn(
+      "Firebase no está configurado. Por favor, actualiza firebaseConfig en src/lib/firebase.ts con los detalles de tu proyecto."
+    );
+    // Podrías lanzar un error aquí o manejarlo de otra forma si prefieres
+    // throw new Error("Firebase no configurado. Revisa src/lib/firebase.ts");
+  }
+
   app = initializeApp(firebaseConfig);
   db = getFirestore(app);
   storage = getStorage(app);
-  console.log("Firebase initialized successfully.");
+  console.log("Firebase initialized (or attempted to initialize).");
 
   // TODO: Habilitar persistencia offline (Tarea 3.3) si es necesario aquí
   // enableIndexedDbPersistence(db)
@@ -40,15 +55,15 @@ try {
   //     }
   //   });
 
-} catch (error) {
-  console.error("Error initializing Firebase:", error);
-  // Handle initialization error, maybe show a message to the user
-  // or fallback to a non-Firebase mode if applicable.
-  // For this app, we'll throw to make it clear setup is needed.
+} catch (error: any) {
+  console.error("Error initializing Firebase:", error.message);
+  // Alerta al usuario si sigue usando la configuración por defecto,
+  // especialmente si la inicialización falla por esa razón.
   if (firebaseConfig.apiKey === "YOUR_API_KEY") {
-    alert("Error: Firebase is not configured. Please update firebaseConfig in src/lib/firebase.ts with your project details.");
+    alert("Error: Firebase no está configurado. Por favor, actualiza firebaseConfig en src/lib/firebase.ts con los detalles de tu proyecto para habilitar funcionalidades como la subida de archivos.");
   }
-  throw new Error("Firebase initialization failed. Please check your firebaseConfig in src/lib/firebase.ts and ensure your Firebase project is set up correctly for web apps, including enabling Firebase Storage.");
+  // Considera si quieres relanzar el error o manejarlo de forma diferente
+  // throw new Error(`Firebase initialization failed: ${error.message}. Please check your firebaseConfig in src/lib/firebase.ts and ensure your Firebase project is set up correctly for web apps, including enabling Firebase Storage.`);
 }
 
 
