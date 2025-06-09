@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { TripDetails, City, Coordinates } from '@/lib/types';
 import SectionCard from '@/components/ui/SectionCard';
-import { MapPin, Route, PlusCircle, Trash2, CalendarIcon, Globe, StickyNote, Loader2, AlertTriangle, Info } from 'lucide-react'; // MapPinIcon was removed as MapPin is used
+import { MapPin, Route, PlusCircle, Trash2, CalendarIcon, Globe, StickyNote, Loader2, AlertTriangle, Info } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -52,15 +52,15 @@ const libraries: ("places")[] = ["places"];
 export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }: MapSectionProps) {
   const [isCityFormOpen, setIsCityFormOpen] = useState(false);
   const [previewCenter, setPreviewCenter] = useState<Coordinates | null>(null);
-  const [forceRenderKey, setForceRenderKey] = useState(0);
+  const [forceRenderKey, setForceRenderKey] = useState(0); // Used to force re-render of RHF fields
   const { toast } = useToast();
 
   const [autocompleteNode, setAutocompleteNode] = useState<HTMLElement | null>(null);
 
   const placeAutocompleteRefCallback = useCallback((node: HTMLElement | null) => {
     console.log("MapSection DEBUG: placeAutocompleteRefCallback called with node:", node);
-    if (node && (node as any).value) { // Attempt to clear if component has a value property
-      (node as any).value = "";
+    if (node && (node as any).value) { // Clear previous value if node is being reused
+        (node as any).value = "";
     }
     setAutocompleteNode(node);
   }, []);
@@ -91,6 +91,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
 
     if (place && typeof place === 'object') {
         console.log("MapSection DEBUG: Raw place data from event:", JSON.stringify(place));
+        
         let finalCityName = place.displayName || "";
         let extractedCountryName = "";
         let latitude: number | undefined;
@@ -101,11 +102,13 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
             if (countryComponent) {
                 extractedCountryName = countryComponent.longText || countryComponent.shortText || "";
             }
+            // Try to get a more specific city name if displayName is too broad (e.g., just "California")
             const localityComponent = place.addressComponents.find(c => c.types.includes('locality') || c.types.includes('postal_town') || c.types.includes('administrative_area_level_1'));
              if (localityComponent && (!finalCityName || (extractedCountryName && finalCityName.includes(extractedCountryName)) || finalCityName === extractedCountryName ) ) {
                 finalCityName = localityComponent.longText || localityComponent.shortText || finalCityName;
              }
         }
+        // Fallback for country if not in addressComponents (less reliable)
         if (!extractedCountryName && place.formattedAddress) {
             const parts = place.formattedAddress.split(',');
             if (parts.length > 0) {
@@ -116,22 +119,23 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
                  }
             }
         }
+        // Clean up city name if it contains the country
         if (finalCityName && extractedCountryName && finalCityName.includes(extractedCountryName) && finalCityName !== extractedCountryName) {
             finalCityName = finalCityName.replace(`, ${extractedCountryName}`, "").replace(extractedCountryName, "").trim();
         }
 
 
-        if (place.location) {
-             if (typeof place.location.lat === 'function' && typeof place.location.lng === 'function') {
+        if (place.location) { // location can be LatLng or LatLngLiteral
+             if (typeof place.location.lat === 'function' && typeof place.location.lng === 'function') { // LatLng
                 latitude = place.location.lat();
                 longitude = place.location.lng();
-            } else if (typeof (place.location as google.maps.LatLngLiteral).lat === 'number' && typeof (place.location as google.maps.LatLngLiteral).lng === 'number') {
+            } else if (typeof (place.location as google.maps.LatLngLiteral).lat === 'number' && typeof (place.location as google.maps.LatLngLiteral).lng === 'number') { // LatLngLiteral
                 latitude = (place.location as google.maps.LatLngLiteral).lat;
                 longitude = (place.location as google.maps.LatLngLiteral).lng;
             }
         }
         
-        console.log(`MapSection DEBUG: Extracted Values - Name: "${finalCityName}", Country: "${extractedCountryName}", Lat: ${latitude}, Lng: ${longitude}`);
+        console.log(`MapSection DEBUG: Extracted Values - For Form Name: "${finalCityName}", Country: "${extractedCountryName}", Lat: ${latitude}, Lng: ${longitude}`);
 
         if (finalCityName && extractedCountryName && typeof latitude === 'number' && typeof longitude === 'number') {
             form.setValue('name', finalCityName, { shouldValidate: true, shouldDirty: true });
@@ -139,7 +143,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
             form.setValue('lat', latitude, { shouldValidate: true, shouldDirty: true });
             form.setValue('lng', longitude, { shouldValidate: true, shouldDirty: true });
             setPreviewCenter({ lat: latitude, lng: longitude });
-            setForceRenderKey(prev => {
+            setForceRenderKey(prev => { // Force RHF fields to update their display
                 const newKey = prev + 1;
                 console.log(`MapSection DEBUG: Forcing re-render for form update. New key: ${newKey}`);
                 return newKey;
@@ -158,41 +162,43 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
         console.warn("MapSection WARN: gmp-placechange event fired but 'place' data is missing or not an object on event.target.");
         setPreviewCenter(null);
     }
-  }, [form, setPreviewCenter, setForceRenderKey, toast]);
+  }, [form, setPreviewCenter, setForceRenderKey, toast]); // Dependencies for useCallback
 
+
+  // Effect to add/remove event listener
   useEffect(() => {
-    if (isLoaded && GOOGLE_MAPS_API_KEY && !loadError && autocompleteNode && isCityFormOpen) {
-        console.log("MapSection DEBUG: useEffect - Attaching 'gmp-placechange' listener to:", autocompleteNode);
-        
-        const currentAutocompleteNode = autocompleteNode; 
-        
-        if ((currentAutocompleteNode as any).__gmpPlaceChangedListenerAttached) {
-            console.log("MapSection DEBUG: useEffect - Listener already considered attached, skipping re-attachment.");
-            return;
-        }
-
+    const currentAutocompleteNode = autocompleteNode; // Capture current value for cleanup
+    const logContext = { isLoaded, GOOGLE_MAPS_API_KEY_PRESENT: !!GOOGLE_MAPS_API_KEY, loadError: !!loadError, autocompleteNodeExists: !!currentAutocompleteNode, isCityFormOpen };
+    
+    if (isCityFormOpen && isLoaded && GOOGLE_MAPS_API_KEY && !loadError && currentAutocompleteNode) {
+      // Check if listener is already attached to this specific node
+      if (!(currentAutocompleteNode as any).__gmpPlaceChangedListenerAttached) {
+        console.log("MapSection DEBUG: useEffect - Attaching 'gmp-placechange' listener to:", currentAutocompleteNode);
         currentAutocompleteNode.addEventListener('gmp-placechange', handlePlaceSelectedCallback);
-        (currentAutocompleteNode as any).__gmpPlaceChangedListenerAttached = true;
+        (currentAutocompleteNode as any).__gmpPlaceChangedListenerAttached = true; // Mark this node
         console.log("MapSection DEBUG: useEffect - ADDED 'gmp-placechange' listener.");
-
-        return () => {
-            if ((currentAutocompleteNode as any).__gmpPlaceChangedListenerAttached) {
-              console.log("MapSection DEBUG: useEffect cleanup - Removing 'gmp-placechange' listener from:", currentAutocompleteNode);
-              currentAutocompleteNode.removeEventListener('gmp-placechange', handlePlaceSelectedCallback);
-              delete (currentAutocompleteNode as any).__gmpPlaceChangedListenerAttached;
-              console.log("MapSection DEBUG: useEffect cleanup - REMOVED 'gmp-placechange' listener.");
-            }
-        };
+      } else {
+        console.log("MapSection DEBUG: useEffect - Listener already considered attached to:", currentAutocompleteNode);
+      }
     } else {
-        console.log("MapSection DEBUG: useEffect - Conditions NOT MET for attaching listener.", { isLoaded, GOOGLE_MAPS_API_KEY_PRESENT: !!GOOGLE_MAPS_API_KEY, loadError: !!loadError, autocompleteNodeExists: !!autocompleteNode, isCityFormOpen });
+        console.log("MapSection DEBUG: useEffect - Conditions NOT MET for attaching listener.", logContext);
     }
-  }, [isLoaded, GOOGLE_MAPS_API_KEY, loadError, autocompleteNode, isCityFormOpen, handlePlaceSelectedCallback]);
+
+    return () => {
+      if (currentAutocompleteNode && (currentAutocompleteNode as any).__gmpPlaceChangedListenerAttached) {
+        console.log("MapSection DEBUG: useEffect cleanup - Removing 'gmp-placechange' listener from:", currentAutocompleteNode);
+        currentAutocompleteNode.removeEventListener('gmp-placechange', handlePlaceSelectedCallback);
+        delete (currentAutocompleteNode as any).__gmpPlaceChangedListenerAttached; // Unmark this node
+        console.log("MapSection DEBUG: useEffect cleanup - REMOVED 'gmp-placechange' listener.");
+      }
+    };
+  }, [isLoaded, GOOGLE_MAPS_API_KEY, loadError, autocompleteNode, isCityFormOpen, handlePlaceSelectedCallback]); // handlePlaceSelectedCallback is stable due to useCallback
 
 
   const handleDialogChange = (open: boolean) => {
     setIsCityFormOpen(open);
     if (open) {
-      console.log("MapSection DEBUG: Dialog opening. Resetting form. Autocomplete node state:", autocompleteNode);
+      console.log("MapSection DEBUG: Dialog opening. Resetting form. Current autocomplete node state:", autocompleteNode);
       form.reset({
         name: '',
         country: '',
@@ -203,14 +209,17 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
         lng: undefined,
       });
       setPreviewCenter(null);
-      if (autocompleteNode && typeof (autocompleteNode as any).setPlace === 'function') {
-        (autocompleteNode as any).setPlace(null); // API to clear selection if available
-      } else if (autocompleteNode && (autocompleteNode as any).value) {
-         (autocompleteNode as any).value = ""; // Clear input value
+      // The placeAutocompleteRefCallback will be called by React when the element mounts/unmounts.
+      // If autocompleteNode is already set from a previous render cycle for the dialog,
+      // and it's still the same node instance (which it should be if DialogContent key is stable),
+      // try to clear its value directly.
+      if (autocompleteNode && (autocompleteNode as any).value) {
+         (autocompleteNode as any).value = ""; 
       }
-      setForceRenderKey(prev => prev + 1);
+       setForceRenderKey(prev => prev + 1); 
     } else {
         console.log("MapSection DEBUG: Dialog closing.");
+        // setAutocompleteNode(null); // Not strictly necessary here, as ref callback handles it.
     }
   };
 
@@ -254,7 +263,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
           Añadir Ciudad
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg rounded-xl shadow-2xl" key={`dialog-content-${forceRenderKey}`}>
+      <DialogContent className="sm:max-w-lg rounded-xl shadow-2xl">
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl text-primary flex items-center">
             <MapPin size={22} className="mr-2" />
@@ -281,25 +290,26 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleAddCitySubmit)} className="space-y-4 py-2">
+            {/* Google Place Autocomplete Input */}
             <div className="space-y-1">
               <FormLabel className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-muted-foreground" />Buscar Ciudad</FormLabel>
-              {isLoaded && GOOGLE_MAPS_API_KEY && !loadError ? (
+              {isCityFormOpen && isLoaded && GOOGLE_MAPS_API_KEY && !loadError ? (
                 React.createElement('gmp-place-autocomplete', {
-                  ref: placeAutocompleteRefCallback,
+                  ref: placeAutocompleteRefCallback, // Use the callback ref
                   id: 'gmp-place-search-input-mapsection',
                   "requested-fields": "id,displayName,formattedAddress,location,addressComponents",
-                  "place-types": "locality,administrative_area_level_1,country", // Broaden types slightly
+                  "place-types": "locality,administrative_area_level_1,country", // Filter for cities/countries
                   placeholder: "Ej: San Francisco, California",
-                  style: {
+                  style: { // Basic styling to match ShadCN Input
                     width: '100%',
-                    fontSize: '0.875rem',
-                    padding: '0.5rem 0.75rem',
-                    borderRadius: '0.375rem',
+                    fontSize: '0.875rem', // Corresponds to ShadCN text-sm
+                    padding: '0.5rem 0.75rem', // Corresponds to ShadCN px-3 py-2 (for h-10)
+                    borderRadius: '0.375rem', // Corresponds to ShadCN rounded-md
                     border: '1px solid hsl(var(--input))',
                     backgroundColor: 'hsl(var(--background))',
                     color: 'hsl(var(--foreground))',
                     boxSizing: 'border-box',
-                    height: '2.5rem',
+                    height: '2.5rem', // Corresponds to ShadCN h-10
                   },
                 } as React.HTMLAttributes<HTMLElement> & { "requested-fields"?: string; "place-types"?: string; placeholder?: string; id?: string; })
               ) : GOOGLE_MAPS_API_KEY && !loadError ? (
@@ -310,9 +320,11 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
               ) : null}
             </div>
             
+            {/* Form Fields */}
             <FormField
               control={form.control}
               name="name"
+              key={`name-${forceRenderKey}`} // Re-key to force update on reset for readOnly
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center"><MapPin size={16} className="mr-2 h-4 w-4 text-muted-foreground" />Nombre Ciudad</FormLabel>
@@ -326,6 +338,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
             <FormField
               control={form.control}
               name="country"
+              key={`country-${forceRenderKey}`} // Re-key to force update on reset for readOnly
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-muted-foreground" />País</FormLabel>
@@ -336,6 +349,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
                 </FormItem>
               )}
             />
+            {/* Hidden fields for lat/lng, still part of the form data */}
             <FormField control={form.control} name="lat" render={({ field }) => <Input type="hidden" {...field} value={field.value || ""} />} />
             <FormField control={form.control} name="lng" render={({ field }) => <Input type="hidden" {...field} value={field.value || ""} />} />
 
@@ -382,8 +396,9 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
               )}
             />
 
+            {/* Map Preview */}
             {isLoaded && GOOGLE_MAPS_API_KEY && !loadError && previewCenter && (
-              <div className="mt-4 h-48 w-full rounded-md overflow-hidden border" key={`map-preview-${previewCenter.lat}-${previewCenter.lng}-${forceRenderKey}`}>
+              <div className="mt-4 h-48 w-full rounded-md overflow-hidden border" key={`map-preview-${previewCenter.lat}-${previewCenter.lng}`}>
                 <GoogleMap
                   mapContainerStyle={{ width: '100%', height: '100%' }}
                   center={previewCenter}
@@ -391,7 +406,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
                   options={{
                     disableDefaultUI: true,
                     zoomControl: true,
-                    gestureHandling: 'cooperative'
+                    gestureHandling: 'cooperative' // Allows user interaction with the preview map
                   }}
                 >
                   <MarkerF position={previewCenter} />
@@ -403,7 +418,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancelar</Button>
               </DialogClose>
-              <Button type="submit" disabled={form.formState.isSubmitting || !isLoaded || !!loadError || !form.formState.isValid && form.formState.isSubmitted}>
+              <Button type="submit" disabled={form.formState.isSubmitting || !isLoaded || !!loadError || (!form.formState.isValid && form.formState.isSubmitted)}>
                 {form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Añadir Ciudad al Viaje
               </Button>
@@ -414,6 +429,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
     </Dialog>
   );
 
+  // Main component return
   return (
     <SectionCard
       id="map"
@@ -424,7 +440,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
     >
       <div className="space-y-8">
         <div className="p-2 sm:p-0">
-          <h3 className="text-xl font-headline text-secondary-foreground mb-4">Ciudades Planificadas</h3>
+          <h3 className="text-xl font-headline text-secondary-foreground mb-4 truncate" title="Ciudades Planificadas">Ciudades Planificadas</h3>
           {cities.length > 0 ? (
              <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {cities.map((city: City) => (
@@ -456,7 +472,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
                         zoom={9}
                         options={{
                           disableDefaultUI: true,
-                          gestureHandling: 'none', 
+                          gestureHandling: 'none', // Make city card maps non-interactive
                           clickableIcons: false,
                         }}
                       >
@@ -477,6 +493,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
           )}
         </div>
 
+        {/* Placeholder for main interactive map */}
         <div className="text-center p-4 border-2 border-dashed border-border rounded-lg mt-8">
           <p className="text-muted-foreground">
             Mapa interactivo principal con todas las ciudades y rutas próximamente.
@@ -488,6 +505,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
   );
 }
 
+// TypeScript declaration for the Google Maps Place Autocomplete Web Component
 declare global {
   namespace JSX {
     interface IntrinsicElements {
@@ -496,9 +514,8 @@ declare global {
         "place-types"?: string;
         placeholder?: string;
         id?: string;
-        value?: string | null; 
-        // Consider adding setPlace if the component exposes it, for programmatic clearing
-        // setPlace?: (place: google.maps.places.PlaceResult | null) => void;
+        value?: string | null; // Add value to allow programmatic clearing
+        // Potentially add other properties if needed, e.g., for styling or specific behaviors
       }, HTMLElement>;
     }
   }
