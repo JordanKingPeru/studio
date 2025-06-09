@@ -7,7 +7,7 @@ import TripHeader from './TripHeader';
 import ItinerarySection from '@/components/itinerary/ItinerarySection';
 import CalendarSection from '@/components/calendar/CalendarSection';
 import MapSection from '@/components/map/MapSection';
-import type { CityFormData } from '@/components/map/AddCityDialog'; // Import CityFormData
+// import type { CityFormData } from '@/components/map/AddCityDialog'; // No longer needed here directly for the shell
 import BudgetSection from '@/components/budget/BudgetSection';
 import { Separator } from '@/components/ui/separator';
 import TodayView from './TodayView';
@@ -16,7 +16,7 @@ import BudgetSnapshot from './BudgetSnapshot';
 import QuickActions from './QuickActions';
 import { parseISO, isWithinInterval } from 'date-fns';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, serverTimestamp, query, orderBy as firestoreOrderBy, addDoc } from 'firebase/firestore'; // Removed FieldValue, addDoc already imported
+import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, serverTimestamp, query, orderBy as firestoreOrderBy, addDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
 
@@ -78,6 +78,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
       if (fetchedCities.length > 0) {
         setCities(fetchedCities);
       } else {
+        // If Firestore is empty, use static data as a fallback for display
         setCities(initialStaticTripData.ciudades); 
       }
     } catch (error: any) {
@@ -87,7 +88,7 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
         title: "Error al cargar ciudades",
         description: `No se pudieron cargar las ciudades. ${error.message}`,
       });
-      setCities(initialStaticTripData.ciudades);
+      setCities(initialStaticTripData.ciudades); // Fallback to static if fetch fails
     } finally {
       setIsLoadingCities(false);
     }
@@ -245,83 +246,9 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     }
   };
 
-  const handleSaveCity = async (cityData: CityFormData) => {
-    const cityToSave: Omit<City, 'id'> & { id?: string } = {
-      name: cityData.name,
-      country: cityData.country,
-      arrivalDate: cityData.arrivalDate,
-      departureDate: cityData.departureDate,
-      notes: cityData.notes,
-      coordinates: {
-        lat: cityData.lat,
-        lng: cityData.lng,
-      },
-      // budget can be added here if needed, or managed separately
-    };
-
-    if (cityData.id) { // Existing city - Update
-      cityToSave.id = cityData.id;
-      const cityRef = doc(db, "trips", TRIP_ID, "cities", cityData.id);
-      try {
-        await setDoc(cityRef, cityToSave, { merge: true }); // merge: true to update fields
-        toast({
-          title: "Ciudad Actualizada",
-          description: `${cityData.name} ha sido actualizada.`,
-        });
-        fetchCities();
-      } catch (error) {
-        console.error("Error updating city:", error);
-        toast({
-          variant: "destructive",
-          title: "Error al actualizar ciudad",
-          description: `No se pudo actualizar la ciudad. Error: ${(error as Error).message}`,
-        });
-        throw error; // Re-throw to let AddCityDialog know submission failed
-      }
-    } else { // New city - Add
-      const citiesCollectionRef = collection(db, "trips", TRIP_ID, "cities");
-      try {
-        // Remove id property for addDoc if it somehow got there (it shouldn't for new cities)
-        const { id, ...dataWithoutId } = cityToSave; 
-        await addDoc(citiesCollectionRef, dataWithoutId);
-        toast({
-          title: "Ciudad Añadida",
-          description: `${cityData.name} ha sido añadida al viaje.`,
-        });
-        fetchCities();
-      } catch (error) {
-        console.error("Error adding city:", error);
-        toast({
-          variant: "destructive",
-          title: "Error al añadir ciudad",
-          description: `No se pudo guardar la ciudad. Error: ${(error as Error).message}`,
-        });
-        throw error; // Re-throw
-      }
-    }
-  };
-
-
-  const handleDeleteCity = async (cityId: string) => {
-    const cityToDelete = cities.find(c => c.id === cityId);
-    if (!cityToDelete) return;
-    try {
-      const cityRef = doc(db, "trips", TRIP_ID, "cities", cityId);
-      await deleteDoc(cityRef);
-      toast({
-        title: "Ciudad Eliminada",
-        description: `${cityToDelete.name} ha sido eliminada del viaje.`,
-      });
-      fetchCities(); 
-    } catch (error) {
-      console.error("Error deleting city:", error);
-      toast({
-        variant: "destructive",
-        title: "Error al eliminar ciudad",
-        description: `No se pudo eliminar ${cityToDelete.name}. Error: ${(error as Error).message}`,
-      });
-    }
-  };
+  // Placeholder for handleSaveCity and handleDeleteCity if MapSection shell doesn't need them
+  // const handleSaveCity = async (cityData: CityFormData) => { ... }
+  // const handleDeleteCity = async (cityId: string) => { ... }
 
   const isLoading = isLoadingActivities || isLoadingCities; 
 
@@ -362,9 +289,9 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
           ) : (
             <MapSection 
               tripData={currentTripDataForWidgets} 
-              cities={cities}
-              onSaveCity={handleSaveCity} // Changed from onAddCity
-              onDeleteCity={handleDeleteCity}
+              // cities={cities} // No longer passing cities to the shell
+              // onSaveCity={handleSaveCity} // No longer passing save handler to the shell
+              // onDeleteCity={handleDeleteCity} // No longer passing delete handler to the shell
             />
           )}
           <Separator className="my-8 md:my-12" />
