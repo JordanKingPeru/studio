@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { TripDetails, City, Coordinates } from '@/lib/types';
 import SectionCard from '@/components/ui/SectionCard';
-import { MapPin, Route, PlusCircle, Trash2, CalendarIcon, Globe, StickyNote, Loader2, AlertTriangle, Info, MapPinIcon } from 'lucide-react';
+import { MapPin, Route, PlusCircle, Trash2, CalendarIcon, Globe, StickyNote, Loader2, AlertTriangle, Info } from 'lucide-react'; // MapPinIcon was removed as MapPin is used
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -52,10 +52,19 @@ const libraries: ("places")[] = ["places"];
 export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }: MapSectionProps) {
   const [isCityFormOpen, setIsCityFormOpen] = useState(false);
   const [previewCenter, setPreviewCenter] = useState<Coordinates | null>(null);
-  const [forceRenderKey, setForceRenderKey] = useState(0); // To help re-render form with new values
+  const [forceRenderKey, setForceRenderKey] = useState(0);
   const { toast } = useToast();
 
-  const placeAutocompleteRef = useRef<HTMLElement & { place?: google.maps.places.PlaceResult; value?: string | null; getPlace?: () => google.maps.places.PlaceResult | undefined } | null>(null);
+  const [autocompleteNode, setAutocompleteNode] = useState<HTMLElement | null>(null);
+
+  const placeAutocompleteRefCallback = useCallback((node: HTMLElement | null) => {
+    console.log("MapSection DEBUG: placeAutocompleteRefCallback called with node:", node);
+    if (node && (node as any).value) { // Attempt to clear if component has a value property
+      (node as any).value = "";
+    }
+    setAutocompleteNode(node);
+  }, []);
+
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
@@ -77,14 +86,11 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
   });
 
   const handlePlaceSelectedCallback = useCallback((event: Event) => {
-    const autocompleteElement = event.target as HTMLElement & { place?: google.maps.places.PlaceResult };
-    const place = autocompleteElement?.place;
-
     console.log("MapSection DEBUG: gmp-placechange event FIRED.");
-    console.log("MapSection DEBUG: event.target raw:", event.target);
-    console.log("MapSection DEBUG: event.target.place (raw PlaceResult):", place ? JSON.stringify(place) : "undefined");
+    const place = (event.target as any)?.place as google.maps.places.PlaceResult | undefined;
 
     if (place && typeof place === 'object') {
+        console.log("MapSection DEBUG: Raw place data from event:", JSON.stringify(place));
         let finalCityName = place.displayName || "";
         let extractedCountryName = "";
         let latitude: number | undefined;
@@ -95,23 +101,22 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
             if (countryComponent) {
                 extractedCountryName = countryComponent.longText || countryComponent.shortText || "";
             }
-            // If displayName is too broad (e.g., includes country), try to get a more specific city name
-            if (!finalCityName || (extractedCountryName && finalCityName.includes(extractedCountryName)) ) {
-                 const localityComponent = place.addressComponents.find(c => c.types.includes('locality'));
-                 if (localityComponent) {
-                    finalCityName = localityComponent.longText || localityComponent.shortText || finalCityName; // Fallback to original displayName
-                 }
-            }
+            const localityComponent = place.addressComponents.find(c => c.types.includes('locality') || c.types.includes('postal_town') || c.types.includes('administrative_area_level_1'));
+             if (localityComponent && (!finalCityName || (extractedCountryName && finalCityName.includes(extractedCountryName)) || finalCityName === extractedCountryName ) ) {
+                finalCityName = localityComponent.longText || localityComponent.shortText || finalCityName;
+             }
         }
-         // Fallback for country if not in addressComponents but maybe in formattedAddress
         if (!extractedCountryName && place.formattedAddress) {
             const parts = place.formattedAddress.split(',');
             if (parts.length > 0) {
-                 extractedCountryName = parts[parts.length - 1].trim();
+                 const potentialCountry = parts[parts.length - 1].trim();
+                 // Basic check if it's likely a country (e.g., not a number like a zip code)
+                 if (isNaN(parseInt(potentialCountry))) {
+                    extractedCountryName = potentialCountry;
+                 }
             }
         }
-        // Ensure finalCityName doesn't still contain the country if we successfully extracted it
-        if (finalCityName && extractedCountryName && finalCityName.includes(extractedCountryName)) {
+        if (finalCityName && extractedCountryName && finalCityName.includes(extractedCountryName) && finalCityName !== extractedCountryName) {
             finalCityName = finalCityName.replace(`, ${extractedCountryName}`, "").replace(extractedCountryName, "").trim();
         }
 
@@ -129,53 +134,65 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
         console.log(`MapSection DEBUG: Extracted Values - Name: "${finalCityName}", Country: "${extractedCountryName}", Lat: ${latitude}, Lng: ${longitude}`);
 
         if (finalCityName && extractedCountryName && typeof latitude === 'number' && typeof longitude === 'number') {
-            form.setValue('name', finalCityName, { shouldValidate: true });
-            form.setValue('country', extractedCountryName, { shouldValidate: true });
-            form.setValue('lat', latitude, { shouldValidate: true });
-            form.setValue('lng', longitude, { shouldValidate: true });
+            form.setValue('name', finalCityName, { shouldValidate: true, shouldDirty: true });
+            form.setValue('country', extractedCountryName, { shouldValidate: true, shouldDirty: true });
+            form.setValue('lat', latitude, { shouldValidate: true, shouldDirty: true });
+            form.setValue('lng', longitude, { shouldValidate: true, shouldDirty: true });
             setPreviewCenter({ lat: latitude, lng: longitude });
             setForceRenderKey(prev => {
-                console.log(`MapSection DEBUG: Forcing re-render for form update. Old key: ${prev}, New key: ${prev + 1}`);
-                return prev + 1;
+                const newKey = prev + 1;
+                console.log(`MapSection DEBUG: Forcing re-render for form update. New key: ${newKey}`);
+                return newKey;
             });
             toast({ title: "Ubicación Seleccionada", description: `${finalCityName}, ${extractedCountryName}` });
         } else {
             console.error("MapSection ERROR: Missing essential place data after selection.", { finalCityName, extractedCountryName, latitude, longitude });
             toast({
                 variant: "destructive",
-                title: "Datos incompletos",
-                description: "No se pudo obtener toda la información del lugar. Intenta de nuevo o elige otro."
+                title: "Datos incompletos del lugar",
+                description: "No se pudo obtener toda la información. Intenta de nuevo o elige otro."
             });
             setPreviewCenter(null);
         }
     } else {
-        console.warn("MapSection WARN: gmp-placechange event fired but place data is undefined, null, or not an object.");
+        console.warn("MapSection WARN: gmp-placechange event fired but 'place' data is missing or not an object on event.target.");
         setPreviewCenter(null);
     }
-  }, [form, toast, setForceRenderKey, setPreviewCenter]);
-
+  }, [form, setPreviewCenter, setForceRenderKey, toast]);
 
   useEffect(() => {
-    const autocompleteElement = placeAutocompleteRef.current;
-    // This effect handles adding/removing the event listener.
-    if (isCityFormOpen && isLoaded && !loadError && autocompleteElement) {
-      console.log("MapSection DEBUG: useEffect - Attaching 'gmp-placechange' listener to:", autocompleteElement);
-      autocompleteElement.addEventListener('gmp-placechange', handlePlaceSelectedCallback);
-
-      return () => {
-        if (autocompleteElement) { // Ensure element still exists on cleanup
-          console.log("MapSection DEBUG: useEffect - Detaching 'gmp-placechange' listener from:", autocompleteElement);
-          autocompleteElement.removeEventListener('gmp-placechange', handlePlaceSelectedCallback);
+    if (isLoaded && GOOGLE_MAPS_API_KEY && !loadError && autocompleteNode && isCityFormOpen) {
+        console.log("MapSection DEBUG: useEffect - Attaching 'gmp-placechange' listener to:", autocompleteNode);
+        
+        const currentAutocompleteNode = autocompleteNode; 
+        
+        if ((currentAutocompleteNode as any).__gmpPlaceChangedListenerAttached) {
+            console.log("MapSection DEBUG: useEffect - Listener already considered attached, skipping re-attachment.");
+            return;
         }
-      };
+
+        currentAutocompleteNode.addEventListener('gmp-placechange', handlePlaceSelectedCallback);
+        (currentAutocompleteNode as any).__gmpPlaceChangedListenerAttached = true;
+        console.log("MapSection DEBUG: useEffect - ADDED 'gmp-placechange' listener.");
+
+        return () => {
+            if ((currentAutocompleteNode as any).__gmpPlaceChangedListenerAttached) {
+              console.log("MapSection DEBUG: useEffect cleanup - Removing 'gmp-placechange' listener from:", currentAutocompleteNode);
+              currentAutocompleteNode.removeEventListener('gmp-placechange', handlePlaceSelectedCallback);
+              delete (currentAutocompleteNode as any).__gmpPlaceChangedListenerAttached;
+              console.log("MapSection DEBUG: useEffect cleanup - REMOVED 'gmp-placechange' listener.");
+            }
+        };
+    } else {
+        console.log("MapSection DEBUG: useEffect - Conditions NOT MET for attaching listener.", { isLoaded, GOOGLE_MAPS_API_KEY_PRESENT: !!GOOGLE_MAPS_API_KEY, loadError: !!loadError, autocompleteNodeExists: !!autocompleteNode, isCityFormOpen });
     }
-    return undefined; // Explicitly return undefined if no cleanup is needed for this run
-  }, [isCityFormOpen, isLoaded, loadError, handlePlaceSelectedCallback]); // handlePlaceSelectedCallback is memoized
+  }, [isLoaded, GOOGLE_MAPS_API_KEY, loadError, autocompleteNode, isCityFormOpen, handlePlaceSelectedCallback]);
+
 
   const handleDialogChange = (open: boolean) => {
     setIsCityFormOpen(open);
     if (open) {
-      console.log("MapSection DEBUG: handleDialogChange - Dialog opening. Resetting form.");
+      console.log("MapSection DEBUG: Dialog opening. Resetting form. Autocomplete node state:", autocompleteNode);
       form.reset({
         name: '',
         country: '',
@@ -186,12 +203,14 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
         lng: undefined,
       });
       setPreviewCenter(null);
-      if (placeAutocompleteRef.current) {
-        placeAutocompleteRef.current.value = null; // Attempt to clear web component's input
+      if (autocompleteNode && typeof (autocompleteNode as any).setPlace === 'function') {
+        (autocompleteNode as any).setPlace(null); // API to clear selection if available
+      } else if (autocompleteNode && (autocompleteNode as any).value) {
+         (autocompleteNode as any).value = ""; // Clear input value
       }
-      setForceRenderKey(prev => prev + 1); // Force re-render to clear inputs if needed
+      setForceRenderKey(prev => prev + 1);
     } else {
-        console.log("MapSection DEBUG: handleDialogChange - Dialog closing.");
+        console.log("MapSection DEBUG: Dialog closing.");
     }
   };
 
@@ -203,19 +222,28 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
             title: "Faltan Datos Esenciales",
             description: "Asegúrate de seleccionar una ciudad del buscador para autocompletar nombre, país y coordenadas.",
         });
-        console.error("MapSection ERROR: Submission failed - critical data missing.", data);
+        console.error("MapSection ERROR: Submission failed - critical data missing from form state.", data);
         return;
     }
 
-    await onAddCity({
-      name: data.name,
-      country: data.country,
-      arrivalDate: data.arrivalDate,
-      departureDate: data.departureDate,
-      notes: data.notes,
-      coordinates: { lat: data.lat, lng: data.lng },
-    });
-    handleDialogChange(false); // Close dialog on successful submission
+    try {
+        await onAddCity({
+        name: data.name,
+        country: data.country,
+        arrivalDate: data.arrivalDate,
+        departureDate: data.departureDate,
+        notes: data.notes,
+        coordinates: { lat: data.lat, lng: data.lng },
+        });
+        handleDialogChange(false); 
+    } catch (error) {
+        console.error("Error in onAddCity prop:", error);
+        toast({
+            variant: "destructive",
+            title: "Error al guardar ciudad",
+            description: (error as Error).message || "Ocurrió un error desconocido."
+        });
+    }
   };
   
   const headerActions = (
@@ -254,14 +282,14 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleAddCitySubmit)} className="space-y-4 py-2">
             <div className="space-y-1">
-              <FormLabel className="flex items-center"><MapPinIcon className="mr-2 h-4 w-4 text-muted-foreground" />Buscar Ciudad</FormLabel>
+              <FormLabel className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-muted-foreground" />Buscar Ciudad</FormLabel>
               {isLoaded && GOOGLE_MAPS_API_KEY && !loadError ? (
                 React.createElement('gmp-place-autocomplete', {
-                  ref: placeAutocompleteRef,
+                  ref: placeAutocompleteRefCallback,
                   id: 'gmp-place-search-input-mapsection',
-                  "requested-fields": "id,displayName,formattedAddress,location,addressComponents,name",
-                  "place-types": "locality,administrative_area_level_1",
-                  placeholder: "Ej: París, Francia",
+                  "requested-fields": "id,displayName,formattedAddress,location,addressComponents",
+                  "place-types": "locality,administrative_area_level_1,country", // Broaden types slightly
+                  placeholder: "Ej: San Francisco, California",
                   style: {
                     width: '100%',
                     fontSize: '0.875rem',
@@ -273,7 +301,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
                     boxSizing: 'border-box',
                     height: '2.5rem',
                   },
-                } as React.HTMLAttributes<HTMLElement> & { "requested-fields"?: string; "place-types"?: string; placeholder?: string; id?: string; value?: string | null })
+                } as React.HTMLAttributes<HTMLElement> & { "requested-fields"?: string; "place-types"?: string; placeholder?: string; id?: string; })
               ) : GOOGLE_MAPS_API_KEY && !loadError ? (
                 <div className="flex items-center justify-center h-10 border rounded-md bg-muted/50">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -282,9 +310,6 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
               ) : null}
             </div>
             
-            <FormField control={form.control} name="lat" render={({ field }) => <Input type="hidden" {...field} />} />
-            <FormField control={form.control} name="lng" render={({ field }) => <Input type="hidden" {...field} />} />
-
             <FormField
               control={form.control}
               name="name"
@@ -311,6 +336,9 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
                 </FormItem>
               )}
             />
+            <FormField control={form.control} name="lat" render={({ field }) => <Input type="hidden" {...field} value={field.value || ""} />} />
+            <FormField control={form.control} name="lng" render={({ field }) => <Input type="hidden" {...field} value={field.value || ""} />} />
+
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
@@ -375,7 +403,7 @@ export default function MapSection({ tripData, cities, onAddCity, onDeleteCity }
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancelar</Button>
               </DialogClose>
-              <Button type="submit" disabled={form.formState.isSubmitting || !isLoaded || !!loadError}>
+              <Button type="submit" disabled={form.formState.isSubmitting || !isLoaded || !!loadError || !form.formState.isValid && form.formState.isSubmitted}>
                 {form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Añadir Ciudad al Viaje
               </Button>
@@ -468,8 +496,11 @@ declare global {
         "place-types"?: string;
         placeholder?: string;
         id?: string;
-        value?: string | null; // Added value prop for potential direct manipulation
+        value?: string | null; 
+        // Consider adding setPlace if the component exposes it, for programmatic clearing
+        // setPlace?: (place: google.maps.places.PlaceResult | null) => void;
       }, HTMLElement>;
     }
   }
 }
+
