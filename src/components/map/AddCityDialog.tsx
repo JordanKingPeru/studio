@@ -47,21 +47,21 @@ interface AddCityDialogProps {
 const mapContainerStyle = {
   width: '100%',
   height: '200px',
-  borderRadius: '0.375rem',
+  borderRadius: '0.375rem', // Corresponds to Tailwind's rounded-md
 };
 
 const defaultNewCityValues: Omit<CityFormData, 'id'> = {
   name: '',
   country: '',
   arrivalDate: new Date().toISOString().split('T')[0],
-  departureDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+  departureDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default to 7 days later
   notes: '',
-  lat: 0,
-  lng: 0,
+  lat: 0, // Placeholder, will be updated by autocomplete
+  lng: 0, // Placeholder, will be updated by autocomplete
 };
 
-const GOOGLE_MAPS_LIBRARIES = ['places'] as Array<'places'>;
-const GOOGLE_MAPS_SCRIPT_ID = 'app-google-maps-script';
+const GOOGLE_MAPS_LIBRARIES = ['places'] as Array<'places'>; // Specify libraries type
+const GOOGLE_MAPS_SCRIPT_ID = 'app-google-maps-script'; // Consistent script ID
 
 export default function AddCityDialog({
   isOpen,
@@ -73,7 +73,7 @@ export default function AddCityDialog({
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewCenter, setPreviewCenter] = useState<Coordinates | null>(null);
-  const [forceRenderMapKey, setForceRenderMapKey] = useState(0);
+  const [forceRenderMapKey, setForceRenderMapKey] = useState(0); // For map preview re-render
   const [apiLoadStatus, setApiLoadStatus] = useState<'initial' | 'loading' | 'loaded' | 'error' | 'no_key'>('initial');
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -89,9 +89,7 @@ export default function AddCityDialog({
 
   const form = useForm<CityFormData>({
     resolver: zodResolver(cityFormSchema),
-    defaultValues: initialData
-      ? { ...initialData, notes: initialData.notes || '', lat: initialData.coordinates.lat, lng: initialData.coordinates.lng }
-      : { ...defaultNewCityValues, id: undefined }
+    defaultValues: defaultNewCityValues
   });
 
   useEffect(() => {
@@ -100,11 +98,9 @@ export default function AddCityDialog({
       console.warn("AddCityDialog: Google Maps API Key not provided.");
       return;
     }
-    // Only set to loading if it's initial, to avoid flicker if isLoaded changes quickly
-    if (apiLoadStatus === 'initial') {
+    if (apiLoadStatus === 'initial' && !isLoaded && !loadError) {
         setApiLoadStatus('loading');
     }
-
     if (isLoaded) {
       setApiLoadStatus('loaded');
       console.log("AddCityDialog: Google Maps API script loaded successfully via useJsApiLoader.");
@@ -115,10 +111,10 @@ export default function AddCityDialog({
     }
   }, [isLoaded, loadError, googleMapsApiKey, apiLoadStatus]);
 
+
   const handlePlaceSelected = useCallback(() => {
     if (!autocompleteRef.current) {
       console.error("AddCityDialog: Autocomplete instance not found in handlePlaceSelected.");
-      toast({ variant: "destructive", title: "Error de Autocompletado", description: "La instancia de autocompletado no está disponible." });
       return;
     }
     
@@ -128,7 +124,7 @@ export default function AddCityDialog({
 
     if (!place || !place.geometry || !place.geometry.location) {
       toast({ variant: "destructive", title: "Selección Inválida", description: "No se pudieron obtener datos completos del lugar. Inténtalo de nuevo." });
-      console.warn("AddCityDialog: Place data incomplete from getPlace(). Place object:", place);
+      console.warn("AddCityDialog: Place data incomplete. Place object:", place);
       return;
     }
 
@@ -136,33 +132,35 @@ export default function AddCityDialog({
     const lng = place.geometry.location.lng();
     let cityName = '';
     let countryName = '';
-    let adminAreaLevel1Name = '';
+    let adminAreaLevel1Name = ''; // For cases where 'locality' might be missing (e.g. some large areas)
 
     if (place.address_components) {
-        console.log("AddCityDialog: Extracting from address_components:", place.address_components);
-        for (const component of place.address_components) {
-            if (component.types.includes('locality')) {
-            cityName = component.long_name;
-            console.log(`AddCityDialog: Found city (locality): ${cityName}`);
-            }
-            if (component.types.includes('administrative_area_level_1') && !cityName) {
+      console.log("AddCityDialog: Extracting from address_components:", place.address_components);
+      for (const component of place.address_components) {
+        if (component.types.includes('locality')) {
+          cityName = component.long_name;
+          console.log(`AddCityDialog: Found city (locality): ${cityName}`);
+        }
+        if (component.types.includes('administrative_area_level_1')) { // State or major region
             adminAreaLevel1Name = component.long_name;
             console.log(`AddCityDialog: Found admin_area_level_1: ${adminAreaLevel1Name}`);
-            }
-            if (component.types.includes('country')) {
-            countryName = component.long_name;
-            console.log(`AddCityDialog: Found country: ${countryName}`);
-            }
         }
+        if (component.types.includes('country')) {
+          countryName = component.long_name;
+          console.log(`AddCityDialog: Found country: ${countryName}`);
+        }
+      }
     } else {
-        console.warn("AddCityDialog: place.address_components is undefined. Raw place:", place)
+        console.warn("AddCityDialog: place.address_components is undefined. Raw place:", place);
     }
     
+    // Fallback logic for cityName
     if (!cityName && adminAreaLevel1Name) {
-        cityName = adminAreaLevel1Name;
+        cityName = adminAreaLevel1Name; // Use state/region if locality is not found
         console.log(`AddCityDialog: Using admin_area_level_1 as city: ${cityName}`);
     }
-    if (!cityName && place.name && !place.types?.some(t => ['street_address', 'premise', 'route', 'establishment', 'point_of_interest', 'airport', 'bus_station', 'train_station', 'postal_code', 'sublocality'].includes(t))) {
+    // Further fallback to place.name if it's not a very specific type of place
+    if (!cityName && place.name && !place.types?.some(t => ['street_address', 'premise', 'route', 'establishment', 'point_of_interest', 'airport', 'bus_station', 'train_station', 'postal_code', 'sublocality', 'plus_code'].includes(t))) {
         cityName = place.name;
         console.log(`AddCityDialog: Using place.name as city (fallback): ${cityName}`);
     }
@@ -176,46 +174,48 @@ export default function AddCityDialog({
       form.setValue('lat', lat, { shouldValidate: true, shouldDirty: true });
       form.setValue('lng', lng, { shouldValidate: true, shouldDirty: true });
       setPreviewCenter({ lat, lng });
-      setForceRenderMapKey(prev => prev + 1);
-      if (citySearchInputRef.current) {
+      setForceRenderMapKey(prev => prev + 1); // Re-render map preview
+      if (citySearchInputRef.current) { // Update the search input with formatted address
         citySearchInputRef.current.value = place.formatted_address || `${cityName}, ${countryName}`;
       }
       toast({ title: "Ciudad Seleccionada", description: `${cityName}, ${countryName} autocompletada.` });
     } else {
-      toast({ variant: "destructive", title: "Datos Incompletos", description: "No se pudo extraer toda la información necesaria (ciudad, país) del lugar seleccionado. Revisa los logs de la consola." });
+      toast({ variant: "destructive", title: "Datos Incompletos", description: "No se pudo extraer toda la información necesaria (ciudad, país) del lugar seleccionado. Revisa los logs." });
       console.error("AddCityDialog: Failed to extract all necessary place data. Extracted:", { cityName, countryName, lat, lng }, "Original place data:", place);
     }
   }, [form, toast]);
 
   const initializeAutocomplete = useCallback(() => {
-    if (apiLoadStatus === 'loaded' && citySearchInputRef.current && window.google && window.google.maps && window.google.maps.places) {
-      if (autocompleteRef.current) {
-        console.log("AddCityDialog: Autocomplete already initialized. Skipping re-initialization.");
-        return;
-      }
-      console.log("AddCityDialog: Attempting to initialize Google Maps Autocomplete on input:", citySearchInputRef.current);
-      try {
-        const instance = new window.google.maps.places.Autocomplete(
-          citySearchInputRef.current,
-          {
-            types: ['(cities)'],
-            fields: ['address_components', 'geometry.location', 'name', 'formatted_address', 'place_id', 'types'],
-          }
-        );
-        autocompleteRef.current = instance;
-        
-        if (placeChangedListenerRef.current) {
-          window.google.maps.event.removeListener(placeChangedListenerRef.current);
-          console.log("AddCityDialog: Removed existing place_changed listener.");
-        }
-        placeChangedListenerRef.current = instance.addListener('place_changed', handlePlaceSelected);
-        console.log("AddCityDialog: Autocomplete initialized and new listener added.");
-      } catch (error) {
-        console.error("AddCityDialog: Error initializing Google Maps Autocomplete:", error);
-        toast({variant: "destructive", title: "Error de Google Maps", description: "No se pudo inicializar el autocompletado."});
-      }
-    } else {
+    if (apiLoadStatus !== 'loaded' || !citySearchInputRef.current) {
       console.log("AddCityDialog: Conditions not met for Autocomplete initialization. API Status:", apiLoadStatus, "Input Ref:", citySearchInputRef.current);
+      return;
+    }
+    if (autocompleteRef.current) {
+      console.log("AddCityDialog: Autocomplete instance already exists. Skipping re-initialization.");
+      return;
+    }
+
+    console.log("AddCityDialog: Attempting to initialize Google Maps Autocomplete on input:", citySearchInputRef.current);
+    try {
+      const instance = new window.google.maps.places.Autocomplete(
+        citySearchInputRef.current,
+        {
+          types: ['(cities)'], // Restrict to cities
+          fields: ['address_components', 'geometry.location', 'name', 'formatted_address', 'place_id', 'types'], // Specify fields
+        }
+      );
+      autocompleteRef.current = instance;
+      
+      // Clear any old listener before adding a new one
+      if (placeChangedListenerRef.current) {
+        window.google.maps.event.removeListener(placeChangedListenerRef.current);
+        console.log("AddCityDialog: Removed existing place_changed listener before adding new one.");
+      }
+      placeChangedListenerRef.current = instance.addListener('place_changed', handlePlaceSelected);
+      console.log("AddCityDialog: Autocomplete initialized and new listener added.");
+    } catch (error) {
+      console.error("AddCityDialog: Error initializing Google Maps Autocomplete:", error);
+      toast({variant: "destructive", title: "Error de Google Maps", description: `No se pudo inicializar el autocompletado: ${(error as Error).message}`});
     }
   }, [apiLoadStatus, handlePlaceSelected, toast]);
 
@@ -229,36 +229,29 @@ export default function AddCityDialog({
     if (autocompleteRef.current) {
       // More thorough cleanup for Autocomplete
       if (window.google && window.google.maps && window.google.maps.event && citySearchInputRef.current) {
+        // The Autocomplete instance itself might not have clearInstanceListeners directly.
+        // It's more about removing its listeners from the input and the Autocomplete object itself.
         window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
         window.google.maps.event.clearInstanceListeners(citySearchInputRef.current); // Clear listeners from input too
       }
-      autocompleteRef.current = null;
+      autocompleteRef.current = null; // Dereference
       console.log("AddCityDialog: Autocomplete instance reference cleared and listeners attempted clear.");
     }
+    // Remove .pac-container elements which are appended to body
     const pacContainers = document.querySelectorAll('.pac-container');
     pacContainers.forEach(container => {
+      // Check if the container is still in the document body before removing
       if (document.body.contains(container)) {
-        container.remove();
+          container.remove();
       }
     });
     console.log("AddCityDialog: .pac-container elements attempted removal during cleanup.");
   }, []);
 
-
+  // Effect for managing dialog open/close state
   useEffect(() => {
     if (isOpen) {
-      initializeAutocomplete();
-    } else {
-      cleanupAutocomplete();
-    }
-    // This effect should re-run if isOpen or initializeAutocomplete changes
-  }, [isOpen, initializeAutocomplete, cleanupAutocomplete]);
-
-
-  const handleDialogChange = (open: boolean) => {
-    onOpenChange(open);
-    if (open) {
-      console.log("AddCityDialog: Dialog opened.");
+      // When dialog opens, reset form and related state
       const resetValues = initialData
         ? { ...initialData, notes: initialData.notes || '', lat: initialData.coordinates.lat, lng: initialData.coordinates.lng }
         : { ...defaultNewCityValues, id: undefined };
@@ -268,33 +261,43 @@ export default function AddCityDialog({
         citySearchInputRef.current.value = initialData ? `${initialData.name}, ${initialData.country}` : '';
       }
       setPreviewCenter(initialData ? initialData.coordinates : null);
-      setForceRenderMapKey(prev => prev +1);
-      // Defer Autocomplete initialization until the dialog is fully open and input is available
-      // setTimeout(initializeAutocomplete, 100); // Small delay
+      setForceRenderMapKey(prev => prev + 1);
+
+      // If API is already loaded when dialog opens, try to initialize Autocomplete
+      // Primarily, initialization will happen on input focus for robustness
+      if (apiLoadStatus === 'loaded' && citySearchInputRef.current && !autocompleteRef.current) {
+        console.log("AddCityDialog: [isOpen effect] - API loaded, input available. Initializing autocomplete.");
+        initializeAutocomplete();
+      } else if (apiLoadStatus === 'loaded' && !citySearchInputRef.current) {
+         console.warn("AddCityDialog: [isOpen effect] - API loaded, but input ref is not yet available.");
+      }
+
     } else {
-      console.log("AddCityDialog: Dialog closed.");
-      // Cleanup is now handled by the useEffect listening to isOpen
+      // When dialog closes, perform cleanup
+      cleanupAutocomplete();
     }
-  };
+  }, [isOpen, initialData, form, apiLoadStatus, initializeAutocomplete, cleanupAutocomplete]);
+
 
   const handleFormSubmit = async (data: CityFormData) => {
     setIsSubmitting(true);
     console.log("AddCityDialog: Form submitted with data:", data);
-    if ((data.lat === 0 && data.lng === 0 && !initialData?.id) && !(form.formState.dirtyFields.lat || form.formState.dirtyFields.lng)) {
+    
+    // Basic check for placeholder coordinates if it's a new city and autocomplete might not have run
+    if (!data.id && (data.lat === 0 && data.lng === 0) && !(form.formState.dirtyFields.lat || form.formState.dirtyFields.lng)) {
         toast({
             variant: "destructive",
             title: "Coordenadas Inválidas",
-            description: "Por favor, selecciona una ciudad del buscador para obtener coordenadas válidas.",
+            description: "Por favor, selecciona una ciudad del buscador para obtener coordenadas válidas, o ingrésalas manualmente si es necesario (no implementado).",
         });
-        form.setError("lat", {type: "manual", message: "Selecciona una ciudad del buscador."});
-        form.setError("lng", {type: "manual", message: "Selecciona una ciudad del buscador."});
+        form.setError("name", {type: "manual", message: "Selecciona una ciudad válida del buscador."}); // Set error on name for visibility
         setIsSubmitting(false);
         return;
     }
 
     try {
       await onSaveCity(data);
-      handleDialogChange(false);
+      onOpenChange(false); // Close dialog on successful save
     } catch (error) {
       console.error("AddCityDialog: Error saving city:", error);
       toast({ variant: "destructive", title: "Error al Guardar", description: (error as Error).message || "No se pudo guardar la ciudad." });
@@ -321,7 +324,16 @@ export default function AddCityDialog({
 
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleDialogChange}>
+    <Dialog open={isOpen} onOpenChange={(openState) => {
+        // This is the main handler for dialog open/close changes from DialogPrimitive
+        if (!openState) { // If closing
+            cleanupAutocomplete();
+            if (citySearchInputRef.current) citySearchInputRef.current.value = '';
+            form.reset(defaultNewCityValues);
+            setPreviewCenter(null);
+        }
+        onOpenChange(openState); // Propagate state up
+    }}>
       <DialogContent className="sm:max-w-lg rounded-xl shadow-2xl">
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl text-primary flex items-center">
@@ -344,6 +356,8 @@ export default function AddCityDialog({
                 className="text-base"
                 defaultValue={initialData ? `${initialData.name}, ${initialData.country}` : ""}
                 onFocus={(e) => {
+                    console.log("AddCityDialog: citySearchInput onFocus triggered.");
+                    // Ensure .pac-containers are managed
                     const pacContainers = document.querySelectorAll('.pac-container');
                     if (pacContainers.length > 1) {
                          console.log("AddCityDialog: Multiple .pac-container elements found on focus. Removing extras.");
@@ -351,15 +365,20 @@ export default function AddCityDialog({
                             if (index < pacContainers.length -1 && document.body.contains(container) ) container.remove();
                          });
                     }
-                    // Attempt to initialize if not already done and dialog is open
-                    if (isOpen && !autocompleteRef.current) {
+                    // Robust initialization on focus if not already done
+                    if (apiLoadStatus === 'loaded' && citySearchInputRef.current && !autocompleteRef.current) {
+                        console.log("AddCityDialog: [onFocus] - Initializing Autocomplete.");
                         initializeAutocomplete();
                     }
                 }}
+                // onChange should not typically be needed for Autocomplete input itself
+                // as Google handles the input value during suggestion selection.
+                // If you need to react to text changes before selection, handle with care.
               />
               {searchInputInfo}
             </div>
 
+            {/* These fields will be populated by Autocomplete */}
             <FormField
               control={form.control}
               name="name"
@@ -367,7 +386,8 @@ export default function AddCityDialog({
                 <FormItem>
                   <FormLabel className="flex items-center"><MapPinIconLucide className="mr-2 h-4 w-4 text-muted-foreground" />Nombre Ciudad</FormLabel>
                   <FormControl>
-                    <Input placeholder="Se autocompletará al buscar" {...field} readOnly={!form.formState.dirtyFields.name && !!field.value && field.value !== defaultNewCityValues.name} />
+                    {/* Allow manual edit if needed, but primarily driven by autocomplete */}
+                    <Input placeholder="Se autocompletará al buscar" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -380,13 +400,14 @@ export default function AddCityDialog({
                 <FormItem>
                   <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-muted-foreground" />País</FormLabel>
                   <FormControl>
-                    <Input placeholder="Se autocompletará al buscar" {...field} readOnly={!form.formState.dirtyFields.country && !!field.value && field.value !== defaultNewCityValues.country} />
+                    <Input placeholder="Se autocompletará al buscar" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             
+            {/* Hidden fields for lat/lng, values set by Autocomplete */}
             <FormField control={form.control} name="lat" render={({ field }) => <Input type="hidden" {...field} />} />
             <FormField control={form.control} name="lng" render={({ field }) => <Input type="hidden" {...field} />} />
             { (form.formState.errors.lat || form.formState.errors.lng) && 
@@ -401,7 +422,7 @@ export default function AddCityDialog({
                 <FormLabel>Vista Previa del Mapa</FormLabel>
                 <div className="mt-1 h-[200px] w-full rounded-md overflow-hidden border">
                   <GoogleMap
-                    key={`preview-map-${previewCenter.lat}-${previewCenter.lng}-${forceRenderMapKey}`}
+                    key={`preview-map-${previewCenter.lat}-${previewCenter.lng}-${forceRenderMapKey}`} // Key to force re-render
                     mapContainerStyle={mapContainerStyle}
                     center={previewCenter}
                     zoom={10}
@@ -458,7 +479,7 @@ export default function AddCityDialog({
 
             <DialogFooter className="pt-4">
               <DialogClose asChild>
-                <Button type="button" variant="outline">Cancelar</Button>
+                <Button type="button" variant="outline" >Cancelar</Button>
               </DialogClose>
               <Button
                 type="submit"
@@ -474,5 +495,3 @@ export default function AddCityDialog({
     </Dialog>
   );
 }
-
-    
