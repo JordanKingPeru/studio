@@ -4,11 +4,11 @@
 import React, { useState, useMemo } from 'react';
 import type { TripDetails, City } from '@/lib/types';
 import SectionCard from '@/components/ui/SectionCard';
-import CityFormDialog, { type CityFormData } from './CityFormDialog'; // Assuming this is for manual input now
+import CityFormDialog, { type CityFormData } from './CityFormDialog';
 import CityListCard from './CityListCard';
 import { Button } from '@/components/ui/button';
 import { Route, PlusCircle, List, Loader2 } from 'lucide-react';
-import MapDisplay from './MapDisplay'; // Direct import
+import MapDisplay from './MapDisplay'; // Direct import now
 
 interface MapSectionProps {
   tripData: TripDetails;
@@ -26,7 +26,8 @@ export default function MapSection({
   const [isCityFormOpen, setIsCityFormOpen] = useState(false);
   const [editingCity, setEditingCity] = useState<City | null>(null);
 
-  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  // Ensure API key is read correctly. Default to undefined if not set.
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || undefined;
 
   const handleOpenForm = (city?: City) => {
     setEditingCity(city || null);
@@ -36,7 +37,7 @@ export default function MapSection({
   const headerActions = (
     <Button onClick={() => handleOpenForm()} variant="default" size="sm">
       <PlusCircle size={18} className="mr-2" />
-      Añadir Ciudad (Manual)
+      Añadir Ciudad
     </Button>
   );
 
@@ -93,7 +94,7 @@ export default function MapSection({
       <CityFormDialog
         isOpen={isCityFormOpen}
         onOpenChange={setIsCityFormOpen}
-        onSaveCity={onSaveCity} // No changes needed here for Google Maps API key
+        onSaveCity={onSaveCity}
         initialData={editingCity}
       />
     </SectionCard>

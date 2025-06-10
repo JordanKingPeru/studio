@@ -13,8 +13,8 @@ interface MapDisplayProps {
 
 const mapContainerStyle = {
   width: '100%',
-  height: '100%', // Changed from fixed height to 100% to fill parent
-  borderRadius: '0.75rem', // Keep rounded corners if parent has overflow hidden
+  height: '100%',
+  borderRadius: '0.75rem', 
 };
 
 const defaultCenter: Coordinates = { lat: 20, lng: 0 }; // General world view
@@ -31,7 +31,9 @@ export default function MapDisplay({ cities, googleMapsApiKey }: MapDisplayProps
   const validCities = useMemo(() => cities.filter(city =>
     typeof city.coordinates?.lat === 'number' &&
     typeof city.coordinates?.lng === 'number' &&
-    !(city.coordinates.lat === 0 && city.coordinates.lng === 0 && !city.id.startsWith('static-')) // Allow static (0,0) for now if needed for initial data
+    // Allow (0,0) only if it's explicitly set and not the default uninitialized state for a new city
+    // This logic might need refinement based on how (0,0) is treated for "new" vs "intentionally (0,0)" cities
+    (city.coordinates.lat !== 0 || city.coordinates.lng !== 0 || (city.id && city.name)) 
   ), [cities]);
 
   const onLoad = useCallback((map: google.maps.Map) => {
@@ -40,6 +42,7 @@ export default function MapDisplay({ cities, googleMapsApiKey }: MapDisplayProps
 
   const onUnmount = useCallback(() => {
     setMapRef(null);
+    setSelectedCity(null); // Clear selected city on unmount
   }, []);
 
   useEffect(() => {
@@ -50,10 +53,18 @@ export default function MapDisplay({ cities, googleMapsApiKey }: MapDisplayProps
       });
       mapRef.fitBounds(bounds);
 
-      // If only one city, set a reasonable zoom level
-      if (validCities.length === 1) {
-        mapRef.setZoom(6); // Adjust zoom level as needed for a single city
-      }
+      // Adjust zoom if only one city or if bounds are too zoomed in
+      const listener = window.google.maps.event.addListenerOnce(mapRef, 'idle', () => {
+        if (validCities.length === 1 && mapRef.getZoom()! > 7) {
+            mapRef.setZoom(7);
+        } else if (validCities.length > 1 && mapRef.getZoom()! > 15) { // Don't zoom too far for multiple cities
+            mapRef.setZoom(15);
+        }
+      });
+      return () => {
+        window.google.maps.event.removeListener(listener);
+      };
+
     } else if (mapRef) {
       mapRef.setCenter(defaultCenter);
       mapRef.setZoom(2);
@@ -65,9 +76,9 @@ export default function MapDisplay({ cities, googleMapsApiKey }: MapDisplayProps
       <div className="flex flex-col items-center justify-center h-full bg-destructive/10 p-4 rounded-xl">
         <p className="text-destructive font-semibold">Error al cargar Google Maps:</p>
         <p className="text-destructive text-sm">{loadError.message}</p>
-        <p className="text-muted-foreground text-xs mt-2">
+        <p className="text-muted-foreground text-xs mt-2 text-center">
           Asegúrate de que la API Key (`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`) esté configurada correctamente en tu archivo `.env`
-          y que la "Maps JavaScript API" esté habilitada en Google Cloud Console para esta clave.
+          y que la "Maps JavaScript API" esté habilitada en Google Cloud Console para esta clave. Verifica también las restricciones de la API Key.
         </p>
       </div>
     );
@@ -85,8 +96,8 @@ export default function MapDisplay({ cities, googleMapsApiKey }: MapDisplayProps
   return (
     <GoogleMap
       mapContainerStyle={mapContainerStyle}
-      center={defaultCenter}
-      zoom={2}
+      center={defaultCenter} // Initial center, will be adjusted by useEffect
+      zoom={2} // Initial zoom
       onLoad={onLoad}
       onUnmount={onUnmount}
       options={{
@@ -94,12 +105,12 @@ export default function MapDisplay({ cities, googleMapsApiKey }: MapDisplayProps
         mapTypeControl: false,
         fullscreenControl: false,
         zoomControl: true,
-        clickableIcons: false, // Disables clicking on Google's POIs
+        clickableIcons: false, 
       }}
     >
       {validCities.map((city) => (
         <MarkerF
-          key={city.id || city.name} // Ensure key is unique
+          key={city.id || `${city.name}-${city.coordinates.lat}-${city.coordinates.lng}`}
           position={{ lat: city.coordinates.lat, lng: city.coordinates.lng }}
           onClick={() => setSelectedCity(city)}
           title={city.name}
@@ -110,7 +121,7 @@ export default function MapDisplay({ cities, googleMapsApiKey }: MapDisplayProps
         <InfoWindowF
           position={{ lat: selectedCity.coordinates.lat, lng: selectedCity.coordinates.lng }}
           onCloseClick={() => setSelectedCity(null)}
-          options={{ pixelOffset: new window.google.maps.Size(0, -30) }} // Adjust offset if needed
+          options={{ pixelOffset: new window.google.maps.Size(0, -30) }} 
         >
           <div className="p-1">
             <h4 className="font-semibold text-sm text-primary">{selectedCity.name}</h4>
