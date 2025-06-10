@@ -4,11 +4,11 @@
 import React, { useState, useMemo } from 'react';
 import type { TripDetails, City } from '@/lib/types';
 import SectionCard from '@/components/ui/SectionCard';
-import CityFormDialog, { type CityFormData } from './CityFormDialog';
+import AddCityDialog, { type CityFormData } from './AddCityDialog'; // Updated import
 import CityListCard from './CityListCard';
 import { Button } from '@/components/ui/button';
-import { Route, PlusCircle, List, Loader2 } from 'lucide-react';
-import MapDisplay from './MapDisplay'; // Direct import now
+import { Route, PlusCircle, List } from 'lucide-react';
+import MapDisplay from './MapDisplay';
 
 interface MapSectionProps {
   tripData: TripDetails;
@@ -26,8 +26,7 @@ export default function MapSection({
   const [isCityFormOpen, setIsCityFormOpen] = useState(false);
   const [editingCity, setEditingCity] = useState<City | null>(null);
 
-  // Ensure API key is read correctly. Default to undefined if not set.
-  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || undefined;
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   const handleOpenForm = (city?: City) => {
     setEditingCity(city || null);
@@ -83,7 +82,7 @@ export default function MapSection({
               <div className="flex flex-col items-center justify-center h-full bg-destructive/5 p-4 rounded-xl">
                  <p className="text-destructive-foreground font-semibold">API Key de Google Maps no configurada.</p>
                  <p className="text-muted-foreground text-sm mt-1 text-center">
-                   Por favor, añade `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` a tu archivo `.env` para mostrar el mapa.
+                   Por favor, añade `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` a tu archivo `.env` para mostrar el mapa y habilitar la búsqueda de ciudades.
                  </p>
               </div>
             )}
@@ -91,12 +90,16 @@ export default function MapSection({
         </div>
       </div>
 
-      <CityFormDialog
-        isOpen={isCityFormOpen}
-        onOpenChange={setIsCityFormOpen}
-        onSaveCity={onSaveCity}
-        initialData={editingCity}
-      />
+      {googleMapsApiKey && ( // Only render dialog if API key is available
+        <AddCityDialog
+            isOpen={isCityFormOpen}
+            onOpenChange={setIsCityFormOpen}
+            onSaveCity={onSaveCity}
+            initialData={editingCity}
+            googleMapsApiKey={googleMapsApiKey}
+        />
+      )}
     </SectionCard>
   );
 }
+
