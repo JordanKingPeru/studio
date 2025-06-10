@@ -6,8 +6,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input'; // Se mantiene para otros campos del formulario
+import { Input as ShadcnInput } from '@/components/ui/input'; // Renombrado para evitar colisión
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -28,10 +29,10 @@ declare global {
   namespace JSX {
     interface IntrinsicElements {
       'gmp-place-autocomplete-element': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
-        ref?: React.Ref<any>; // HTMLElement & { value?: string; place?: google.maps.places.PlaceResult }; // Tipo más específico
+        ref?: React.Ref<HTMLElement & { value?: string; place?: google.maps.places.PlaceResult }>;
         placeholder?: string;
-        "request-options"?: string; // JSON string de AutocompleteRequestOptions
-        // Otras props si son necesarias, ej: "country-restrictions", "type-restrictions"
+        "request-options"?: string;
+        "value"?: string; // Para pre-llenado
       }, HTMLElement>;
     }
   }
@@ -61,16 +62,16 @@ interface AddCityDialogProps {
 const mapContainerStyle = {
   width: '100%',
   height: '200px',
-  borderRadius: '0.375rem',
+  borderRadius: '0.375rem', // Tailwind's rounded-md
 };
 
 const defaultNewCityValues: Omit<CityFormData, 'id'> = {
   name: '',
   country: '',
   arrivalDate: new Date().toISOString().split('T')[0],
-  departureDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+  departureDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default 7 days later
   notes: '',
-  lat: 0,
+  lat: 0, // Default to 0,0; will be updated by autocomplete
   lng: 0,
 };
 
@@ -87,17 +88,16 @@ export default function AddCityDialog({
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewCenter, setPreviewCenter] = useState<Coordinates | null>(null);
-  const [forceRenderMapKey, setForceRenderMapKey] = useState(0);
+  const [forceRenderMapKey, setForceRenderMapKey] = useState(0); // To force re-render of GoogleMap component
   const [apiLoadStatus, setApiLoadStatus] = useState<'initial' | 'loading' | 'loaded' | 'error' | 'no_key'>('initial');
 
-  // Ref para el nuevo PlaceAutocompleteElement
-  const placeAutocompleteElementRef = useRef<HTMLElement & { value?: string, place?: google.maps.places.Place }>(null);
+  const placeAutocompleteElementRef = useRef<HTMLElement & { value?: string; place?: google.maps.places.PlaceResult }>(null);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: googleMapsApiKey,
     libraries: GOOGLE_MAPS_LIBRARIES,
-    preventGoogleFontsLoading: true,
+    preventGoogleFontsLoading: true, // Added for consistency
   });
 
   const form = useForm<CityFormData>({
@@ -112,6 +112,7 @@ export default function AddCityDialog({
       console.warn("AddCityDialog: Google Maps API Key NO proporcionada.");
       return;
     }
+
     if (apiLoadStatus === 'initial' && !isLoaded && !loadError) {
       setApiLoadStatus('loading');
       console.log("AddCityDialog: Google Maps API script CARGANDO...");
@@ -124,54 +125,50 @@ export default function AddCityDialog({
     }
   }, [isLoaded, loadError, googleMapsApiKey, apiLoadStatus]);
 
-  // Efecto para manejar la apertura/cierre del diálogo y el pre-llenado
+  // Effect to handle dialog open/close and form pre-filling
   useEffect(() => {
     console.log(`AddCityDialog: useEffect [isOpen] - Dialog ${isOpen ? 'ABIERTO' : 'CERRADO'}. API Status: ${apiLoadStatus}, InitialData:`, initialData ? initialData.name : 'Ninguno');
     if (isOpen) {
       const resetValues = initialData
         ? { ...initialData, notes: initialData.notes || '', lat: initialData.coordinates.lat, lng: initialData.coordinates.lng }
-        : { ...defaultNewCityValues, id: undefined };
+        : { ...defaultNewCityValues, id: undefined }; // Ensure id is undefined for new cities
       form.reset(resetValues);
       console.log("AddCityDialog: [useEffect isOpen=true] - Formulario reseteado con:", resetValues);
 
       setPreviewCenter(initialData ? initialData.coordinates : null);
-      setForceRenderMapKey(prev => prev + 1);
+      setForceRenderMapKey(prev => prev + 1); // Force re-render map preview
 
-      // Pre-llenar el PlaceAutocompleteElement si hay datos iniciales
+      // Pre-fill PlaceAutocompleteElement if initialData exists and element is available
       if (initialData && placeAutocompleteElementRef.current) {
-        // El Web Component se actualiza a través de su propiedad 'value'
         placeAutocompleteElementRef.current.value = `${initialData.name}, ${initialData.country}`;
         console.log("AddCityDialog: [useEffect isOpen=true] - PlaceAutocompleteElement pre-llenado con:", placeAutocompleteElementRef.current.value);
       } else if (!initialData && placeAutocompleteElementRef.current) {
-        placeAutocompleteElementRef.current.value = ''; // Limpiar en caso de nuevo
+        placeAutocompleteElementRef.current.value = ''; // Clear for new city
+        console.log("AddCityDialog: [useEffect isOpen=true] - PlaceAutocompleteElement limpiado para nueva ciudad.");
       }
-    }
-  }, [isOpen, initialData, form, apiLoadStatus]); // No incluir placeAutocompleteElementRef.current aquí directamente
 
-  // Efecto para adjuntar y limpiar el listener de gmp-placechange
+    }
+  }, [isOpen, initialData, form, apiLoadStatus]); // `placeAutocompleteElementRef.current` is not a stable dependency here.
+
+  // Effect to attach and clean up 'gmp-placechange' listener
   useEffect(() => {
     const autocompleteElement = placeAutocompleteElementRef.current;
 
     if (isOpen && autocompleteElement && apiLoadStatus === 'loaded') {
       const handleGmpPlaceChange = async (event: Event) => {
-        // El tipo de evento es CustomEvent, pero 'any' es más simple aquí sin tipos específicos para gmp
-        const customEvent = event as any; 
-        const place = customEvent.detail?.place as google.maps.places.Place | undefined;
-
         console.log("AddCityDialog: Evento 'gmp-placechange' DISPARADO.");
+        const customEvent = event as CustomEvent<{ place: google.maps.places.PlaceResult }>;
+        const place = customEvent.detail?.place;
 
         if (!place) {
           console.warn("AddCityDialog: Evento 'gmp-placechange' no contenía detalles del lugar (place).");
           return;
         }
-        
         console.log("AddCityDialog: Objeto 'place' crudo (antes de fetchFields) desde 'gmp-placechange':", place ? JSON.parse(JSON.stringify(place)) : "NULO O INDEFINIDO");
 
         try {
-          // Campos necesarios para el formulario y el mapa
-          const fieldsToFetch = ['displayName', 'formattedAddress', 'geometry.location', 'addressComponents', 'name', 'types'];
+          const fieldsToFetch: (keyof google.maps.places.PlaceResult)[] = ['displayName', 'formattedAddress', 'geometry', 'addressComponents', 'name', 'types'];
           await place.fetchFields({ fields: fieldsToFetch });
-
           console.log("AddCityDialog: Objeto 'place' DESPUÉS de fetchFields:", place ? JSON.parse(JSON.stringify(place)) : "NULO O INDEFINIDO");
 
           const lat = place.geometry?.location?.lat();
@@ -185,31 +182,23 @@ export default function AddCityDialog({
             for (const component of place.addressComponents) {
               if (component.types.includes('locality')) {
                 extractedCityName = component.longText || component.shortText || '';
-                console.log(`AddCityDialog: Ciudad encontrada (locality): ${extractedCityName}`);
-              }
-              if (component.types.includes('administrative_area_level_1') && !extractedCityName) {
+              } else if (component.types.includes('administrative_area_level_1') && !extractedCityName) {
                  if (!place.addressComponents.some(c => c.types.includes('locality'))) {
                     extractedCityName = component.longText || component.shortText || '';
-                    console.log(`AddCityDialog: Usando admin_area_level_1 como ciudad: ${extractedCityName}`);
                  }
               }
               if (component.types.includes('country')) {
                 extractedCountryName = component.longText || component.shortText || '';
-                console.log(`AddCityDialog: País encontrado: ${extractedCountryName}`);
               }
             }
           }
           
-          // Fallback si la extracción no fue exitosa pero tenemos displayName
           if (!extractedCityName && place.displayName) {
             extractedCityName = place.displayName;
-            // Intenta limpiar el nombre si incluye el país
             if (extractedCountryName && extractedCityName.includes(extractedCountryName)) {
                 extractedCityName = extractedCityName.replace(`, ${extractedCountryName}`, '').replace(extractedCountryName, '').trim();
             }
-             console.log(`AddCityDialog: Usando place.displayName como ciudad (fallback): ${extractedCityName}`);
           }
-
 
           console.log(`AddCityDialog: Extraído finalmente - Ciudad: "${extractedCityName}", País: "${extractedCountryName}", Lat: ${lat}, Lng: ${lng}`);
 
@@ -219,17 +208,15 @@ export default function AddCityDialog({
             form.setValue('lat', lat, { shouldValidate: true, shouldDirty: true });
             form.setValue('lng', lng, { shouldValidate: true, shouldDirty: true });
             setPreviewCenter({ lat, lng });
-            setForceRenderMapKey(prev => prev + 1); // Forzar re-render del mapa de preview
+            setForceRenderMapKey(prev => prev + 1); // Re-render map
             
-            // Actualizar el valor del input de gmp-place-autocomplete-element si es diferente
             if (placeAutocompleteElementRef.current && place.formattedAddress) {
-                 placeAutocompleteElementRef.current.value = place.formattedAddress;
+                 placeAutocompleteElementRef.current.value = place.formattedAddress; // Update displayed value
             }
-
             toast({ title: "Ciudad Seleccionada", description: `${extractedCityName}, ${extractedCountryName} autocompletada.` });
           } else {
-            toast({ variant: "destructive", title: "Datos Incompletos", description: "No se pudo extraer toda la información necesaria (ciudad, país, coords) del lugar seleccionado." });
-            console.error("AddCityDialog: Fallo al extraer todos los datos necesarios del lugar. Extraído:", { extractedCityName, extractedCountryName, lat, lng });
+            toast({ variant: "destructive", title: "Datos Incompletos", description: "No se pudo extraer toda la información necesaria del lugar seleccionado." });
+            console.error("AddCityDialog: Fallo al extraer todos los datos del lugar. Extraído:", { extractedCityName, extractedCountryName, lat, lng });
           }
 
         } catch (error) {
@@ -242,21 +229,23 @@ export default function AddCityDialog({
       autocompleteElement.addEventListener('gmp-placechange', handleGmpPlaceChange);
 
       return () => {
-        console.log("AddCityDialog: Limpiando listener 'gmp-placechange' de <gmp-place-autocomplete-element>.");
-        autocompleteElement.removeEventListener('gmp-placechange', handleGmpPlaceChange);
+        if (autocompleteElement) {
+          console.log("AddCityDialog: Limpiando listener 'gmp-placechange' de <gmp-place-autocomplete-element>.");
+          autocompleteElement.removeEventListener('gmp-placechange', handleGmpPlaceChange);
+        }
       };
     }
-  }, [isOpen, apiLoadStatus, form, toast]); // placeAutocompleteElementRef.current no es una dependencia estable
+  }, [isOpen, apiLoadStatus, form, toast]);
 
 
   const handleDialogStateChange = (openState: boolean) => {
     console.log(`AddCityDialog: handleDialogStateChange - Cambiando estado a: ${openState ? 'ABIERTO' : 'CERRADO'}`);
     if (!openState) {
       console.log("AddCityDialog: Dialog se está CERRANDO. Reseteando formulario y preview.");
-      form.reset(defaultNewCityValues); // Resetear formulario al cerrar
+      form.reset(defaultNewCityValues);
       setPreviewCenter(null);
       if (placeAutocompleteElementRef.current) {
-        placeAutocompleteElementRef.current.value = ''; // Limpiar el campo de búsqueda
+        placeAutocompleteElementRef.current.value = '';
       }
     }
     onOpenChange(openState);
@@ -271,7 +260,7 @@ export default function AddCityDialog({
         title: "Coordenadas Inválidas",
         description: "Por favor, selecciona una ciudad del buscador para obtener coordenadas válidas.",
       });
-      form.setError("name", { type: "manual", message: "Selecciona una ciudad válida del buscador." });
+      form.setError("name", { type: "manual", message: "Selecciona una ciudad válida del buscador." }); // Or set error on lat/lng
       setIsSubmitting(false);
       return;
     }
@@ -293,10 +282,11 @@ export default function AddCityDialog({
   const submitButtonText = initialData ? "Guardar Cambios" : "Añadir Ciudad";
   const FormIcon = initialData ? Edit3 : PlusCircle;
 
+  // Refined request-options for PlaceAutocompleteElement
   const requestOptions = JSON.stringify({
-    // types: ['(cities)'], // Esta opción es para Autocomplete (legacy), no para PlaceAutocompleteElement
-    componentRestrictions: { country: [] }, // Sin restricciones de país por defecto, o puedes especificar ej: ['es', 'fr']
-    fields: ['addressComponents', 'geometry.location', 'name', 'formattedAddress', 'displayName', 'types'], // Campos básicos que el widget puede usar
+    fields: ["addressComponents", "geometry.location", "name", "formattedAddress", "displayName", "types"],
+    includedPrimaryTypes: ["locality", "administrative_area_level_1", "postal_town", "sublocality_level_1"],
+    componentRestrictions: { country: [] } // No country restrictions by default
   });
 
   return (
@@ -314,38 +304,34 @@ export default function AddCityDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 py-2">
             {apiLoadStatus === 'loading' && (
-              <div className="text-sm text-muted-foreground flex items-center p-2 border rounded-md">
+              <div className="text-sm text-muted-foreground flex items-center p-3 border rounded-md bg-muted/50">
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />Cargando API de Google Maps...
               </div>
             )}
             {apiLoadStatus === 'error' && (
-              <div className="text-sm text-destructive flex items-center p-2 border border-destructive rounded-md">
+              <div className="text-sm text-destructive flex items-center p-3 border border-destructive rounded-md bg-destructive/10">
                 <AlertTriangle className="h-4 w-4 mr-2" />Error al cargar Google Maps. Revisa tu API Key y la consola.
               </div>
             )}
             {apiLoadStatus === 'no_key' && (
-              <div className="text-sm text-destructive flex items-center p-2 border border-destructive rounded-md">
-                <AlertTriangle className="h-4 w-4 mr-2" />API Key de Google Maps no configurada.
+              <div className="text-sm text-destructive flex items-center p-3 border border-destructive rounded-md bg-destructive/10">
+                <AlertTriangle className="h-4 w-4 mr-2" />API Key de Google Maps no configurada. El buscador de ciudades no funcionará.
               </div>
             )}
 
             {apiLoadStatus === 'loaded' && (
               <div className="space-y-1">
-                <Label htmlFor="gmp-city-search" className="flex items-center">
+                <Label htmlFor="gmp-city-search" className="flex items-center text-sm font-medium">
                   <Search className="mr-2 h-4 w-4 text-muted-foreground" />
                   Buscar Ciudad
                 </Label>
-                {/*
-                  El PlaceAutocompleteElement no es un input controlado por React de la misma manera.
-                  Su valor se maneja internamente, y obtenemos el lugar seleccionado a través del evento 'gmp-placechange'.
-                  Le damos una clase para que se parezca un poco a los inputs de ShadCN.
-                */}
                 <gmp-place-autocomplete-element
                   ref={placeAutocompleteElementRef}
                   id="gmp-city-search"
                   placeholder="Ej: París, Francia"
                   request-options={requestOptions}
                   className="w-full block border border-input bg-background rounded-md shadow-sm px-3 py-2 text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={initialData ? `${initialData.name}, ${initialData.country}` : ""}
                 >
                 </gmp-place-autocomplete-element>
                  <FormMessage>{form.formState.errors.name?.message || form.formState.errors.country?.message}</FormMessage>
@@ -359,7 +345,7 @@ export default function AddCityDialog({
                 <FormItem>
                   <FormLabel className="flex items-center"><MapPinIconLucide className="mr-2 h-4 w-4 text-muted-foreground" />Nombre Ciudad</FormLabel>
                   <FormControl>
-                    <Input placeholder="Se autocompletará al buscar" {...field} readOnly={!form.formState.dirtyFields.name} />
+                    <ShadcnInput placeholder="Se autocompletará al buscar" {...field} readOnly={!form.formState.dirtyFields.name} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -372,25 +358,26 @@ export default function AddCityDialog({
                 <FormItem>
                   <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-muted-foreground" />País</FormLabel>
                   <FormControl>
-                    <Input placeholder="Se autocompletará al buscar" {...field} readOnly={!form.formState.dirtyFields.country} />
+                    <ShadcnInput placeholder="Se autocompletará al buscar" {...field} readOnly={!form.formState.dirtyFields.country} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <FormField control={form.control} name="lat" render={({ field }) => <Input type="hidden" {...field} />} />
-            <FormField control={form.control} name="lng" render={({ field }) => <Input type="hidden" {...field} />} />
+            {/* Hidden fields for lat/lng, form.setError will show messages under 'name' or general form error */}
+            <FormField control={form.control} name="lat" render={({ field }) => <ShadcnInput type="hidden" {...field} />} />
+            <FormField control={form.control} name="lng" render={({ field }) => <ShadcnInput type="hidden" {...field} />} />
             {(form.formState.errors.lat || form.formState.errors.lng) &&
               (form.getValues('lat') === 0 && form.getValues('lng') === 0 && !initialData) &&
-              <FormMessage>
+              <FormMessage className="text-xs">
                 {form.formState.errors.lat?.message || form.formState.errors.lng?.message || "Latitud y longitud son necesarias. Usa el buscador."}
               </FormMessage>
             }
 
             {apiLoadStatus === 'loaded' && previewCenter && (
-              <div className="mt-4">
-                <FormLabel>Vista Previa del Mapa</FormLabel>
+              <div className="mt-3">
+                <Label className="text-sm font-medium">Vista Previa del Mapa</Label>
                 <div className="mt-1 h-[200px] w-full rounded-md overflow-hidden border">
                   <GoogleMap
                     key={`preview-map-${previewCenter.lat}-${previewCenter.lng}-${forceRenderMapKey}`}
@@ -405,7 +392,7 @@ export default function AddCityDialog({
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
               <FormField
                 control={form.control}
                 name="arrivalDate"
@@ -413,7 +400,7 @@ export default function AddCityDialog({
                   <FormItem>
                     <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Llegada</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} className="text-base" />
+                      <ShadcnInput type="date" {...field} className="text-sm" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -426,7 +413,7 @@ export default function AddCityDialog({
                   <FormItem>
                     <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Salida</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} className="text-base" />
+                      <ShadcnInput type="date" {...field} className="text-sm" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -441,7 +428,7 @@ export default function AddCityDialog({
                 <FormItem>
                   <FormLabel className="flex items-center"><StickyNote className="mr-2 h-4 w-4 text-muted-foreground" />Notas (opcional)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Información adicional sobre esta ciudad..." {...field} className="text-base" />
+                    <Textarea placeholder="Información adicional sobre esta ciudad..." {...field} className="text-sm" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -450,7 +437,7 @@ export default function AddCityDialog({
 
             <DialogFooter className="pt-4">
               <DialogClose asChild>
-                <Button type="button" variant="outline">Cancelar</Button>
+                <Button type="button" variant="outline" onClick={() => handleDialogStateChange(false)}>Cancelar</Button>
               </DialogClose>
               <Button
                 type="submit"
