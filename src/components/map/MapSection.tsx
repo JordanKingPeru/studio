@@ -1,20 +1,31 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { TripDetails, City } from '@/lib/types';
 import SectionCard from '@/components/ui/SectionCard';
 import CityFormDialog, { type CityFormData } from './CityFormDialog';
 import CityListCard from './CityListCard';
 import { Button } from '@/components/ui/button';
-import { Route, PlusCircle, List } from 'lucide-react';
-import Image from 'next/image';
+import { Route, PlusCircle, List, Loader2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+// Dynamically import MapDisplay to ensure it's client-side only
+const MapDisplay = dynamic(() => import('./MapDisplay'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-[400px] md:h-[500px] bg-muted/30 rounded-xl">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <p className="ml-2">Cargando mapa...</p>
+    </div>
+  ),
+});
 
 interface MapSectionProps {
-  tripData: TripDetails; // For context like trip dates
-  cities: City[]; // Managed by DashboardView
-  onSaveCity: (cityData: CityFormData) => Promise<void>; // To add/update city in Firestore
-  onDeleteCity: (cityId: string) => Promise<void>; // To delete city from Firestore
+  tripData: TripDetails;
+  cities: City[];
+  onSaveCity: (cityData: CityFormData) => Promise<void>;
+  onDeleteCity: (cityId: string) => Promise<void>;
 }
 
 export default function MapSection({
@@ -38,6 +49,11 @@ export default function MapSection({
     </Button>
   );
 
+  // Memoize sorted cities to prevent unnecessary re-renders if order doesn't change
+  const sortedCities = useMemo(() => {
+    return [...cities].sort((a, b) => new Date(a.arrivalDate).getTime() - new Date(b.arrivalDate).getTime());
+  }, [cities]);
+
   return (
     <SectionCard
       id="map"
@@ -47,14 +63,13 @@ export default function MapSection({
       headerActions={headerActions}
     >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Columna para la lista de ciudades */}
-        <div className="md:col-span-1 space-y-4 max-h-[600px] overflow-y-auto pr-2">
-          <h3 className="text-lg font-semibold text-secondary-foreground flex items-center mb-3">
+        <div className="md:col-span-1 space-y-4 max-h-[550px] overflow-y-auto pr-2 custom-scrollbar">
+          <h3 className="text-lg font-semibold text-secondary-foreground flex items-center mb-3 sticky top-0 bg-card py-2 z-10">
             <List size={20} className="mr-2 text-primary" />
-            Ciudades Planificadas
+            Ciudades Planificadas ({sortedCities.length})
           </h3>
-          {cities.length > 0 ? (
-            cities.map((city) => (
+          {sortedCities.length > 0 ? (
+            sortedCities.map((city) => (
               <CityListCard
                 key={city.id}
                 city={city}
@@ -69,28 +84,10 @@ export default function MapSection({
           )}
         </div>
 
-        {/* Columna para el placeholder del mapa */}
         <div className="md:col-span-2">
-            <div className="sticky top-24"> {/* Para que el mapa (placeholder) se quede fijo al hacer scroll en la lista */}
-                <h3 className="text-lg font-semibold text-secondary-foreground mb-3">
-                Vista del Mapa
-                </h3>
-                <div className="aspect-video w-full bg-muted/30 rounded-xl shadow-inner flex flex-col items-center justify-center p-6 border-2 border-dashed border-border">
-                <p className="text-lg text-muted-foreground mb-4 text-center">
-                    Mapa interactivo con Leaflet, pins y rutas próximamente.
-                </p>
-                <div className="max-w-md w-full">
-                    <Image
-                    data-ai-hint="world map"
-                    src="https://placehold.co/600x350.png" 
-                    alt="Marcador de posición para mapa interactivo"
-                    width={600}
-                    height={350}
-                    className="rounded-lg shadow-md opacity-70 object-contain"
-                    />
-                </div>
-                </div>
-            </div>
+          <div className="sticky top-20 h-[550px] rounded-xl shadow-lg overflow-hidden border">
+             <MapDisplay cities={cities} />
+          </div>
         </div>
       </div>
 
@@ -99,8 +96,6 @@ export default function MapSection({
         onOpenChange={setIsCityFormOpen}
         onSaveCity={async (data) => {
           await onSaveCity(data);
-          // No es necesario setIsCityFormOpen(false) aquí si onSaveCity cierra el diálogo
-          // o si el diálogo se cierra automáticamente al cambiar onOpenChange
         }}
         initialData={editingCity}
       />
