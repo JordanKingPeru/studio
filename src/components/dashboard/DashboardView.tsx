@@ -2,12 +2,12 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { TripDetails, Activity, City, Expense, Coordinates } from '@/lib/types'; // Added Coordinates
+import type { TripDetails, Activity, City, Expense, Coordinates } from '@/lib/types';
+import type { CityFormData } from '@/components/map/CityFormDialog'; // Import CityFormData
 import TripHeader from './TripHeader';
 import ItinerarySection from '@/components/itinerary/ItinerarySection';
 import CalendarSection from '@/components/calendar/CalendarSection';
 import MapSection from '@/components/map/MapSection';
-// import type { CityFormData } from '@/components/map/AddCityDialog'; // No longer needed here directly for the shell
 import BudgetSection from '@/components/budget/BudgetSection';
 import { Separator } from '@/components/ui/separator';
 import TodayView from './TodayView';
@@ -79,7 +79,9 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
         setCities(fetchedCities);
       } else {
         // If Firestore is empty, use static data as a fallback for display
-        setCities(initialStaticTripData.ciudades); 
+        // Or, better, start with an empty array if no static data should persist
+        setCities([]); // Initialize with empty if nothing in Firestore
+        // setCities(initialStaticTripData.ciudades); 
       }
     } catch (error: any) {
       console.error("Error fetching cities:", error);
@@ -88,11 +90,12 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
         title: "Error al cargar ciudades",
         description: `No se pudieron cargar las ciudades. ${error.message}`,
       });
-      setCities(initialStaticTripData.ciudades); // Fallback to static if fetch fails
+      setCities([]); // Fallback to empty on error
+      // setCities(initialStaticTripData.ciudades); 
     } finally {
       setIsLoadingCities(false);
     }
-  }, [toast, initialStaticTripData.ciudades]);
+  }, [toast]);
 
   useEffect(() => {
     fetchActivities();
@@ -246,9 +249,62 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     }
   };
 
-  // Placeholder for handleSaveCity and handleDeleteCity if MapSection shell doesn't need them
-  // const handleSaveCity = async (cityData: CityFormData) => { ... }
-  // const handleDeleteCity = async (cityId: string) => { ... }
+  const handleSaveCity = async (cityData: CityFormData) => {
+    const { id, lat, lng, ...dataToSave } = cityData;
+    const cityObjectForFirestore: Omit<City, 'id'> = {
+      ...dataToSave,
+      coordinates: { lat, lng },
+    };
+
+    try {
+      if (id) { // Editing existing city
+        const cityRef = doc(db, "trips", TRIP_ID, "cities", id);
+        await setDoc(cityRef, cityObjectForFirestore, { merge: true });
+        toast({
+          title: "Ciudad Actualizada",
+          description: `"${cityData.name}" ha sido actualizada.`,
+        });
+      } else { // Adding new city
+        const citiesCollectionRef = collection(db, "trips", TRIP_ID, "cities");
+        await addDoc(citiesCollectionRef, cityObjectForFirestore);
+        toast({
+          title: "Ciudad Añadida",
+          description: `"${cityData.name}" ha sido añadida al itinerario.`,
+        });
+      }
+      fetchCities(); // Refresh the city list
+    } catch (error: any) {
+      console.error("Error saving city:", error);
+      toast({
+        variant: "destructive",
+        title: "Error al Guardar Ciudad",
+        description: `No se pudo guardar la ciudad. ${error.message}`,
+      });
+      throw error; // Re-throw to be caught by CityFormDialog if needed
+    }
+  };
+
+  const handleDeleteCity = async (cityId: string) => {
+    const cityToDelete = cities.find(c => c.id === cityId);
+    if (!cityToDelete) return;
+
+    try {
+      const cityRef = doc(db, "trips", TRIP_ID, "cities", cityId);
+      await deleteDoc(cityRef);
+      toast({
+        title: "Ciudad Eliminada",
+        description: `"${cityToDelete.name}" ha sido eliminada.`,
+      });
+      fetchCities(); // Refresh the city list
+    } catch (error: any) {
+      console.error("Error deleting city:", error);
+      toast({
+        variant: "destructive",
+        title: "Error al Eliminar Ciudad",
+        description: `No se pudo eliminar "${cityToDelete.name}". ${error.message}`,
+      });
+    }
+  };
 
   const isLoading = isLoadingActivities || isLoadingCities; 
 
@@ -289,9 +345,9 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
           ) : (
             <MapSection 
               tripData={currentTripDataForWidgets} 
-              // cities={cities} // No longer passing cities to the shell
-              // onSaveCity={handleSaveCity} // No longer passing save handler to the shell
-              // onDeleteCity={handleDeleteCity} // No longer passing delete handler to the shell
+              cities={cities}
+              onSaveCity={handleSaveCity}
+              onDeleteCity={handleDeleteCity}
             />
           )}
           <Separator className="my-8 md:my-12" />
@@ -343,3 +399,4 @@ export default function DashboardView({ tripData: initialStaticTripData }: Dashb
     </div>
   );
 }
+
