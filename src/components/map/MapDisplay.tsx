@@ -1,89 +1,123 @@
 
 "use client";
 
-import React, { useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import L, { type LatLngExpression, type LatLngBoundsExpression } from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import type { City } from '@/lib/types';
-
-// Configure Leaflet's default icon paths to use images from the public folder
-// This should run once when the module is loaded on the client side.
-if (typeof window !== 'undefined') {
-  // @ts-ignore
-  delete L.Icon.Default.prototype._getIconUrl; // Recommended by Leaflet to avoid issues with Webpack
-  L.Icon.Default.mergeOptions({
-    iconRetinaUrl: '/leaflet-images/marker-icon-2x.png',
-    iconUrl: '/leaflet-images/marker-icon.png',
-    shadowUrl: '/leaflet-images/marker-shadow.png',
-  });
-}
-
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-maps/api';
+import type { City, Coordinates } from '@/lib/types';
+import { Loader2 } from 'lucide-react';
 
 interface MapDisplayProps {
   cities: City[];
+  googleMapsApiKey: string;
 }
 
-const defaultPosition: LatLngExpression = [20, 0]; // A general world view
-const defaultZoom = 2;
+const mapContainerStyle = {
+  width: '100%',
+  height: '100%', // Changed from fixed height to 100% to fill parent
+  borderRadius: '0.75rem', // Keep rounded corners if parent has overflow hidden
+};
 
-// Component to dynamically change map view
-function ChangeView({ bounds }: { bounds: LatLngBoundsExpression | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (bounds) {
-      map.fitBounds(bounds, { padding: [50, 50] });
-    } else if (map.getZoom() < defaultZoom +1 ) { // Only reset to default if not already zoomed in by user
-        map.setView(defaultPosition, defaultZoom);
-    }
-  }, [bounds, map]);
-  return null;
-}
+const defaultCenter: Coordinates = { lat: 20, lng: 0 }; // General world view
 
-export default function MapDisplay({ cities }: MapDisplayProps) {
-  const validCities = useMemo(() => cities.filter(city => 
-    typeof city.coordinates?.lat === 'number' && typeof city.coordinates?.lng === 'number' &&
-    !(city.coordinates.lat === 0 && city.coordinates.lng === 0) // Optionally exclude (0,0) if considered invalid
+export default function MapDisplay({ cities, googleMapsApiKey }: MapDisplayProps) {
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: googleMapsApiKey,
+  });
+
+  const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
+  const [selectedCity, setSelectedCity] = useState<City | null>(null);
+
+  const validCities = useMemo(() => cities.filter(city =>
+    typeof city.coordinates?.lat === 'number' &&
+    typeof city.coordinates?.lng === 'number' &&
+    !(city.coordinates.lat === 0 && city.coordinates.lng === 0 && !city.id.startsWith('static-')) // Allow static (0,0) for now if needed for initial data
   ), [cities]);
 
-  const mapBounds = useMemo((): LatLngBoundsExpression | null => {
-    if (validCities.length === 0) return null;
-    if (validCities.length === 1) {
-        const city = validCities[0];
-        // For a single city, create a small "bounds" around it or just center on it
-        return L.latLng(city.coordinates.lat, city.coordinates.lng).toBounds(10000); // 10km radius bounds
-    }
-    const lats = validCities.map(city => city.coordinates.lat);
-    const lngs = validCities.map(city => city.coordinates.lng);
-    return L.latLngBounds(
-      [Math.min(...lats), Math.min(...lngs)],
-      [Math.max(...lats), Math.max(...lngs)]
-    );
-  }, [validCities]);
+  const onLoad = useCallback((map: google.maps.Map) => {
+    setMapRef(map);
+  }, []);
 
-  const mapKey = useMemo(() => validCities.map(c => c.id).join('_') || 'initial-map', [validCities]);
+  const onUnmount = useCallback(() => {
+    setMapRef(null);
+  }, []);
+
+  useEffect(() => {
+    if (mapRef && validCities.length > 0) {
+      const bounds = new window.google.maps.LatLngBounds();
+      validCities.forEach(city => {
+        bounds.extend(new window.google.maps.LatLng(city.coordinates.lat, city.coordinates.lng));
+      });
+      mapRef.fitBounds(bounds);
+
+      // If only one city, set a reasonable zoom level
+      if (validCities.length === 1) {
+        mapRef.setZoom(6); // Adjust zoom level as needed for a single city
+      }
+    } else if (mapRef) {
+      mapRef.setCenter(defaultCenter);
+      mapRef.setZoom(2);
+    }
+  }, [mapRef, validCities]);
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full bg-destructive/10 p-4 rounded-xl">
+        <p className="text-destructive font-semibold">Error al cargar Google Maps:</p>
+        <p className="text-destructive text-sm">{loadError.message}</p>
+        <p className="text-muted-foreground text-xs mt-2">
+          Asegúrate de que la API Key (`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`) esté configurada correctamente en tu archivo `.env`
+          y que la "Maps JavaScript API" esté habilitada en Google Cloud Console para esta clave.
+        </p>
+      </div>
+    );
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center h-full bg-muted/30 rounded-xl">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Cargando mapa...</p>
+      </div>
+    );
+  }
 
   return (
-    <MapContainer
-      key={mapKey} // Change key to force re-render if city list changes drastically
-      center={defaultPosition}
-      zoom={defaultZoom}
-      scrollWheelZoom={true}
-      style={{ height: '100%', width: '100%', borderRadius: '0.75rem' }}
-      className="min-h-[400px] md:min-h-[500px]"
+    <GoogleMap
+      mapContainerStyle={mapContainerStyle}
+      center={defaultCenter}
+      zoom={2}
+      onLoad={onLoad}
+      onUnmount={onUnmount}
+      options={{
+        streetViewControl: false,
+        mapTypeControl: false,
+        fullscreenControl: false,
+        zoomControl: true,
+        clickableIcons: false, // Disables clicking on Google's POIs
+      }}
     >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      {validCities.map(city => (
-        <Marker key={city.id} position={[city.coordinates.lat, city.coordinates.lng]}>
-          <Popup>
-            <span className="font-semibold">{city.name}</span>, {city.country}
-          </Popup>
-        </Marker>
+      {validCities.map((city) => (
+        <MarkerF
+          key={city.id || city.name} // Ensure key is unique
+          position={{ lat: city.coordinates.lat, lng: city.coordinates.lng }}
+          onClick={() => setSelectedCity(city)}
+          title={city.name}
+        />
       ))}
-      <ChangeView bounds={mapBounds} />
-    </MapContainer>
+
+      {selectedCity && (
+        <InfoWindowF
+          position={{ lat: selectedCity.coordinates.lat, lng: selectedCity.coordinates.lng }}
+          onCloseClick={() => setSelectedCity(null)}
+          options={{ pixelOffset: new window.google.maps.Size(0, -30) }} // Adjust offset if needed
+        >
+          <div className="p-1">
+            <h4 className="font-semibold text-sm text-primary">{selectedCity.name}</h4>
+            <p className="text-xs text-muted-foreground">{selectedCity.country}</p>
+          </div>
+        </InfoWindowF>
+      )}
+    </GoogleMap>
   );
 }

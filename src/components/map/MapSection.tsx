@@ -4,22 +4,11 @@
 import React, { useState, useMemo } from 'react';
 import type { TripDetails, City } from '@/lib/types';
 import SectionCard from '@/components/ui/SectionCard';
-import CityFormDialog, { type CityFormData } from './CityFormDialog';
+import CityFormDialog, { type CityFormData } from './CityFormDialog'; // Assuming this is for manual input now
 import CityListCard from './CityListCard';
 import { Button } from '@/components/ui/button';
 import { Route, PlusCircle, List, Loader2 } from 'lucide-react';
-import dynamic from 'next/dynamic';
-
-// Dynamically import MapDisplay to ensure it's client-side only
-const MapDisplay = dynamic(() => import('./MapDisplay'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center h-[400px] md:h-[500px] bg-muted/30 rounded-xl">
-      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      <p className="ml-2">Cargando mapa...</p>
-    </div>
-  ),
-});
+import MapDisplay from './MapDisplay'; // Direct import
 
 interface MapSectionProps {
   tripData: TripDetails;
@@ -37,6 +26,8 @@ export default function MapSection({
   const [isCityFormOpen, setIsCityFormOpen] = useState(false);
   const [editingCity, setEditingCity] = useState<City | null>(null);
 
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
   const handleOpenForm = (city?: City) => {
     setEditingCity(city || null);
     setIsCityFormOpen(true);
@@ -45,11 +36,10 @@ export default function MapSection({
   const headerActions = (
     <Button onClick={() => handleOpenForm()} variant="default" size="sm">
       <PlusCircle size={18} className="mr-2" />
-      Añadir Ciudad
+      Añadir Ciudad (Manual)
     </Button>
   );
 
-  // Memoize sorted cities to prevent unnecessary re-renders if order doesn't change
   const sortedCities = useMemo(() => {
     return [...cities].sort((a, b) => new Date(a.arrivalDate).getTime() - new Date(b.arrivalDate).getTime());
   }, [cities]);
@@ -86,7 +76,16 @@ export default function MapSection({
 
         <div className="md:col-span-2">
           <div className="sticky top-20 h-[550px] rounded-xl shadow-lg overflow-hidden border">
-             <MapDisplay cities={cities} />
+            {googleMapsApiKey ? (
+              <MapDisplay cities={cities} googleMapsApiKey={googleMapsApiKey} />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full bg-destructive/5 p-4 rounded-xl">
+                 <p className="text-destructive-foreground font-semibold">API Key de Google Maps no configurada.</p>
+                 <p className="text-muted-foreground text-sm mt-1 text-center">
+                   Por favor, añade `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` a tu archivo `.env` para mostrar el mapa.
+                 </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -94,9 +93,7 @@ export default function MapSection({
       <CityFormDialog
         isOpen={isCityFormOpen}
         onOpenChange={setIsCityFormOpen}
-        onSaveCity={async (data) => {
-          await onSaveCity(data);
-        }}
+        onSaveCity={onSaveCity} // No changes needed here for Google Maps API key
         initialData={editingCity}
       />
     </SectionCard>
