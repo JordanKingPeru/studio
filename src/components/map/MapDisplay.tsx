@@ -8,7 +8,7 @@ import { Loader2 } from 'lucide-react';
 
 interface MapDisplayProps {
   cities: City[];
-  googleMapsApiKey: string;
+  // googleMapsApiKey prop is removed
 }
 
 const mapContainerStyle = {
@@ -18,14 +18,18 @@ const mapContainerStyle = {
 };
 
 const defaultCenter: Coordinates = { lat: 20, lng: 0 }; // General world view
-const GOOGLE_MAPS_LIBRARIES: ("places")[] = ['places']; // Define libraries consistently
-const GOOGLE_MAPS_SCRIPT_ID = 'app-google-maps-script'; // Consistent script ID
+const GOOGLE_MAPS_LIBRARIES: ("places")[] = ['places']; 
+const GOOGLE_MAPS_SCRIPT_ID = 'app-google-maps-script';
 
-export default function MapDisplay({ cities, googleMapsApiKey }: MapDisplayProps) {
+export default function MapDisplay({ cities }: MapDisplayProps) {
+  // Use API key directly from environment variable for consistency
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+
   const { isLoaded, loadError } = useJsApiLoader({
-    id: GOOGLE_MAPS_SCRIPT_ID, // Use consistent ID
-    googleMapsApiKey: googleMapsApiKey,
-    libraries: GOOGLE_MAPS_LIBRARIES, // Use consistent libraries
+    id: GOOGLE_MAPS_SCRIPT_ID, 
+    googleMapsApiKey: googleMapsApiKey, // Use consistent API key source
+    libraries: GOOGLE_MAPS_LIBRARIES,
+    preventGoogleFontsLoading: true, // Ensure this option is consistent
   });
 
   const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
@@ -64,7 +68,6 @@ export default function MapDisplay({ cities, googleMapsApiKey }: MapDisplayProps
         mapRef.setZoom(2);
       }
 
-
       const listener = window.google.maps.event.addListenerOnce(mapRef, 'idle', () => {
         if (validCities.length === 1 && mapRef.getZoom()! > 7) {
           mapRef.setZoom(7);
@@ -81,6 +84,17 @@ export default function MapDisplay({ cities, googleMapsApiKey }: MapDisplayProps
       mapRef.setZoom(2);
     }
   }, [mapRef, validCities]);
+
+  if (!googleMapsApiKey) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full bg-destructive/5 p-4 rounded-xl">
+        <p className="text-destructive-foreground font-semibold">API Key de Google Maps no configurada.</p>
+        <p className="text-muted-foreground text-sm mt-1 text-center">
+          Por favor, añade `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` a tu archivo `.env` para mostrar el mapa.
+        </p>
+      </div>
+    );
+  }
 
   if (loadError) {
     return (
