@@ -2,13 +2,13 @@
 "use client";
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-maps/api';
+import { GoogleMap, MarkerF, InfoWindowF } from '@react-google-maps/api';
 import type { City, Coordinates } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 
 interface MapDisplayProps {
   cities: City[];
-  // googleMapsApiKey prop is removed
+  isLoaded: boolean;
 }
 
 const mapContainerStyle = {
@@ -18,20 +18,8 @@ const mapContainerStyle = {
 };
 
 const defaultCenter: Coordinates = { lat: 20, lng: 0 }; // General world view
-const GOOGLE_MAPS_LIBRARIES: ("places")[] = ['places']; 
-const GOOGLE_MAPS_SCRIPT_ID = 'app-google-maps-script';
 
-export default function MapDisplay({ cities }: MapDisplayProps) {
-  // Use API key directly from environment variable for consistency
-  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
-
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: GOOGLE_MAPS_SCRIPT_ID, 
-    googleMapsApiKey: googleMapsApiKey, // Use consistent API key source
-    libraries: GOOGLE_MAPS_LIBRARIES,
-    preventGoogleFontsLoading: true, // Ensure this option is consistent
-  });
-
+export default function MapDisplay({ cities, isLoaded }: MapDisplayProps) {
   const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
 
@@ -84,30 +72,6 @@ export default function MapDisplay({ cities }: MapDisplayProps) {
       mapRef.setZoom(2);
     }
   }, [mapRef, validCities]);
-
-  if (!googleMapsApiKey) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full bg-destructive/5 p-4 rounded-xl">
-        <p className="text-destructive-foreground font-semibold">API Key de Google Maps no configurada.</p>
-        <p className="text-muted-foreground text-sm mt-1 text-center">
-          Por favor, añade `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` a tu archivo `.env` para mostrar el mapa.
-        </p>
-      </div>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full bg-destructive/10 p-4 rounded-xl">
-        <p className="text-destructive font-semibold">Error al cargar Google Maps:</p>
-        <p className="text-destructive text-sm">{loadError.message}</p>
-        <p className="text-muted-foreground text-xs mt-2 text-center">
-          Asegúrate de que la API Key (`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`) esté configurada correctamente en tu archivo `.env`
-          y que las APIs "Maps JavaScript API" y "Places API" estén habilitadas en Google Cloud Console para esta clave. Verifica también las restricciones de la API Key.
-        </p>
-      </div>
-    );
-  }
 
   if (!isLoaded) {
     return (

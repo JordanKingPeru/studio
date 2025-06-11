@@ -14,7 +14,7 @@ const initialActivities: Activity[] = [
 const initialExpenses: Expense[] = initialActivities
   .filter(activity => typeof activity.cost === 'number' && activity.cost > 0)
   .map(activity => ({
-    id: `${activity.id}-expense`, // Ensure unique ID for derived expenses
+    id: `${activity.id}-expense`, // Ensure unique ID for a derived expenses
     city: activity.city,
     date: activity.date,
     category: activity.category, // Or a more generic 'Activity Cost'
@@ -45,3 +45,5 @@ export const viaje: TripDetails = {
   expenses: initialExpenses, // expenses are derived from activities with cost
 };
 
+export const GOOGLE_MAPS_LIBRARIES = ['routes', 'marker', 'places'] as Array<'routes' | 'marker' | 'places'>;
+export const GOOGLE_MAPS_SCRIPT_ID = 'app-google-maps-script';

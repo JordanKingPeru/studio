@@ -2,9 +2,11 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
+import { useJsApiLoader } from '@react-google-maps/api';
 import type { TripDetails, City } from '@/lib/types';
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/constants';
 import SectionCard from '@/components/ui/SectionCard';
-import AddCityDialog, { type CityFormData } from './AddCityDialog'; // Updated import
+import AddCityDialog, { type CityFormData } from './AddCityDialog';
 import CityListCard from './CityListCard';
 import { Button } from '@/components/ui/button';
 import { Route, PlusCircle, List } from 'lucide-react';
@@ -26,7 +28,15 @@ export default function MapSection({
   const [isCityFormOpen, setIsCityFormOpen] = useState(false);
   const [editingCity, setEditingCity] = useState<City | null>(null);
 
-  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: GOOGLE_MAPS_SCRIPT_ID,
+    googleMapsApiKey: googleMapsApiKey,
+    libraries: GOOGLE_MAPS_LIBRARIES,
+  });
+
+  console.log('MapSection isLoaded:', isLoaded);
 
   const handleOpenForm = (city?: City) => {
     setEditingCity(city || null);
@@ -34,7 +44,7 @@ export default function MapSection({
   };
 
   const headerActions = (
-    <Button onClick={() => handleOpenForm()} variant="default" size="sm">
+    <Button onClick={() => handleOpenForm()} variant="default" size="sm" disabled={!isLoaded}>
       <PlusCircle size={18} className="mr-2" />
       Añadir Ciudad
     </Button>
@@ -76,30 +86,29 @@ export default function MapSection({
 
         <div className="md:col-span-2">
           <div className="sticky top-20 h-[550px] rounded-xl shadow-lg overflow-hidden border">
-            {googleMapsApiKey ? (
-              <MapDisplay cities={cities} googleMapsApiKey={googleMapsApiKey} />
-            ) : (
+            {loadError ? (
               <div className="flex flex-col items-center justify-center h-full bg-destructive/5 p-4 rounded-xl">
-                 <p className="text-destructive-foreground font-semibold">API Key de Google Maps no configurada.</p>
-                 <p className="text-muted-foreground text-sm mt-1 text-center">
-                   Por favor, añade `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` a tu archivo `.env` para mostrar el mapa y habilitar la búsqueda de ciudades.
-                 </p>
+                <p className="text-destructive-foreground font-semibold">Error al cargar Google Maps.</p>
+                <p className="text-muted-foreground text-sm mt-1 text-center">
+                  Por favor, comprueba tu conexión a internet y la configuración de la API Key.
+                </p>
               </div>
+            ) : (
+              <MapDisplay cities={cities} isLoaded={isLoaded} />
             )}
           </div>
         </div>
       </div>
 
-      {googleMapsApiKey && ( // Only render dialog if API key is available
+      {isLoaded && (
         <AddCityDialog
             isOpen={isCityFormOpen}
             onOpenChange={setIsCityFormOpen}
             onSaveCity={onSaveCity}
             initialData={editingCity}
-            googleMapsApiKey={googleMapsApiKey}
+            isLoaded={isLoaded}
         />
       )}
     </SectionCard>
   );
 }
-
