@@ -1,12 +1,12 @@
 
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input as ShadcnInput } from '@/components/ui/input';
+import { Input as ShadcnInput } from '@/components/ui/input'; // Renamed to avoid conflict
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
@@ -19,237 +19,474 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Globe, MapPin as MapPinIconLucide, CalendarIcon, StickyNote, Search, Loader2, PlusCircle, Edit3, AlertTriangle } from 'lucide-react';
-import { GoogleMap, MarkerF } from '@react-google-maps/api';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import Image from 'next/image';
+import { Map, AdvancedMarker, useMapsLibrary } from '@vis.gl/react-google-maps';
+
+import { Globe, MapPin as MapPinIconLucide, CalendarIcon, StickyNote, Search, Loader2, PlusCircle, Edit3, Camera, Info, List } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { usePlaceAutocomplete } from '@/hooks/usePlaceAutocomplete';
 import type { City, Coordinates } from '@/lib/types';
 
-const cityFormSchema = z.object({
+// This is the data structure expected by the onSaveCity prop from MapSection
+const citySaveSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, "El nombre de la ciudad es obligatorio."),
   country: z.string().min(1, "El país es obligatorio."),
   arrivalDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido (YYYY-MM-DD)"),
   departureDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido (YYYY-MM-DD)"),
   notes: z.string().optional(),
-  lat: z.number({ required_error: "La latitud es necesaria. Selecciona una ciudad del buscador." }).min(-90).max(90),
-  lng: z.number({ required_error: "La longitud es necesaria. Selecciona una ciudad del buscador." }).min(-180).max(180),
+  lat: z.number({ required_error: "La latitud es necesaria. Selecciona una ciudad de la búsqueda." }).min(-90).max(90),
+  lng: z.number({ required_error: "La longitud es necesaria. Selecciona una ciudad de la búsqueda." }).min(-180).max(180),
+  budget: z.number().optional().nullable(),
 });
+export type CityFormData = z.infer<typeof citySaveSchema>;
 
-export type CityFormData = z.infer<typeof cityFormSchema>;
+
+interface PlaceDetailsFromSearch {
+  id?: string;
+  displayName?: string;
+  formattedAddress?: string;
+  latitude?: number;
+  longitude?: number;
+  country?: string;
+  types?: readonly string[];
+  photos?: google.maps.places.Photo[];
+}
 
 interface AddCityDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onSaveCity: (cityData: CityFormData) => Promise<void>;
-  isLoaded: boolean;
   initialData?: City | null;
 }
 
 const mapContainerStyle = { width: '100%', height: '200px', borderRadius: '0.375rem' };
-const defaultNewCityValues: Omit<CityFormData, 'id'> = {
-  name: '', country: '',
+const defaultNewCityRHFValues: Omit<CityFormData, 'id' | 'name' | 'country' | 'lat' | 'lng'> = {
   arrivalDate: new Date().toISOString().split('T')[0],
   departureDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  notes: '', lat: 0, lng: 0,
+  notes: '',
+  budget: undefined,
 };
 
-export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, isLoaded, initialData }: AddCityDialogProps) {
+export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initialData }: AddCityDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [previewCenter, setPreviewCenter] = useState<Coordinates | null>(null);
-  const [forceRenderMapKey, setForceRenderMapKey] = useState(0);
+  
+  // States for new search logic
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<google.maps.places.Place[]>([]);
+  const [selectedPlaceDetails, setSelectedPlaceDetails] = useState<PlaceDetailsFromSearch | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  
+  const placesLibrary = useMapsLibrary('places');
 
   const form = useForm<CityFormData>({
-    resolver: zodResolver(cityFormSchema),
-    defaultValues: defaultNewCityValues,
+    resolver: zodResolver(citySaveSchema),
+    defaultValues: initialData 
+      ? { ...initialData, lat: initialData.coordinates.lat, lng: initialData.coordinates.lng, budget: initialData.budget ?? undefined }
+      : { ...defaultNewCityRHFValues, name: '', country: '', lat: 0, lng: 0 },
   });
 
-  const {
-    placeAutocompleteElementRef,
-    extractedPlace,
-    autocompleteError,
-    clearAutocomplete
-  } = usePlaceAutocomplete({ isLoaded });
-
   useEffect(() => {
-    if (extractedPlace) {
-      form.setValue('name', extractedPlace.name, { shouldValidate: true, shouldDirty: true });
-      form.setValue('country', extractedPlace.country, { shouldValidate: true, shouldDirty: true });
-      form.setValue('lat', extractedPlace.lat, { shouldValidate: true, shouldDirty: true });
-      form.setValue('lng', extractedPlace.lng, { shouldValidate: true, shouldDirty: true });
-      setPreviewCenter({ lat: extractedPlace.lat, lng: extractedPlace.lng });
-      setForceRenderMapKey(prev => prev + 1);
+    if (isOpen) {
+      if (initialData) {
+        form.reset({
+          id: initialData.id,
+          name: initialData.name,
+          country: initialData.country,
+          arrivalDate: initialData.arrivalDate,
+          departureDate: initialData.departureDate,
+          notes: initialData.notes || '',
+          lat: initialData.coordinates.lat,
+          lng: initialData.coordinates.lng,
+          budget: initialData.budget ?? undefined,
+        });
+        setSearchTerm(`${initialData.name}, ${initialData.country}`);
+        setSelectedPlaceDetails({ // Pre-fill selectedPlaceDetails if editing
+            id: initialData.id, // Or place_id if available and different
+            displayName: initialData.name,
+            formattedAddress: `${initialData.name}, ${initialData.country}`, // Approximate
+            latitude: initialData.coordinates.lat,
+            longitude: initialData.coordinates.lng,
+            country: initialData.country,
+            types: [], // No types info in City type
+            photos: [] // No photos info in City type
+        });
+      } else {
+        form.reset({ ...defaultNewCityRHFValues, name: '', country: '', lat: 0, lng: 0 });
+        setSearchTerm('');
+        setSelectedPlaceDetails(null);
+      }
+      setSearchResults([]);
+      setIsSearching(false);
+    }
+  }, [isOpen, initialData, form]);
 
-      if (!extractedPlace.countryFound) {
-          toast({
-              variant: "default",
-              title: "País no detectado",
-              description: "No se pudo detectar el país automáticamente. Por favor, añádelo manualmente si es necesario.",
-          });
-          form.setFocus('country');
+  const handleSearch = useCallback(async () => {
+    if (!placesLibrary) {
+      toast({ title: "Error", description: "La librería de Google Places no está cargada.", variant: "destructive" });
+      console.error("AddCityDialog: placesLibrary not loaded.");
+      return;
+    }
+    if (!searchTerm.trim()) {
+      toast({ title: "Advertencia", description: "Por favor, ingresa un término de búsqueda.", variant: "default" });
+      return;
+    }
+
+    setSearchResults([]);
+    setSelectedPlaceDetails(null);
+    setIsSearching(true);
+    form.setValue('name', ''); // Clear form fields related to place details
+    form.setValue('country', '');
+    form.setValue('lat', 0);
+    form.setValue('lng', 0);
+
+    const request: google.maps.places.SearchByTextRequest = {
+      textQuery: searchTerm,
+      fields: ['id', 'displayName', 'formattedAddress', 'geometry.location', 'types', 'photos', 'addressComponents'],
+      language: 'es', // Prefer Spanish results
+      region: 'ES',   // Bias towards Spain, adjust if needed
+      // includedType: 'locality', // This is quite restrictive, might miss some valid places. Test with and without.
+    };
+
+    console.log('DEBUG: Initiating Google Maps Place.searchByText with query:', searchTerm, 'and request:', JSON.stringify(request));
+
+    try {
+      const { places } = await placesLibrary.Place.searchByText(request);
+      
+      console.log('DEBUG: Google Maps API Response:', places);
+
+      if (places && places.length > 0) {
+        setSearchResults(places);
+        toast({ title: "Búsqueda Exitosa", description: `Se encontraron ${places.length} lugares.` });
+      } else {
+        setSearchResults([]);
+        toast({ title: "Búsqueda Sin Resultados", description: "No se encontraron lugares para tu búsqueda." });
+      }
+    } catch (error) {
+      console.error("Error during Google Maps search:", error);
+      toast({ title: "Error en la Búsqueda", description: `Error al contactar la API de Google: ${(error as Error).message}`, variant: "destructive" });
+    } finally {
+      setIsSearching(false);
+    }
+  }, [placesLibrary, searchTerm, toast, form]);
+
+  const handlePlaceSelect = (place: google.maps.places.Place) => {
+    console.log('DEBUG: Place selected from list:', JSON.parse(JSON.stringify(place)));
+    
+    let lat: number | undefined = undefined;
+    let lng: number | undefined = undefined;
+
+    if (place.geometry?.location) {
+        if (typeof place.geometry.location.lat === 'function') lat = place.geometry.location.lat();
+        else if (typeof place.geometry.location.lat === 'number') lat = place.geometry.location.lat;
+        
+        if (typeof place.geometry.location.lng === 'function') lng = place.geometry.location.lng();
+        else if (typeof place.geometry.location.lng === 'number') lng = place.geometry.location.lng;
+    }
+
+    let countryName: string | undefined = undefined;
+    if (place.addressComponents) {
+      const countryComponent = place.addressComponents.find(component => component.types.includes('country'));
+      if (countryComponent) {
+        countryName = countryComponent.longText || countryComponent.shortText;
       }
     }
-  }, [extractedPlace, form, toast]);
+    
+    const placeDetailsToSet: PlaceDetailsFromSearch = {
+      id: place.id,
+      displayName: place.displayName,
+      formattedAddress: place.formattedAddress,
+      latitude: lat,
+      longitude: lng,
+      country: countryName,
+      types: place.types,
+      photos: place.photos,
+    };
+    
+    setSelectedPlaceDetails(placeDetailsToSet);
+    
+    // Update React Hook Form fields
+    form.setValue('name', place.displayName || '', { shouldValidate: true });
+    form.setValue('country', countryName || '', { shouldValidate: true });
+    if (lat !== undefined) form.setValue('lat', lat, { shouldValidate: true });
+    if (lng !== undefined) form.setValue('lng', lng, { shouldValidate: true });
 
-  const handleDialogStateChange = (openState: boolean) => {
-    if (!openState) {
-      console.log("AddCityDialog: Dialog is closing. Clearing form, preview, and search value.");
-      clearAutocomplete();
-      form.reset(defaultNewCityValues);
-      setPreviewCenter(null);
-    } else {
-        const resetValues = initialData
-            ? { ...initialData, notes: initialData.notes || '', lat: initialData.coordinates.lat, lng: initialData.coordinates.lng, id: initialData.id }
-            : { ...defaultNewCityValues, id: undefined };
-        
-        console.log("AddCityDialog: [useEffect isOpen=true] - Resetting form with:", resetValues);
-        form.reset(resetValues);
-        setPreviewCenter(initialData ? initialData.coordinates : null);
-        setForceRenderMapKey(prev => prev + 1);
-    }
-    onOpenChange(openState);
+    setSearchResults([]); 
   };
-
-  useEffect(() => {
-    if (isOpen && initialData && placeAutocompleteElementRef.current) {
-        placeAutocompleteElementRef.current.value = `${initialData.name}, ${initialData.country}`;
-    }
-  }, [isOpen, initialData, placeAutocompleteElementRef]);
 
   const handleFormSubmit = async (data: CityFormData) => {
     setIsSubmitting(true);
-    if ((data.lat === 0 && data.lng === 0) && !initialData) {
-      toast({ variant: "destructive", title: "Coordenadas Inválidas", description: "Selecciona una ciudad del buscador para obtener coordenadas válidas." });
-      form.setError("name", { type: "manual", message: "Selecciona una ciudad válida del buscador." });
+    if ((data.lat === 0 && data.lng === 0) && !initialData?.coordinates) { // Allow 0,0 if it was initialData
+      toast({ variant: "destructive", title: "Coordenadas Inválidas", description: "Por favor, busca y selecciona una ciudad para obtener coordenadas válidas." });
       setIsSubmitting(false);
       return;
     }
+
+    // Ensure name and country are from selected place if a place was selected
+    // If no place was selected but there's initialData, keep initialData's name/country
+    // If no place selected and no initialData, RHF validation for name/country should catch it.
+    const dataToSave: CityFormData = {
+        ...data, // RHF data (dates, notes, budget)
+        id: initialData?.id, // Keep original ID if editing
+        name: selectedPlaceDetails?.displayName || data.name,
+        country: selectedPlaceDetails?.country || data.country,
+        lat: selectedPlaceDetails?.latitude ?? data.lat,
+        lng: selectedPlaceDetails?.longitude ?? data.lng,
+    };
+
+
     try {
-      await onSaveCity(data);
-      handleDialogStateChange(false); // Close dialog
+      await onSaveCity(dataToSave);
+      onOpenChange(false); // Close dialog
     } catch (error) {
       console.error("AddCityDialog: Error saving city:", error);
+      // Toast for error during save is likely handled by onSaveCity caller
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  const requestOptions = useMemo(() => JSON.stringify({
-    fields: ["addressComponents", "geometry.location", "name", "formattedAddress", "displayName", "types"],
-    includedPrimaryTypes: ["locality", "administrative_area_level_1", "postal_town", "sublocality_level_1"],
-  }), []);
-
+  
   const dialogTitle = initialData ? "Editar Ciudad" : "Añadir Nueva Ciudad";
-  const dialogDescription = "Busca una ciudad para autocompletar los datos y completa las fechas de tu estancia.";
-  const submitButtonText = initialData ? "Guardar Cambios" : "Añadir Ciudad";
   const FormIcon = initialData ? Edit3 : PlusCircle;
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleDialogStateChange}>
-      <DialogContent className="sm:max-w-lg rounded-xl shadow-2xl">
+    <Dialog open={isOpen} onOpenChange={(open) => {
+        if (!open) {
+            setSelectedPlaceDetails(null); // Clear details when dialog closes
+            setSearchResults([]);
+            setSearchTerm('');
+        }
+        onOpenChange(open);
+    }}>
+      <DialogContent className="sm:max-w-2xl rounded-xl shadow-2xl">
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl text-primary flex items-center">
             <FormIcon size={22} className="mr-2" />
             {dialogTitle}
           </DialogTitle>
-          <DialogDescription>{dialogDescription}</DialogDescription>
+          <DialogDescription>
+            Busca una ciudad, selecciona un resultado y luego completa las fechas y notas de tu estancia.
+          </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 py-2 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
-            {!isLoaded ? (
-              <div className="text-sm text-muted-foreground flex items-center p-3 border rounded-md bg-muted/50">
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />Cargando API de Google Maps...
-              </div>
-            ) : (
-              <div className="space-y-1">
-                <Label htmlFor="gmp-city-search" className="flex items-center text-sm font-medium">
+
+        <ScrollArea className="max-h-[70vh] pr-4 custom-scrollbar -mr-2">
+          <div className="space-y-4 py-2 pr-2">
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-end gap-2 sm:gap-4">
+              <div className="sm:col-span-3 space-y-1">
+                <Label htmlFor="city-search-input" className="flex items-center text-sm font-medium">
                   <Search className="mr-2 h-4 w-4 text-muted-foreground" />
-                  Buscar Ciudad
+                  Buscar Ciudad por Nombre
                 </Label>
-                <gmp-place-autocomplete-element
-                  ref={placeAutocompleteElementRef}
-                  id="gmp-city-search"
-                  placeholder="Ej: París, Francia"
-                  request-options={requestOptions}
-                  className="w-full block border border-input bg-background rounded-md shadow-sm px-3 py-2 text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                <ShadcnInput
+                  id="city-search-input"
+                  placeholder="Ej., París, Lima, Tokio"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); }}}
+                  className="text-base sm:text-sm"
                 />
-                {autocompleteError && <FormMessage>{autocompleteError}</FormMessage>}
               </div>
-            )}
-
-            <FormField control={form.control} name="name" render={({ field }) => (
-                <FormItem>
-                    <FormLabel className="flex items-center"><MapPinIconLucide className="mr-2 h-4 w-4 text-muted-foreground" />Nombre Ciudad</FormLabel>
-                    <FormControl><ShadcnInput placeholder="Se autocompletará al buscar" {...field} /></FormControl>
-                    <FormMessage />
-                </FormItem>
-            )} />
-            <FormField control={form.control} name="country" render={({ field }) => (
-                <FormItem>
-                    <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4 text-muted-foreground" />País</FormLabel>
-                    <FormControl><ShadcnInput placeholder="Se autocompletará al buscar" {...field} /></FormControl>
-                    <FormMessage />
-                </FormItem>
-            )} />
-
-            <FormField control={form.control} name="lat" render={({ field }) => <ShadcnInput type="hidden" {...field} />} />
-            <FormField control={form.control} name="lng" render={({ field }) => <ShadcnInput type="hidden" {...field} />} />
-
-            {isLoaded && previewCenter && (
-              <div className="mt-3">
-                <Label className="text-sm font-medium">Vista Previa del Mapa</Label>
-                <div className="mt-1 h-[200px] w-full rounded-md overflow-hidden border">
-                  <GoogleMap
-                    key={`preview-map-${forceRenderMapKey}`}
-                    mapContainerStyle={mapContainerStyle}
-                    center={previewCenter}
-                    zoom={10}
-                    options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: true, clickableIcons: false }}
-                  >
-                    <MarkerF position={previewCenter} />
-                  </GoogleMap>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <FormField control={form.control} name="arrivalDate" render={({ field }) => (
-                  <FormItem>
-                      <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Llegada</FormLabel>
-                      <FormControl><ShadcnInput type="date" {...field} className="text-sm" /></FormControl>
-                      <FormMessage />
-                  </FormItem>
-              )} />
-              <FormField control={form.control} name="departureDate" render={({ field }) => (
-                  <FormItem>
-                      <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Salida</FormLabel>
-                      <FormControl><ShadcnInput type="date" {...field} className="text-sm" /></FormControl>
-                      <FormMessage />
-                  </FormItem>
-              )} />
+              <Button onClick={handleSearch} disabled={!searchTerm.trim() || !placesLibrary || isSearching} className="w-full sm:w-auto">
+                {isSearching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSearching ? 'Buscando...' : 'Buscar'}
+              </Button>
             </div>
 
-            <FormField control={form.control} name="notes" render={({ field }) => (
-                <FormItem>
-                    <FormLabel className="flex items-center"><StickyNote className="mr-2 h-4 w-4 text-muted-foreground" />Notas (opcional)</FormLabel>
-                    <FormControl><Textarea placeholder="Información adicional sobre esta ciudad..." {...field} className="text-sm" /></FormControl>
-                    <FormMessage />
-                </FormItem>
-            )} />
+            {searchResults.length > 0 && (
+              <Card className="shadow-md">
+                <CardHeader className="pb-2 pt-3">
+                  <CardTitle className="text-base sm:text-lg flex items-center">
+                    <List className="mr-2 h-5 w-5 text-primary" />
+                    Resultados de la Búsqueda ({searchResults.length})
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">Haz clic en un lugar para ver sus detalles.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2 max-h-[250px] sm:max-h-[300px] overflow-y-auto py-2">
+                  {searchResults.map((place) => (
+                    <Button
+                      key={place.id}
+                      variant="outline"
+                      className="w-full justify-start text-left h-auto py-1.5 sm:py-2 px-2 sm:px-3 hover:bg-accent/50 transition-colors duration-150"
+                      onClick={() => handlePlaceSelect(place)}
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-sm text-foreground">{place.displayName || 'Nombre no disponible'}</span>
+                        <span className="text-xs text-muted-foreground">{place.formattedAddress || 'Dirección no disponible'}</span>
+                      </div>
+                    </Button>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
-            <DialogFooter className="pt-4 sticky bottom-0 bg-background pb-2">
-              <DialogClose asChild>
-                <Button type="button" variant="outline">Cancelar</Button>
-              </DialogClose>
-              <Button type="submit" disabled={isSubmitting || !isLoaded}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {submitButtonText}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+            {selectedPlaceDetails && (
+              <Card className="shadow-lg border-primary mt-4">
+                <CardHeader className="pb-2 pt-3">
+                  <CardTitle className="text-base sm:text-lg flex items-center">
+                    <Info className="mr-2 h-5 w-5 text-primary" />
+                    Detalles del Lugar Seleccionado
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-xs sm:text-sm py-3">
+                  <p><strong>Nombre:</strong> {selectedPlaceDetails.displayName}</p>
+                  <p><strong>Dirección:</strong> {selectedPlaceDetails.formattedAddress}</p>
+                  {selectedPlaceDetails.country && <p><strong>País:</strong> {selectedPlaceDetails.country}</p>}
+                  {selectedPlaceDetails.id && <p><strong>Place ID:</strong> {selectedPlaceDetails.id}</p>}
+                  {selectedPlaceDetails.latitude !== undefined && <p><strong>Latitud:</strong> {selectedPlaceDetails.latitude.toFixed(6)}</p>}
+                  {selectedPlaceDetails.longitude !== undefined && <p><strong>Longitud:</strong> {selectedPlaceDetails.longitude.toFixed(6)}</p>}
+                  {selectedPlaceDetails.types && selectedPlaceDetails.types.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      <strong>Tipos:</strong>
+                      {selectedPlaceDetails.types.map(type => <Badge key={type} variant="secondary" className="text-xs">{type}</Badge>)}
+                    </div>
+                  )}
+                  
+                  {selectedPlaceDetails.photos && selectedPlaceDetails.photos.length > 0 ? (
+                    <div>
+                      <Label className="font-semibold flex items-center text-xs sm:text-sm">
+                        <Camera className="mr-2 h-4 w-4 text-primary" />
+                        Fotos ({Math.min(selectedPlaceDetails.photos.length, 5)} de {selectedPlaceDetails.photos.length}):
+                      </Label>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {selectedPlaceDetails.photos.slice(0, 5).map((photo, index) => {
+                          const photoUrl = photo.getURI({ maxWidthPx: 100, maxHeightPx: 100 });
+                          return (
+                            <Image
+                              key={photoUrl || index} // Use photoUrl if available, fallback to index
+                              src={photoUrl}
+                              alt={`Foto de ${selectedPlaceDetails.displayName || 'lugar seleccionado'} ${index + 1}`}
+                              width={80}
+                              height={80}
+                              className="rounded-md object-cover shadow-md hover:opacity-90 transition-opacity"
+                              data-ai-hint="city landmark"
+                            />
+                          );
+                        })}
+                      </div>
+                      {selectedPlaceDetails.photos.length > 5 && <p className="text-xs text-muted-foreground mt-1">Mostrando las primeras 5 fotos.</p>}
+                    </div>
+                  ) : (
+                     <p className="text-xs text-muted-foreground">No hay fotos disponibles para este lugar.</p>
+                  )}
+
+                  {selectedPlaceDetails.latitude !== undefined && selectedPlaceDetails.longitude !== undefined && (
+                    <div className="mt-3">
+                      <Label className="font-semibold flex items-center text-xs sm:text-sm">
+                        <Globe className="mr-2 h-4 w-4 text-primary" />
+                        Ubicación en el Mapa:
+                      </Label>
+                      <div className="mt-1 h-[180px] sm:h-[200px] w-full rounded-md overflow-hidden border shadow-inner">
+                        <Map
+                          mapId={`selected-city-map-${selectedPlaceDetails.id || Date.now()}`}
+                          center={{ lat: selectedPlaceDetails.latitude, lng: selectedPlaceDetails.longitude }}
+                          zoom={12}
+                          gestureHandling={'greedy'}
+                          disableDefaultUI={true}
+                          className="h-full w-full"
+                        >
+                          <AdvancedMarker 
+                            position={{ lat: selectedPlaceDetails.latitude, lng: selectedPlaceDetails.longitude }}
+                            title={selectedPlaceDetails.displayName || 'Ubicación seleccionada'}
+                          />
+                        </Map>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+            
+            <Separator className="my-3" />
+
+            <Form {...form}>
+              <form className="space-y-4"> {/* No onSubmit here, handled by DialogFooter button */}
+                <FormField control={form.control} name="name" render={({ field }) => (
+                    <FormItem className="hidden"> {/* Hidden, populated by search */}
+                        <FormLabel>Nombre Ciudad (del buscador)</FormLabel>
+                        <FormControl><ShadcnInput {...field} readOnly /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="country" render={({ field }) => (
+                    <FormItem className="hidden"> {/* Hidden, populated by search */}
+                        <FormLabel>País (del buscador)</FormLabel>
+                        <FormControl><ShadcnInput {...field} readOnly /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="lat" render={({ field }) => <ShadcnInput type="hidden" {...field} />} />
+                <FormField control={form.control} name="lng" render={({ field }) => <ShadcnInput type="hidden" {...field} />} />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <FormField control={form.control} name="arrivalDate" render={({ field }) => (
+                      <FormItem>
+                          <FormLabel className="flex items-center text-xs sm:text-sm"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Fecha de Llegada</FormLabel>
+                          <FormControl><ShadcnInput type="date" {...field} className="text-sm" /></FormControl>
+                          <FormMessage />
+                      </FormItem>
+                  )} />
+                  <FormField control={form.control} name="departureDate" render={({ field }) => (
+                      <FormItem>
+                          <FormLabel className="flex items-center text-xs sm:text-sm"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Fecha de Salida</FormLabel>
+                          <FormControl><ShadcnInput type="date" {...field} className="text-sm" /></FormControl>
+                          <FormMessage />
+                      </FormItem>
+                  )} />
+                </div>
+                 <FormField
+                    control={form.control}
+                    name="budget"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel className="flex items-center text-xs sm:text-sm">
+                            <MapPinIconLucide className="mr-2 h-4 w-4 text-muted-foreground" />Presupuesto (opcional)
+                        </FormLabel>
+                        <FormControl>
+                            <ShadcnInput
+                            type="number"
+                            placeholder="Ej: 1500"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={e => {
+                                const value = e.target.value;
+                                field.onChange(value === '' ? undefined : parseFloat(value));
+                            }}
+                            className="text-sm"
+                            />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                <FormField control={form.control} name="notes" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel className="flex items-center text-xs sm:text-sm"><StickyNote className="mr-2 h-4 w-4 text-muted-foreground" />Notas (opcional)</FormLabel>
+                        <FormControl><Textarea placeholder="Información adicional sobre tu estancia en esta ciudad..." {...field} className="text-sm" rows={3} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+              </form>
+            </Form>
+          </div>
+        </ScrollArea>
+        
+        <DialogFooter className="pt-4 sticky bottom-0 bg-background pb-2 mt-auto border-t">
+          <DialogClose asChild>
+            <Button type="button" variant="outline">Cancelar</Button>
+          </DialogClose>
+          <Button type="button" onClick={form.handleSubmit(handleFormSubmit)} disabled={isSubmitting || isSearching || (!selectedPlaceDetails && !initialData)}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {initialData ? 'Guardar Cambios' : 'Añadir Ciudad al Itinerario'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
+
+    
