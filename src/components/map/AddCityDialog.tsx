@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input as ShadcnInput } from '@/components/ui/input'; // Renamed to avoid conflict
+import { Input as ShadcnInput } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
@@ -30,7 +30,6 @@ import { Globe, MapPin as MapPinIconLucide, CalendarIcon, StickyNote, Search, Lo
 import { useToast } from "@/hooks/use-toast";
 import type { City, Coordinates } from '@/lib/types';
 
-// This is the data structure expected by the onSaveCity prop from MapSection
 const citySaveSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, "El nombre de la ciudad es obligatorio."),
@@ -43,7 +42,6 @@ const citySaveSchema = z.object({
   budget: z.number().optional().nullable(),
 });
 export type CityFormData = z.infer<typeof citySaveSchema>;
-
 
 interface PlaceDetailsFromSearch {
   id?: string;
@@ -75,7 +73,6 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // States for new search logic
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<google.maps.places.Place[]>([]);
   const [selectedPlaceDetails, setSelectedPlaceDetails] = useState<PlaceDetailsFromSearch | null>(null);
@@ -105,15 +102,15 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
           budget: initialData.budget ?? undefined,
         });
         setSearchTerm(`${initialData.name}, ${initialData.country}`);
-        setSelectedPlaceDetails({ // Pre-fill selectedPlaceDetails if editing
-            id: initialData.id, // Or place_id if available and different
+        setSelectedPlaceDetails({
+            id: initialData.id,
             displayName: initialData.name,
-            formattedAddress: `${initialData.name}, ${initialData.country}`, // Approximate
+            formattedAddress: `${initialData.name}, ${initialData.country}`,
             latitude: initialData.coordinates.lat,
             longitude: initialData.coordinates.lng,
             country: initialData.country,
-            types: [], // No types info in City type
-            photos: [] // No photos info in City type
+            types: [],
+            photos: []
         });
       } else {
         form.reset({ ...defaultNewCityRHFValues, name: '', country: '', lat: 0, lng: 0 });
@@ -139,17 +136,17 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     setSearchResults([]);
     setSelectedPlaceDetails(null);
     setIsSearching(true);
-    form.setValue('name', ''); // Clear form fields related to place details
+    form.setValue('name', '');
     form.setValue('country', '');
     form.setValue('lat', 0);
     form.setValue('lng', 0);
 
     const request: google.maps.places.SearchByTextRequest = {
       textQuery: searchTerm,
-      fields: ['id', 'displayName', 'formattedAddress', 'geometry.location', 'types', 'photos', 'addressComponents'],
-      language: 'es', // Prefer Spanish results
-      region: 'ES',   // Bias towards Spain, adjust if needed
-      // includedType: 'locality', // This is quite restrictive, might miss some valid places. Test with and without.
+      fields: ['id', 'displayName', 'formattedAddress', 'geometry', 'types', 'photos', 'addressComponents'],
+      language: 'es',
+      region: 'ES',
+      // includedType: 'locality', // This can be too restrictive. Consider removing or adjusting.
     };
 
     console.log('DEBUG: Initiating Google Maps Place.searchByText with query:', searchTerm, 'and request:', JSON.stringify(request));
@@ -209,7 +206,6 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     
     setSelectedPlaceDetails(placeDetailsToSet);
     
-    // Update React Hook Form fields
     form.setValue('name', place.displayName || '', { shouldValidate: true });
     form.setValue('country', countryName || '', { shouldValidate: true });
     if (lat !== undefined) form.setValue('lat', lat, { shouldValidate: true });
@@ -220,31 +216,26 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
 
   const handleFormSubmit = async (data: CityFormData) => {
     setIsSubmitting(true);
-    if ((data.lat === 0 && data.lng === 0) && !initialData?.coordinates) { // Allow 0,0 if it was initialData
+    if ((data.lat === 0 && data.lng === 0) && !initialData?.coordinates) {
       toast({ variant: "destructive", title: "Coordenadas Inválidas", description: "Por favor, busca y selecciona una ciudad para obtener coordenadas válidas." });
       setIsSubmitting(false);
       return;
     }
 
-    // Ensure name and country are from selected place if a place was selected
-    // If no place was selected but there's initialData, keep initialData's name/country
-    // If no place selected and no initialData, RHF validation for name/country should catch it.
     const dataToSave: CityFormData = {
-        ...data, // RHF data (dates, notes, budget)
-        id: initialData?.id, // Keep original ID if editing
+        ...data,
+        id: initialData?.id,
         name: selectedPlaceDetails?.displayName || data.name,
         country: selectedPlaceDetails?.country || data.country,
         lat: selectedPlaceDetails?.latitude ?? data.lat,
         lng: selectedPlaceDetails?.longitude ?? data.lng,
     };
 
-
     try {
       await onSaveCity(dataToSave);
-      onOpenChange(false); // Close dialog
+      onOpenChange(false);
     } catch (error) {
       console.error("AddCityDialog: Error saving city:", error);
-      // Toast for error during save is likely handled by onSaveCity caller
     } finally {
       setIsSubmitting(false);
     }
@@ -256,7 +247,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
         if (!open) {
-            setSelectedPlaceDetails(null); // Clear details when dialog closes
+            setSelectedPlaceDetails(null);
             setSearchResults([]);
             setSearchTerm('');
         }
@@ -356,7 +347,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                           const photoUrl = photo.getURI({ maxWidthPx: 100, maxHeightPx: 100 });
                           return (
                             <Image
-                              key={photoUrl || index} // Use photoUrl if available, fallback to index
+                              key={photoUrl || index}
                               src={photoUrl}
                               alt={`Foto de ${selectedPlaceDetails.displayName || 'lugar seleccionado'} ${index + 1}`}
                               width={80}
@@ -403,16 +394,16 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
             <Separator className="my-3" />
 
             <Form {...form}>
-              <form className="space-y-4"> {/* No onSubmit here, handled by DialogFooter button */}
+              <form className="space-y-4">
                 <FormField control={form.control} name="name" render={({ field }) => (
-                    <FormItem className="hidden"> {/* Hidden, populated by search */}
+                    <FormItem className="hidden">
                         <FormLabel>Nombre Ciudad (del buscador)</FormLabel>
                         <FormControl><ShadcnInput {...field} readOnly /></FormControl>
                         <FormMessage />
                     </FormItem>
                 )} />
                 <FormField control={form.control} name="country" render={({ field }) => (
-                    <FormItem className="hidden"> {/* Hidden, populated by search */}
+                    <FormItem className="hidden">
                         <FormLabel>País (del buscador)</FormLabel>
                         <FormControl><ShadcnInput {...field} readOnly /></FormControl>
                         <FormMessage />
@@ -487,6 +478,3 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     </Dialog>
   );
 }
-
-
-    
