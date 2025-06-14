@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ClientProviders } from '@/components/client-providers'; // NUEVA IMPORTACIÓN
 
 export const metadata: Metadata = {
   title: 'Family Trip Planner',
@@ -30,8 +31,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
-          <Toaster />
+          <ClientProviders> {/* ENVOLVEMOS AQUÍ */}
+            {children}
+            <Toaster />
+          </ClientProviders>
         </ThemeProvider>
       </body>
     </html>
