@@ -1,10 +1,17 @@
+
 "use client";
 
+// THIS HOOK IS NO LONGER ACTIVELY USED AND CAN BE CONSIDERED OBSOLETE
+// The new AddCityDialog.tsx uses Place.searchByText() and useMapsLibrary
+// from @vis.gl/react-google-maps directly, instead of relying on 
+// the <gmp-place-autocomplete-element> Web Component that this hook was designed for.
+// It's left here for reference or if a future decision is made to revert to the Web Component.
+
 import { useRef, useEffect, useState, useCallback } from 'react';
-import type { CityFormData } from '@/components/map/AddCityDialog';
+import type { CityFormData } from '@/components/map/AddCityDialog'; // This might need adjustment if CityFormData changes
 import { useToast } from "@/hooks/use-toast";
 
-type ExtractedPlaceData = Omit<CityFormData, 'id' | 'arrivalDate' | 'departureDate' | 'notes'> & {
+type ExtractedPlaceData = Omit<CityFormData, 'id' | 'arrivalDate' | 'departureDate' | 'notes' | 'budget'> & {
     formattedAddress?: string;
     countryFound: boolean;
 };
@@ -25,7 +32,7 @@ export function usePlaceAutocomplete({ isLoaded }: { isLoaded: boolean }) {
             return;
         }
         
-        console.log("usePlaceAutocomplete: Raw 'place' object from 'gmp-placechange':", placeResultFromEvent ? JSON.parse(JSON.stringify(placeResultFromEvent)) : "NULL OR UNDEFINED");
+        console.log("usePlaceAutocomplete (OBSOLETE): Raw 'place' object from 'gmp-placechange':", placeResultFromEvent ? JSON.parse(JSON.stringify(placeResultFromEvent)) : "NULL OR UNDEFINED");
 
         try {
             await placeResultFromEvent.fetchFields({
@@ -43,6 +50,7 @@ export function usePlaceAutocomplete({ isLoaded }: { isLoaded: boolean }) {
                     if (component.types.includes('locality')) {
                         extractedCityName = component.longText || component.shortText || '';
                     } else if (component.types.includes('administrative_area_level_1') && !extractedCityName) {
+                        // Fallback to administrative area if locality is not found directly
                         if (!placeResultFromEvent.addressComponents.some(c => c.types.includes('locality'))) {
                             extractedCityName = component.longText || component.shortText || '';
                         }
@@ -53,40 +61,43 @@ export function usePlaceAutocomplete({ isLoaded }: { isLoaded: boolean }) {
                 }
             }
             
+            // Further fallbacks for city name
             if (!extractedCityName && placeResultFromEvent.displayName) {
                 extractedCityName = placeResultFromEvent.displayName;
+                // Basic attempt to remove country from displayName if it's appended
                 if (extractedCountryName && extractedCityName.includes(extractedCountryName)) {
                     extractedCityName = extractedCityName.replace(`, ${extractedCountryName}`, '').replace(extractedCountryName, '').trim();
                 }
             }
 
             if (!extractedCityName && placeResultFromEvent.name && placeResultFromEvent.types?.includes('locality')) {
+                // Check 'name' if types confirm it's a locality
                 extractedCityName = placeResultFromEvent.name;
             }
 
-            console.log(`usePlaceAutocomplete: Finally extracted - City: "${extractedCityName}", Country: "${extractedCountryName}", Lat: ${lat}, Lng: ${lng}`);
+            console.log(`usePlaceAutocomplete (OBSOLETE): Finally extracted - City: "${extractedCityName}", Country: "${extractedCountryName}", Lat: ${lat}, Lng: ${lng}`);
 
             if (extractedCityName && typeof lat === 'number' && typeof lng === 'number') {
                 setExtractedPlace({
                     name: extractedCityName,
-                    country: extractedCountryName,
+                    country: extractedCountryName, // Will be empty string if not found
                     lat,
                     lng,
                     formattedAddress: placeResultFromEvent.formattedAddress,
                     countryFound: !!extractedCountryName,
                 });
-                toast({ title: "Ciudad Seleccionada", description: `${extractedCityName}${extractedCountryName ? ', ' + extractedCountryName : ''} autocompletada.` });
+                toast({ title: "Ciudad Seleccionada (OBSOLETE hook)", description: `${extractedCityName}${extractedCountryName ? ', ' + extractedCountryName : ''} autocompletada.` });
             } else {
                 const errorMsg = "No se pudo extraer toda la información necesaria del lugar. Revisa la consola.";
                 setAutocompleteError(errorMsg);
-                toast({ variant: "destructive", title: "Datos Incompletos", description: errorMsg });
-                console.error("usePlaceAutocomplete: Failed to extract all place data. Extracted:", { extractedCityName, extractedCountryName, lat, lng });
+                toast({ variant: "destructive", title: "Datos Incompletos (OBSOLETE hook)", description: errorMsg });
+                console.error("usePlaceAutocomplete (OBSOLETE): Failed to extract all place data. Extracted:", { extractedCityName, extractedCountryName, lat, lng });
             }
         } catch (error) {
             const errorMsg = `No se pudo obtener detalles del lugar: ${(error as Error).message}`;
             setAutocompleteError(errorMsg);
-            console.error("usePlaceAutocomplete: Error in fetchFields or post-processing:", error);
-            toast({ variant: "destructive", title: "Error de Google Maps", description: errorMsg });
+            console.error("usePlaceAutocomplete (OBSOLETE): Error in fetchFields or post-processing:", error);
+            toast({ variant: "destructive", title: "Error de Google Maps (OBSOLETE hook)", description: errorMsg });
         }
     }, [toast]);
 
@@ -94,16 +105,17 @@ export function usePlaceAutocomplete({ isLoaded }: { isLoaded: boolean }) {
         const autocompleteElement = placeAutocompleteElementRef.current;
         if (!isLoaded || !autocompleteElement) return;
 
+        // This event listener is for the <gmp-place-autocomplete-element>
         const eventListenerCallback = (event: Event) => {
             handleGmpPlaceChange(event as CustomEvent<{ place: google.maps.places.PlaceResult }>);
         };
         
-        console.log("usePlaceAutocomplete: Attaching 'gmp-placechange' listener to:", autocompleteElement);
+        console.log("usePlaceAutocomplete (OBSOLETE): Attaching 'gmp-placechange' listener to:", autocompleteElement);
         autocompleteElement.addEventListener('gmp-placechange', eventListenerCallback);
 
         return () => {
             if (autocompleteElement) {
-                console.log("usePlaceAutocomplete: Cleaning up 'gmp-placechange' listener from:", autocompleteElement);
+                console.log("usePlaceAutocomplete (OBSOLETE): Cleaning up 'gmp-placechange' listener from:", autocompleteElement);
                 autocompleteElement.removeEventListener('gmp-placechange', eventListenerCallback);
             }
         };

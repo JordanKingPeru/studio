@@ -1,123 +1,114 @@
 
 "use client";
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { GoogleMap, MarkerF, InfoWindowF } from '@react-google-maps/api';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Map, AdvancedMarker, Pin, InfoWindow } from '@vis.gl/react-google-maps';
 import type { City, Coordinates } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 
 interface MapDisplayProps {
   cities: City[];
-  isLoaded: boolean;
+  // isLoaded prop is no longer needed as APIProvider handles loading globally
 }
 
 const mapContainerStyle = {
   width: '100%',
   height: '100%',
-  borderRadius: '0.75rem',
+  borderRadius: '0.75rem', // Consistent with MapSection's rounded-xl on the parent
 };
 
-const defaultCenter: Coordinates = { lat: 20, lng: 0 }; // General world view
+const defaultCenter: Coordinates = { lat: 40.416775, lng: -3.703790 }; // Default to Madrid or a general world view
 
-export default function MapDisplay({ cities, isLoaded }: MapDisplayProps) {
-  const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
+export default function MapDisplay({ cities }: MapDisplayProps) {
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
+  const [mapCenter, setMapCenter] = useState<Coordinates>(defaultCenter);
+  const [mapZoom, setMapZoom] = useState<number>(2); // Start zoomed out
 
   const validCities = useMemo(() => cities.filter(city =>
     typeof city.coordinates?.lat === 'number' &&
     typeof city.coordinates?.lng === 'number' &&
+    // Allow 0,0 only if it's not the default placeholder (e.g. if a city truly is at 0,0)
+    // For now, we'll assume 0,0 is generally uninitialized unless it has a name.
     (city.coordinates.lat !== 0 || city.coordinates.lng !== 0 || (city.id && city.name))
   ), [cities]);
 
-  const onLoad = useCallback((map: google.maps.Map) => {
-    setMapRef(map);
-  }, []);
-
-  const onUnmount = useCallback(() => {
-    setMapRef(null);
-    setSelectedCity(null);
-  }, []);
-
   useEffect(() => {
-    if (mapRef && validCities.length > 0) {
-      const bounds = new window.google.maps.LatLngBounds();
-      validCities.forEach(city => {
-        if (city.coordinates?.lat != null && city.coordinates?.lng != null) {
-            bounds.extend(new window.google.maps.LatLng(city.coordinates.lat, city.coordinates.lng));
-        }
-      });
-      if (validCities.length > 0 && bounds.getNorthEast() && bounds.getSouthWest() && !bounds.getNorthEast().equals(bounds.getSouthWest()) ) {
-         mapRef.fitBounds(bounds);
-      } else if (validCities.length === 1 && validCities[0].coordinates) {
-        mapRef.setCenter(validCities[0].coordinates);
-        mapRef.setZoom(7);
-      } else {
-        mapRef.setCenter(defaultCenter);
-        mapRef.setZoom(2);
-      }
-
-      const listener = window.google.maps.event.addListenerOnce(mapRef, 'idle', () => {
-        if (validCities.length === 1 && mapRef.getZoom()! > 7) {
-          mapRef.setZoom(7);
-        } else if (validCities.length > 1 && mapRef.getZoom()! > 15) {
-          mapRef.setZoom(15);
-        }
-      });
-      return () => {
-        if (listener) window.google.maps.event.removeListener(listener);
-      };
-
-    } else if (mapRef) {
-      mapRef.setCenter(defaultCenter);
-      mapRef.setZoom(2);
+    if (validCities.length === 1) {
+      setMapCenter(validCities[0].coordinates);
+      setMapZoom(7); // Zoom in on a single city
+    } else if (validCities.length > 1) {
+      // Simple logic: center on the first city, keep zoom broader.
+      // A more complex approach would calculate a bounding box.
+      setMapCenter(validCities[0].coordinates);
+      setMapZoom(3); // Adjust as needed for multiple cities
+    } else {
+      setMapCenter(defaultCenter);
+      setMapZoom(2);
     }
-  }, [mapRef, validCities]);
+  }, [validCities]);
 
-  if (!isLoaded) {
-    return (
-      <div className="flex items-center justify-center h-full bg-muted/30 rounded-xl">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="ml-2">Cargando mapa...</p>
-      </div>
-    );
-  }
+  const handleMarkerClick = useCallback((city: City) => {
+    setSelectedCity(city);
+    setMapCenter(city.coordinates); // Center map on clicked city
+    setMapZoom(9); // Zoom in a bit more on selected city
+  }, []);
+  
+  const handleInfoWindowClose = useCallback(() => {
+    setSelectedCity(null);
+    // Optionally, reset zoom/center if desired when an infowindow closes
+    // if (validCities.length === 1) setMapZoom(7);
+    // else if (validCities.length > 1) setMapZoom(3);
+  }, []);
+
+
+  // The APIProvider in ClientProviders handles the actual loading state for the whole app.
+  // We assume here that if MapDisplay is rendered, the API should be available.
+  // A more robust check could involve useContext if a global load status is needed here.
 
   return (
-    <GoogleMap
-      mapContainerStyle={mapContainerStyle}
-      center={defaultCenter}
-      zoom={2}
-      onLoad={onLoad}
-      onUnmount={onUnmount}
-      options={{
-        streetViewControl: false,
-        mapTypeControl: false,
-        fullscreenControl: false,
-        zoomControl: true,
-        clickableIcons: false,
-      }}
+    <Map
+      mapId="main-trip-map" // Optional: for Cloud-based Map Styling
+      style={mapContainerStyle}
+      center={mapCenter}
+      zoom={mapZoom}
+      gestureHandling={'greedy'}
+      disableDefaultUI={true}
+      streetViewControl={false}
+      mapTypeControl={false}
+      fullscreenControl={false}
+      zoomControl={true}
+      clickableIcons={false} // Good practice
     >
       {validCities.map((city) => (
-        <MarkerF
+        <AdvancedMarker
           key={city.id || `${city.name}-${city.coordinates.lat}-${city.coordinates.lng}`}
           position={city.coordinates}
-          onClick={() => setSelectedCity(city)}
+          onClick={() => handleMarkerClick(city)}
           title={city.name}
-        />
+        >
+          {/* You can customize the marker Pin, e.g., color */}
+          {/* <Pin borderColor="blue" glyphColor="white" background="red" /> */}
+        </AdvancedMarker>
       ))}
 
-      {selectedCity && selectedCity.coordinates && (
-        <InfoWindowF
+      {selectedCity && (
+        <InfoWindow
           position={selectedCity.coordinates}
-          onCloseClick={() => setSelectedCity(null)}
-          options={{ pixelOffset: new window.google.maps.Size(0, -30) }}
+          onCloseClick={handleInfoWindowClose}
+          pixelOffset={[0,-30]} // Adjust as needed
         >
-          <div className="p-1">
-            <h4 className="font-semibold text-sm text-primary">{selectedCity.name}</h4>
-            <p className="text-xs text-muted-foreground">{selectedCity.country}</p>
-          </div>
-        </InfoWindowF>
+          <Card className="w-48 shadow-none border-none p-0 m-0">
+            <CardHeader className="p-2 pb-1">
+                <CardTitle className="text-sm font-semibold text-primary">{selectedCity.name}</CardTitle>
+            </CardHeader>
+            <CardContent className="p-2 pt-0">
+                <p className="text-xs text-muted-foreground">{selectedCity.country}</p>
+                {/* Add more details if desired, e.g., dates */}
+            </CardContent>
+          </Card>
+        </InfoWindow>
       )}
-    </GoogleMap>
+    </Map>
   );
 }

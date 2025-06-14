@@ -2,14 +2,14 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { useJsApiLoader } from '@react-google-maps/api';
+// useJsApiLoader is no longer needed here as APIProvider handles it globally
 import type { TripDetails, City } from '@/lib/types';
-import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/constants';
+// GOOGLE_MAPS_LIBRARIES and GOOGLE_MAPS_SCRIPT_ID are not needed here anymore
 import SectionCard from '@/components/ui/SectionCard';
 import AddCityDialog, { type CityFormData } from './AddCityDialog';
 import CityListCard from './CityListCard';
 import { Button } from '@/components/ui/button';
-import { Route, PlusCircle, List } from 'lucide-react';
+import { Route, PlusCircle, List, Loader2 } from 'lucide-react'; // Added Loader2
 import MapDisplay from './MapDisplay';
 
 interface MapSectionProps {
@@ -28,15 +28,9 @@ export default function MapSection({
   const [isCityFormOpen, setIsCityFormOpen] = useState(false);
   const [editingCity, setEditingCity] = useState<City | null>(null);
 
-  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
-
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: GOOGLE_MAPS_SCRIPT_ID,
-    googleMapsApiKey: googleMapsApiKey,
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
-
-  console.log('MapSection isLoaded:', isLoaded);
+  // The API key is now managed by APIProvider in client-providers.tsx
+  // and directly by AddCityDialog for its places library usage.
+  // No need for useJsApiLoader here.
 
   const handleOpenForm = (city?: City) => {
     setEditingCity(city || null);
@@ -44,7 +38,7 @@ export default function MapSection({
   };
 
   const headerActions = (
-    <Button onClick={() => handleOpenForm()} variant="default" size="sm" disabled={!isLoaded}>
+    <Button onClick={() => handleOpenForm()} variant="default" size="sm">
       <PlusCircle size={18} className="mr-2" />
       Añadir Ciudad
     </Button>
@@ -86,29 +80,27 @@ export default function MapSection({
 
         <div className="md:col-span-2">
           <div className="sticky top-20 h-[550px] rounded-xl shadow-lg overflow-hidden border">
-            {loadError ? (
-              <div className="flex flex-col items-center justify-center h-full bg-destructive/5 p-4 rounded-xl">
-                <p className="text-destructive-foreground font-semibold">Error al cargar Google Maps.</p>
-                <p className="text-muted-foreground text-sm mt-1 text-center">
-                  Por favor, comprueba tu conexión a internet y la configuración de la API Key.
-                </p>
-              </div>
-            ) : (
-              <MapDisplay cities={cities} isLoaded={isLoaded} />
-            )}
+            {/* 
+              MapDisplay now handles its own rendering based on the global APIProvider.
+              We don't need to manage 'isLoaded' or 'loadError' here for the map display itself.
+              If APIProvider fails, MapDisplay might show its own fallback or an error from @vis.gl/react-google-maps.
+            */}
+            <MapDisplay cities={cities} />
           </div>
         </div>
       </div>
 
-      {isLoaded && (
-        <AddCityDialog
-            isOpen={isCityFormOpen}
-            onOpenChange={setIsCityFormOpen}
-            onSaveCity={onSaveCity}
-            initialData={editingCity}
-            isLoaded={isLoaded}
-        />
-      )}
+      {/* 
+        AddCityDialog also uses useMapsLibrary internally and doesn't need isLoaded prop from here.
+        It will show its own loading/error states for the places library if needed.
+      */}
+      <AddCityDialog
+          isOpen={isCityFormOpen}
+          onOpenChange={setIsCityFormOpen}
+          onSaveCity={onSaveCity}
+          initialData={editingCity}
+          // isLoaded prop is no longer needed
+      />
     </SectionCard>
   );
 }
