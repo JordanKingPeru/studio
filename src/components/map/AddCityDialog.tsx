@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input as ShadcnInput } from '@/components/ui/input';
+import { Input as ShadcnInput } from '@/components/ui/input'; // Renamed to avoid conflict if HTMLInput is used
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
@@ -15,11 +15,17 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogDescription,
+  DialogDescription, // This is DialogDescription
   DialogClose,
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Card, CardContent, CardHeader, CardTitle as CardTitleShadcn, CardDescription as CardDescriptionShadcn } from '@/components/ui/card'; // Renamed to avoid conflict with DialogTitle
+import { 
+  Card, 
+  CardContent, 
+  CardHeader, // Use directly
+  CardTitle as ShadcnCardTitle, // Alias to avoid conflict with DialogTitle
+  CardDescription as ShadcnCardDescription // Alias to avoid conflict with DialogDescription
+} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -119,7 +125,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         form.reset({ ...defaultNewCityRHFValues, name: '', country: '', lat: 0, lng: 0 });
         setSearchTerm('');
         setSelectedPlaceDetails(null);
-        setAccordionValue([]); // Collapse accordion by default for new cities
+        setAccordionValue([]); 
       }
       setSearchResults([]);
       setIsSearching(false);
@@ -150,11 +156,16 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
       fields: ['id', 'displayName', 'formattedAddress', 'location', 'types', 'photos', 'addressComponents'],
       language: 'es',
       region: 'ES',
+      // includedType: 'locality', // Consider if this is too restrictive or helpful
     };
+
+    console.log('DEBUG: Initiating Google Maps Place.searchByText with query:', searchTerm, 'and request:', request);
 
     try {
       const { places } = await placesLibrary.Place.searchByText(request);
       
+      console.log('DEBUG: Google Maps API Response:', places);
+
       if (places && places.length > 0) {
         setSearchResults(places);
         toast({ title: "Búsqueda Exitosa", description: `Se encontraron ${places.length} lugares.` });
@@ -195,12 +206,12 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
       latitude: lat,
       longitude: lng,
       country: countryName,
-      types: place.types as readonly string[] | undefined,
-      photos: place.photos as google.maps.places.Photo[] | undefined,
+      types: place.types as readonly string[] | undefined, // Cast to avoid readonly issue with state
+      photos: place.photos as google.maps.places.Photo[] | undefined, // Cast to avoid readonly issue with state
     };
     
     setSelectedPlaceDetails(placeDetailsToSet);
-    setAccordionValue(["city-details-item"]); // Expand accordion when a place is selected
+    setAccordionValue(["city-details-item"]); 
     
     form.setValue('name', place.displayName || '', { shouldValidate: true });
     form.setValue('country', countryName || '', { shouldValidate: true });
@@ -232,6 +243,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
       onOpenChange(false);
     } catch (error) {
       console.error("AddCityDialog: Error saving city:", error);
+      // Toast for error is likely handled in onSaveCity caller or a global error handler
     } finally {
       setIsSubmitting(false);
     }
@@ -256,17 +268,17 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         onOpenChange(open);
     }}>
       <DialogContent className="sm:max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] p-6">
-        <DialogHeader className="flex-shrink-0">
+        <DialogHeader className="flex-shrink-0 pb-2">
           <DialogTitle className="font-headline text-2xl text-primary flex items-center">
             <FormIcon size={22} className="mr-2" />
             {dialogTitleText}
           </DialogTitle>
           <DialogDescription>
-            Busca una ciudad, selecciona un resultado y luego completa las fechas y notas de tu estancia.
+            Busca una ciudad y luego completa los detalles de tu estancia.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 items-end gap-2 sm:gap-4 pt-2 pb-4 flex-shrink-0">
+        <div className="grid grid-cols-1 sm:grid-cols-4 items-end gap-2 sm:gap-4 pb-4 flex-shrink-0">
             <div className="sm:col-span-3 space-y-1">
               <Label htmlFor="city-search-input" className="flex items-center text-sm font-medium">
                   <Search className="mr-2 h-4 w-4 text-muted-foreground" />
@@ -287,18 +299,18 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
             </Button>
         </div>
         
-        <div className="flex-1 min-h-0 py-4"> {/* Scrollable container with vertical padding */}
+        <div className="flex-1 min-h-0 py-4">
             <ScrollArea className="h-full w-full">
-                <div className="space-y-4"> {/* Content wrapper, horizontal padding from DialogContent p-6 */}
+                <div className="px-1 space-y-4"> 
                     {searchResults.length > 0 && !selectedPlaceDetails && (
                       <Card className="shadow-md">
-                        <CardHeaderShadcn className="pb-2 pt-3">
-                          <CardTitleShadcn className="text-base sm:text-lg flex items-center">
+                        <CardHeader className="pb-2 pt-3">
+                          <ShadcnCardTitle className="text-base sm:text-lg flex items-center">
                               <List className="mr-2 h-5 w-5 text-primary" />
                               Resultados de la Búsqueda ({searchResults.length})
-                          </CardTitleShadcn>
-                          <CardDescriptionShadcn className="text-xs sm:text-sm">Haz clic en un lugar para ver sus detalles.</CardDescriptionShadcn>
-                        </CardHeaderShadcn>
+                          </ShadcnCardTitle>
+                          <ShadcnCardDescription className="text-xs sm:text-sm">Haz clic en un lugar para ver sus detalles.</ShadcnCardDescription>
+                        </CardHeader>
                         <CardContent className="space-y-2 max-h-[250px] sm:max-h-[300px] overflow-y-auto py-2">
                           {searchResults.map((place) => (
                             <Button
@@ -331,8 +343,8 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                                     </div>
                                 </div>
                             </AccordionTrigger>
-                            <AccordionContent>
-                                <CardContent className="space-y-3 text-xs sm:text-sm py-3 border-t max-h-[35vh] overflow-y-auto">
+                            <AccordionContent className="border-t">
+                                <CardContent className="space-y-3 text-xs sm:text-sm py-3 max-h-[40vh] overflow-y-auto">
                                   <p><strong>Nombre:</strong> {selectedPlaceDetails.displayName}</p>
                                   <p><strong>Dirección:</strong> {selectedPlaceDetails.formattedAddress}</p>
                                   {selectedPlaceDetails.country && <p><strong>País:</strong> {selectedPlaceDetails.country}</p>}
@@ -471,7 +483,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
             </ScrollArea>
         </div>
         
-        <DialogFooter className="pt-4 flex-shrink-0 border-t">
+        <DialogFooter className="pt-4 flex-shrink-0 border-t mt-auto">
           <DialogClose asChild>
             <Button type="button" variant="outline">Cancelar</Button>
           </DialogClose>
