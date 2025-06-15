@@ -46,7 +46,7 @@ export default function TripMapPage() {
 
   const fetchCities = useCallback(async () => {
     if (!tripId) return;
-    setIsLoading(true); // Ensure loading state is true at start of fetch
+    // setIsLoading(true); // Managed by initial load or specific action triggers
     try {
       const citiesCollectionRef = collection(db, "trips", tripId, "cities");
       const q = query(citiesCollectionRef, firestoreOrderBy("arrivalDate"));
@@ -54,34 +54,42 @@ export default function TripMapPage() {
       const fetchedCities: City[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as City));
       setCities(fetchedCities);
 
-      // Update tripData with fetched cities
-      if (tripData) { // check if tripData is already loaded
-          setTripData(prev => prev ? ({ ...prev, ciudades: fetchedCities }) : null);
-      }
+      setTripData(prev => prev ? ({ ...prev, ciudades: fetchedCities }) : null);
 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `No se pudieron cargar ciudades: ${error.message}` });
-    } finally {
-      setIsLoading(false);
     }
-  }, [tripId, toast, tripData]); // Added tripData to dependencies
+    // finally { setIsLoading(false); } // Managed by initial load or specific action triggers
+  }, [tripId, toast]);
 
   useEffect(() => {
+    let isMounted = true;
     if (tripId) {
       const loadInitialData = async () => {
+        if(!isMounted) return;
         setIsLoading(true);
-        const initialData = await fetchFullTripDataForMap(tripId);
-        setTripData(initialData);
-        if (initialData) {
-          setCities(initialData.ciudades || []);
+        try {
+            const initialData = await fetchFullTripDataForMap(tripId);
+            if(!isMounted) return;
+            setTripData(initialData);
+            if (initialData) {
+                setCities(initialData.ciudades || []);
+            }
+            await fetchCities(); 
+        } catch (e) {
+            if(!isMounted) return;
+            toast({ variant: "destructive", title: "Error", description: `No se pudieron cargar datos del mapa.`});
+            console.error("Error loading initial map data:", e);
+        } finally {
+            if(isMounted) {
+                setIsLoading(false);
+            }
         }
-        // Fetch live cities after setting initial data
-        await fetchCities(); 
-        // setIsLoading(false); // fetchCities will handle this
       };
       loadInitialData();
     }
-  }, [tripId, fetchCities]); // fetchCities is now a dependency
+    return () => { isMounted = false; };
+  }, [tripId, fetchCities]);
 
 
   const handleSaveCity = async (cityData: CityFormData) => {
@@ -145,3 +153,4 @@ export default function TripMapPage() {
     </div>
   );
 }
+

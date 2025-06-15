@@ -3,7 +3,7 @@
 
 import ItinerarySection from '@/components/itinerary/ItinerarySection';
 import { useParams } from 'next/navigation';
-import { useEffect, useState, useCallback } from 'react'; // Added useCallback
+import { useEffect, useState, useCallback } from 'react';
 import type { TripDetails, Activity } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, serverTimestamp, query, orderBy as firestoreOrderBy, addDoc } from 'firebase/firestore';
@@ -44,7 +44,7 @@ export default function TripItineraryPage() {
 
   const fetchActivities = useCallback(async () => {
     if (!tripId) return;
-    setIsLoading(true);
+    // setIsLoading(true); // Managed by initial load or specific action triggers
     try {
       const activitiesCollectionRef = collection(db, "trips", tripId, "activities");
       const q = query(activitiesCollectionRef, firestoreOrderBy("date"), firestoreOrderBy("order"), firestoreOrderBy("time"));
@@ -52,34 +52,43 @@ export default function TripItineraryPage() {
       const fetchedActivities: Activity[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as Activity));
       setActivities(fetchedActivities);
 
-      // Update tripData with fetched activities
-      if (tripData) {
-        setTripData(prev => prev ? ({ ...prev, activities: fetchedActivities }) : null);
-      }
+      setTripData(prev => prev ? ({ ...prev, activities: fetchedActivities }) : null);
 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `No se pudieron cargar actividades: ${error.message}` });
-    } finally {
-      setIsLoading(false);
     }
-  }, [tripId, toast, tripData]); // Added tripData to dependencies
+    // finally { setIsLoading(false); } // Managed by initial load or specific action triggers
+  }, [tripId, toast]);
 
   useEffect(() => {
+    let isMounted = true;
     if (tripId) {
       const loadInitialData = async () => {
+        if (!isMounted) return;
         setIsLoading(true);
-        const initialData = await fetchFullTripDataForItinerary(tripId);
-        setTripData(initialData);
-        if (initialData) {
-          setActivities(initialData.activities || []);
+        try {
+          const initialData = await fetchFullTripDataForItinerary(tripId);
+          if (!isMounted) return;
+          setTripData(initialData);
+          if (initialData) {
+            setActivities(initialData.activities || []);
+          }
+          // Fetch live activities after setting initial data
+          await fetchActivities(); 
+        } catch (e) {
+          if (!isMounted) return;
+          toast({ variant: "destructive", title: "Error", description: `No se pudieron cargar datos del itinerario.`});
+          console.error("Error loading initial itinerary data:", e);
+        } finally {
+          if (isMounted) {
+            setIsLoading(false);
+          }
         }
-        // Fetch live activities after setting initial data
-        await fetchActivities(); 
-        // setIsLoading(false); // fetchActivities will handle this
       };
       loadInitialData();
     }
-  }, [tripId, fetchActivities]); // fetchActivities is now a dependency
+    return () => { isMounted = false; };
+  }, [tripId, fetchActivities]); // fetchActivities is a dependency
 
   const handleAddOrUpdateActivity = async (activity: Activity) => {
     if (!tripId) return;

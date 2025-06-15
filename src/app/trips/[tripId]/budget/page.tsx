@@ -31,7 +31,7 @@ async function fetchFullTripDataForBudget(tripId: string): Promise<TripDetails |
         id: tripId,
         activities,
         ciudades,
-        expenses, // Use the processed expenses which include manual and derived
+        expenses,
       };
     }
   }
@@ -53,61 +53,69 @@ export default function TripBudgetPage() {
 
   const fetchTripSubCollections = useCallback(async () => {
     if (!tripId) return;
-    // setIsLoading(true); // Only set loading if it's not already handled by initial load
+    // setIsLoading(true); // Managed by initial load or specific action triggers
     try {
-      // Fetch Activities (for deriving expenses)
       const activitiesCollectionRef = collection(db, "trips", tripId, "activities");
       const activitiesQuery = query(activitiesCollectionRef, firestoreOrderBy("date"), firestoreOrderBy("order"), firestoreOrderBy("time"));
       const activitiesSnapshot = await getDocs(activitiesQuery);
       const fetchedActivities: Activity[] = activitiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as Activity));
       setActivities(fetchedActivities);
 
-      // Fetch Cities
       const citiesCollectionRef = collection(db, "trips", tripId, "cities");
       const citiesQuery = query(citiesCollectionRef, firestoreOrderBy("arrivalDate"));
       const citiesSnapshot = await getDocs(citiesQuery);
       const fetchedCities: City[] = citiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as City));
       setCities(fetchedCities);
       
-      // Fetch Manual Expenses
       const expensesCollectionRef = collection(db, "trips", tripId, "expenses");
       const expensesQuery = query(expensesCollectionRef, firestoreOrderBy("date", "desc"));
       const expensesSnapshot = await getDocs(expensesQuery);
       const fetchedManualExpenses: Expense[] = expensesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as Expense));
       setManualExpenses(fetchedManualExpenses);
 
-      if (tripData) {
-          setTripData(prev => prev ? ({
+      setTripData(prev => prev ? ({
             ...prev, 
             activities: fetchedActivities, 
             ciudades: fetchedCities,
-            // expenses will be derived below using fetchedManualExpenses and fetchedActivities
+            // expenses will be derived later using fetchedManualExpenses and fetchedActivities
         }) : null);
-      }
 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `No se pudieron cargar datos para presupuesto: ${error.message}` });
-    } finally {
-      setIsLoading(false); // Ensure loading is set to false after all fetches
-    }
-  }, [tripId, toast, tripData]);
+    } 
+    // finally { setIsLoading(false); } // Managed by initial load or specific action triggers
+  }, [tripId, toast]);
 
 
   useEffect(() => {
+    let isMounted = true;
     if (tripId) {
       const loadInitialData = async () => {
+        if (!isMounted) return;
         setIsLoading(true);
-        const initialData = await fetchFullTripDataForBudget(tripId);
-        setTripData(initialData);
-        if (initialData) {
-          setActivities(initialData.activities || []);
-          setCities(initialData.ciudades || []);
-          setManualExpenses(initialData.expenses?.filter(e => !e.id.includes('-expense')) || []); // Filter out derived for manual
+        try {
+            const initialData = await fetchFullTripDataForBudget(tripId);
+            if (!isMounted) return;
+            setTripData(initialData);
+            if (initialData) {
+                setActivities(initialData.activities || []);
+                setCities(initialData.ciudades || []);
+                setManualExpenses(initialData.expenses?.filter(e => !e.id.includes('-expense')) || []);
+            }
+            await fetchTripSubCollections();
+        } catch (e) {
+            if (!isMounted) return;
+            toast({ variant: "destructive", title: "Error", description: `No se pudieron cargar datos del presupuesto.`});
+            console.error("Error loading initial budget data:", e);
+        } finally {
+            if(isMounted) {
+                 setIsLoading(false);
+            }
         }
-        await fetchTripSubCollections();
       };
       loadInitialData();
     }
+     return () => { isMounted = false; };
   }, [tripId, fetchTripSubCollections]);
 
   const derivedExpensesFromActivities = useMemo((): Expense[] => {
@@ -141,7 +149,7 @@ export default function TripBudgetPage() {
     try {
         await setDoc(newExpenseRef, newExpense);
         toast({ title: "Gasto Añadido", description: `"${expenseData.description}" añadido correctamente.` });
-        fetchTripSubCollections(); // Re-fetch all data to update UI
+        fetchTripSubCollections(); 
         setIsExpenseModalOpen(false);
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error al Añadir Gasto", description: error.message });
@@ -159,9 +167,9 @@ export default function TripBudgetPage() {
   }
   
   return (
-    <div className="py-8 relative"> {/* Added relative for FAB positioning context */}
+    <div className="py-8 relative">
       <BudgetSection
-        expenses={allExpenses} // Pass combined expenses
+        expenses={allExpenses}
         tripCities={cities} 
         tripId={tripId}
         onAddExpenseClick={() => setIsExpenseModalOpen(true)}
@@ -170,9 +178,10 @@ export default function TripBudgetPage() {
         isOpen={isExpenseModalOpen}
         onClose={() => setIsExpenseModalOpen(false)}
         onSubmit={handleAddExpense}
-        cities={cities.filter(c => c.tripId === tripId)} // Ensure cities are for the current trip
+        cities={cities.filter(c => c.tripId === tripId)}
         tripId={tripId}
       />
     </div>
   );
 }
+
