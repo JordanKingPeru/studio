@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input as ShadcnInput } from '@/components/ui/input'; // Renamed to avoid conflict
+import { Input as ShadcnInput } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import Image from 'next/image';
-import { Map, AdvancedMarker, useMapsLibrary } from '@vis.gl/react-google-maps';
+import { Map, AdvancedMarker, Pin, InfoWindow, useMapsLibrary } from '@vis.gl/react-google-maps';
 
 import { Globe, MapPin as MapPinIconLucide, CalendarIcon, StickyNote, Search, Loader2, PlusCircle, Edit3, Camera, Info, List } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
@@ -61,7 +61,6 @@ interface AddCityDialogProps {
   initialData?: City | null;
 }
 
-const mapContainerStyle = { width: '100%', height: '200px', borderRadius: '0.375rem' };
 const defaultNewCityRHFValues: Omit<CityFormData, 'id' | 'name' | 'country' | 'lat' | 'lng'> = {
   arrivalDate: new Date().toISOString().split('T')[0],
   departureDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -103,22 +102,22 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         });
         setSearchTerm(`${initialData.name}, ${initialData.country}`);
         setSelectedPlaceDetails({
-            id: initialData.id,
+            id: initialData.id, // Use actual city ID if available
             displayName: initialData.name,
-            formattedAddress: `${initialData.name}, ${initialData.country}`,
+            formattedAddress: `${initialData.name}, ${initialData.country}`, // Reconstruct or use stored
             latitude: initialData.coordinates.lat,
             longitude: initialData.coordinates.lng,
             country: initialData.country,
-            types: [],
-            photos: []
+            types: [], // Not typically stored, can be empty array for display
+            photos: [] // Not typically stored, can be empty array for display
         });
       } else {
         form.reset({ ...defaultNewCityRHFValues, name: '', country: '', lat: 0, lng: 0 });
         setSearchTerm('');
         setSelectedPlaceDetails(null);
       }
-      setSearchResults([]);
-      setIsSearching(false);
+      setSearchResults([]); // Clear previous search results on open
+      setIsSearching(false); // Reset searching state
     }
   }, [isOpen, initialData, form]);
 
@@ -134,18 +133,20 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     }
 
     setSearchResults([]);
-    setSelectedPlaceDetails(null);
+    setSelectedPlaceDetails(null); // Clear previously selected place before new search
     setIsSearching(true);
+    // Clear form fields that will be populated by search to avoid stale data if search fails or user re-searches
     form.setValue('name', '');
     form.setValue('country', '');
-    form.setValue('lat', 0); 
-    form.setValue('lng', 0);
+    form.setValue('lat', 0); // Use a non-null default for controlled RHF
+    form.setValue('lng', 0); // Use a non-null default
 
     const request: google.maps.places.SearchByTextRequest = {
       textQuery: searchTerm,
       fields: ['id', 'displayName', 'formattedAddress', 'location', 'types', 'photos', 'addressComponents'],
       language: 'es',
-      region: 'ES',
+      region: 'ES', // Bias results towards Spain, adjust if needed
+      // includedType: 'locality', // This can be too restrictive, consider removing or adjusting
     };
 
     console.log('DEBUG: Initiating Google Maps Place.searchByText with query:', searchTerm, 'and request:', JSON.stringify(request));
@@ -176,19 +177,15 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     let lat: number | undefined = undefined;
     let lng: number | undefined = undefined;
 
-    if (place.location) {
-        if (typeof place.location.lat === 'function') {
-            lat = place.location.lat();
-        } else if (typeof place.location.lat === 'number') {
-            lat = place.location.lat;
-        }
-        
-        if (typeof place.location.lng === 'function') {
-            lng = place.location.lng();
-        } else if (typeof place.location.lng === 'number') {
-            lng = place.location.lng;
-        }
+    // The 'location' field from searchByText should be LatLngLiteral or LatLng
+    if (place.location && typeof place.location.lat === 'function' && typeof place.location.lng === 'function') {
+        lat = place.location.lat(); // If it's a LatLng object
+        lng = place.location.lng();
+    } else if (place.location && typeof (place.location as google.maps.LatLngLiteral).lat === 'number' && typeof (place.location as google.maps.LatLngLiteral).lng === 'number') {
+        lat = (place.location as google.maps.LatLngLiteral).lat; // If it's a LatLngLiteral
+        lng = (place.location as google.maps.LatLngLiteral).lng;
     }
+
 
     let countryName: string | undefined = undefined;
     if (place.addressComponents) {
@@ -198,6 +195,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
       }
     }
     
+    // Update state for displaying details
     const placeDetailsToSet: PlaceDetailsFromSearch = {
       id: place.id,
       displayName: place.displayName,
@@ -205,22 +203,25 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
       latitude: lat,
       longitude: lng,
       country: countryName,
-      types: place.types,
-      photos: place.photos,
+      types: place.types, // This should be readonly string[]
+      photos: place.photos as google.maps.places.Photo[] | undefined, // Cast if necessary, though it should match
     };
     
     setSelectedPlaceDetails(placeDetailsToSet);
     
+    // Update React Hook Form fields
     form.setValue('name', place.displayName || '', { shouldValidate: true });
     form.setValue('country', countryName || '', { shouldValidate: true });
-    if (lat !== undefined) form.setValue('lat', lat, { shouldValidate: true }); else form.setValue('lat', 0, {shouldValidate: true});
-    if (lng !== undefined) form.setValue('lng', lng, { shouldValidate: true }); else form.setValue('lng', 0, {shouldValidate: true});
+    if (lat !== undefined) form.setValue('lat', lat, { shouldValidate: true }); else form.setValue('lat', 0, {shouldValidate: true}); // Default to 0 if undefined after checks
+    if (lng !== undefined) form.setValue('lng', lng, { shouldValidate: true }); else form.setValue('lng', 0, {shouldValidate: true}); // Default to 0
 
-    setSearchResults([]);
+    setSearchResults([]); // Hide search results list
   };
 
   const handleFormSubmit = async (data: CityFormData) => {
     setIsSubmitting(true);
+    // Ensure lat/lng are not 0,0 if it's a new city and no place was properly selected (or search failed to provide coords)
+    // Allow 0,0 if it's from initialData and was genuinely 0,0
     if ((data.lat === 0 && data.lng === 0) && !initialData?.coordinates && !(selectedPlaceDetails?.latitude === 0 && selectedPlaceDetails?.longitude === 0) && !selectedPlaceDetails?.latitude) {
       toast({ variant: "destructive", title: "Coordenadas Inválidas", description: "Por favor, busca y selecciona una ciudad para obtener coordenadas válidas." });
       setIsSubmitting(false);
@@ -228,19 +229,22 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     }
 
     const dataToSave: CityFormData = {
-        ...data,
-        id: initialData?.id,
+        ...data, // Includes arrivalDate, departureDate, notes, budget, and RHF fallbacks for name, country, lat, lng
+        id: initialData?.id, // Preserve ID if editing
+        // Prioritize details from selectedPlace if available
         name: selectedPlaceDetails?.displayName || data.name,
         country: selectedPlaceDetails?.country || data.country,
-        lat: selectedPlaceDetails?.latitude ?? data.lat,
-        lng: selectedPlaceDetails?.longitude ?? data.lng,
+        lat: selectedPlaceDetails?.latitude ?? data.lat, // Use selectedPlaceDetails lat if available, else RHF lat
+        lng: selectedPlaceDetails?.longitude ?? data.lng, // Use selectedPlaceDetails lng if available, else RHF lng
     };
 
     try {
       await onSaveCity(dataToSave);
-      onOpenChange(false);
+      onOpenChange(false); // Close dialog on successful save
     } catch (error) {
+      // Error toast is usually handled by the calling component (DashboardView > MapSection)
       console.error("AddCityDialog: Error saving city:", error);
+      // Optionally, show a toast here if onSaveCity doesn't throw an error that gets caught by a higher-level toast
     } finally {
       setIsSubmitting(false);
     }
@@ -251,7 +255,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-        if (!open) {
+        if (!open) { // Reset states when dialog is closed
             setSearchTerm('');
             setSearchResults([]);
             setSelectedPlaceDetails(null);
@@ -292,8 +296,8 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
             </Button>
         </div>
         
-        <ScrollArea className="flex-grow min-h-0 pr-1"> {/* Added min-h-0 for flex-grow to work correctly */}
-          <div className="space-y-4 py-2 pr-2">
+        <ScrollArea className="flex-grow min-h-0 h-full"> {/* Scrollable content area */}
+          <div className="space-y-4 py-2">
             {/* Search Results List */}
             {searchResults.length > 0 && (
               <Card className="shadow-md">
@@ -381,7 +385,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                       </Label>
                       <div className="mt-1 h-[180px] sm:h-[200px] w-full rounded-md overflow-hidden border shadow-inner">
                         <Map
-                          mapId={`selected-city-map-${selectedPlaceDetails.id || Date.now()}`}
+                          mapId={`selected-city-map-${selectedPlaceDetails.id || Date.now()}`} // Unique mapId
                           center={{ lat: selectedPlaceDetails.latitude, lng: selectedPlaceDetails.longitude }}
                           zoom={12}
                           gestureHandling={'greedy'}
@@ -402,8 +406,10 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
             
             <Separator className="my-3" />
 
+            {/* Form for dates, budget, notes */}
             <Form {...form}>
-              <form className="space-y-4">
+              <form className="space-y-4"> {/* Removed onSubmit here, will be triggered by footer button */}
+                {/* Hidden fields for RHF to hold search-derived data */}
                 <FormField control={form.control} name="name" render={({ field }) => (
                     <FormItem className="hidden">
                         <FormLabel>Nombre Ciudad (del buscador)</FormLabel>
@@ -421,6 +427,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                 <FormField control={form.control} name="lat" render={({ field }) => <ShadcnInput type="hidden" {...field} />} />
                 <FormField control={form.control} name="lng" render={({ field }) => <ShadcnInput type="hidden" {...field} />} />
 
+                {/* Visible form fields */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                   <FormField control={form.control} name="arrivalDate" render={({ field }) => (
                       <FormItem>
@@ -450,10 +457,10 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                             type="number"
                             placeholder="Ej: 1500"
                             {...field}
-                            value={field.value ?? ''}
+                            value={field.value ?? ''} // Ensure value is not null for input[type=number]
                             onChange={e => {
                                 const value = e.target.value;
-                                field.onChange(value === '' ? undefined : parseFloat(value));
+                                field.onChange(value === '' ? undefined : parseFloat(value)); // Allow clearing
                             }}
                             className="text-sm"
                             />
@@ -487,3 +494,4 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     </Dialog>
   );
 }
+
