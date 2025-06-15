@@ -50,7 +50,8 @@ interface PlaceDetailsFromSearch {
   latitude?: number;
   longitude?: number;
   country?: string;
-  types?: readonly string[];
+  // Use 'readonly string[]' as per Google Maps API 'Place' type for 'types'
+  types?: readonly string[]; 
   photos?: google.maps.places.Photo[];
 }
 
@@ -102,22 +103,22 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         });
         setSearchTerm(`${initialData.name}, ${initialData.country}`);
         setSelectedPlaceDetails({
-            id: initialData.id, // Use actual city ID if available
+            id: initialData.id,
             displayName: initialData.name,
-            formattedAddress: `${initialData.name}, ${initialData.country}`, // Reconstruct or use stored
+            formattedAddress: `${initialData.name}, ${initialData.country}`,
             latitude: initialData.coordinates.lat,
             longitude: initialData.coordinates.lng,
             country: initialData.country,
-            types: [], // Not typically stored, can be empty array for display
-            photos: [] // Not typically stored, can be empty array for display
+            types: [], 
+            photos: [] 
         });
       } else {
         form.reset({ ...defaultNewCityRHFValues, name: '', country: '', lat: 0, lng: 0 });
         setSearchTerm('');
         setSelectedPlaceDetails(null);
       }
-      setSearchResults([]); // Clear previous search results on open
-      setIsSearching(false); // Reset searching state
+      setSearchResults([]);
+      setIsSearching(false);
     }
   }, [isOpen, initialData, form]);
 
@@ -133,20 +134,18 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     }
 
     setSearchResults([]);
-    setSelectedPlaceDetails(null); // Clear previously selected place before new search
+    setSelectedPlaceDetails(null);
     setIsSearching(true);
-    // Clear form fields that will be populated by search to avoid stale data if search fails or user re-searches
     form.setValue('name', '');
     form.setValue('country', '');
-    form.setValue('lat', 0); // Use a non-null default for controlled RHF
-    form.setValue('lng', 0); // Use a non-null default
+    form.setValue('lat', 0); 
+    form.setValue('lng', 0);
 
     const request: google.maps.places.SearchByTextRequest = {
       textQuery: searchTerm,
       fields: ['id', 'displayName', 'formattedAddress', 'location', 'types', 'photos', 'addressComponents'],
       language: 'es',
-      region: 'ES', // Bias results towards Spain, adjust if needed
-      // includedType: 'locality', // This can be too restrictive, consider removing or adjusting
+      region: 'ES', 
     };
 
     console.log('DEBUG: Initiating Google Maps Place.searchByText with query:', searchTerm, 'and request:', JSON.stringify(request));
@@ -177,12 +176,11 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     let lat: number | undefined = undefined;
     let lng: number | undefined = undefined;
 
-    // The 'location' field from searchByText should be LatLngLiteral or LatLng
     if (place.location && typeof place.location.lat === 'function' && typeof place.location.lng === 'function') {
-        lat = place.location.lat(); // If it's a LatLng object
+        lat = place.location.lat();
         lng = place.location.lng();
     } else if (place.location && typeof (place.location as google.maps.LatLngLiteral).lat === 'number' && typeof (place.location as google.maps.LatLngLiteral).lng === 'number') {
-        lat = (place.location as google.maps.LatLngLiteral).lat; // If it's a LatLngLiteral
+        lat = (place.location as google.maps.LatLngLiteral).lat;
         lng = (place.location as google.maps.LatLngLiteral).lng;
     }
 
@@ -195,7 +193,6 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
       }
     }
     
-    // Update state for displaying details
     const placeDetailsToSet: PlaceDetailsFromSearch = {
       id: place.id,
       displayName: place.displayName,
@@ -203,25 +200,22 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
       latitude: lat,
       longitude: lng,
       country: countryName,
-      types: place.types, // This should be readonly string[]
-      photos: place.photos as google.maps.places.Photo[] | undefined, // Cast if necessary, though it should match
+      types: place.types,
+      photos: place.photos as google.maps.places.Photo[] | undefined,
     };
     
     setSelectedPlaceDetails(placeDetailsToSet);
     
-    // Update React Hook Form fields
     form.setValue('name', place.displayName || '', { shouldValidate: true });
     form.setValue('country', countryName || '', { shouldValidate: true });
-    if (lat !== undefined) form.setValue('lat', lat, { shouldValidate: true }); else form.setValue('lat', 0, {shouldValidate: true}); // Default to 0 if undefined after checks
-    if (lng !== undefined) form.setValue('lng', lng, { shouldValidate: true }); else form.setValue('lng', 0, {shouldValidate: true}); // Default to 0
+    if (lat !== undefined) form.setValue('lat', lat, { shouldValidate: true }); else form.setValue('lat', 0, {shouldValidate: true});
+    if (lng !== undefined) form.setValue('lng', lng, { shouldValidate: true }); else form.setValue('lng', 0, {shouldValidate: true});
 
-    setSearchResults([]); // Hide search results list
+    setSearchResults([]);
   };
 
   const handleFormSubmit = async (data: CityFormData) => {
     setIsSubmitting(true);
-    // Ensure lat/lng are not 0,0 if it's a new city and no place was properly selected (or search failed to provide coords)
-    // Allow 0,0 if it's from initialData and was genuinely 0,0
     if ((data.lat === 0 && data.lng === 0) && !initialData?.coordinates && !(selectedPlaceDetails?.latitude === 0 && selectedPlaceDetails?.longitude === 0) && !selectedPlaceDetails?.latitude) {
       toast({ variant: "destructive", title: "Coordenadas Inválidas", description: "Por favor, busca y selecciona una ciudad para obtener coordenadas válidas." });
       setIsSubmitting(false);
@@ -229,22 +223,19 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     }
 
     const dataToSave: CityFormData = {
-        ...data, // Includes arrivalDate, departureDate, notes, budget, and RHF fallbacks for name, country, lat, lng
-        id: initialData?.id, // Preserve ID if editing
-        // Prioritize details from selectedPlace if available
+        ...data,
+        id: initialData?.id,
         name: selectedPlaceDetails?.displayName || data.name,
         country: selectedPlaceDetails?.country || data.country,
-        lat: selectedPlaceDetails?.latitude ?? data.lat, // Use selectedPlaceDetails lat if available, else RHF lat
-        lng: selectedPlaceDetails?.longitude ?? data.lng, // Use selectedPlaceDetails lng if available, else RHF lng
+        lat: selectedPlaceDetails?.latitude ?? data.lat,
+        lng: selectedPlaceDetails?.longitude ?? data.lng,
     };
 
     try {
       await onSaveCity(dataToSave);
-      onOpenChange(false); // Close dialog on successful save
+      onOpenChange(false);
     } catch (error) {
-      // Error toast is usually handled by the calling component (DashboardView > MapSection)
       console.error("AddCityDialog: Error saving city:", error);
-      // Optionally, show a toast here if onSaveCity doesn't throw an error that gets caught by a higher-level toast
     } finally {
       setIsSubmitting(false);
     }
@@ -255,7 +246,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-        if (!open) { // Reset states when dialog is closed
+        if (!open) {
             setSearchTerm('');
             setSearchResults([]);
             setSelectedPlaceDetails(null);
@@ -274,7 +265,6 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
           </DialogDescription>
         </DialogHeader>
 
-        {/* Search Input and Button - Fixed at the top */}
         <div className="grid grid-cols-1 sm:grid-cols-4 items-end gap-2 sm:gap-4 pt-2 flex-shrink-0">
             <div className="sm:col-span-3 space-y-1">
             <Label htmlFor="city-search-input" className="flex items-center text-sm font-medium">
@@ -296,10 +286,9 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
             </Button>
         </div>
         
-        <ScrollArea className="flex-grow min-h-0 h-full"> {/* Scrollable content area */}
-          <div className="space-y-4 py-2">
-            {/* Search Results List */}
-            {searchResults.length > 0 && (
+        <ScrollArea className="flex-grow min-h-0"> {/* Removed h-full */}
+          <div className="py-4 px-1 space-y-4"> {/* Added space-y-4 here, adjusted padding */}
+            {searchResults.length > 0 && !selectedPlaceDetails && (
               <Card className="shadow-md">
                 <CardHeader className="pb-2 pt-3">
                   <CardTitle className="text-base sm:text-lg flex items-center">
@@ -326,9 +315,8 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
               </Card>
             )}
 
-            {/* Selected Place Details */}
             {selectedPlaceDetails && (
-              <Card className="shadow-lg border-primary mt-4">
+              <Card className="shadow-lg border-primary"> {/* Removed mt-4, handled by parent space-y-4 */}
                 <CardHeader className="pb-2 pt-3">
                   <CardTitle className="text-base sm:text-lg flex items-center">
                     <Info className="mr-2 h-5 w-5 text-primary" />
@@ -343,14 +331,14 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                   {selectedPlaceDetails.latitude !== undefined && <p><strong>Latitud:</strong> {selectedPlaceDetails.latitude.toFixed(6)}</p>}
                   {selectedPlaceDetails.longitude !== undefined && <p><strong>Longitud:</strong> {selectedPlaceDetails.longitude.toFixed(6)}</p>}
                   {selectedPlaceDetails.types && selectedPlaceDetails.types.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      <strong>Tipos:</strong>
+                    <div className="flex flex-wrap gap-1 items-baseline">
+                      <strong className="text-xs sm:text-sm">Tipos:</strong>
                       {selectedPlaceDetails.types.map(type => <Badge key={type} variant="secondary" className="text-xs">{type}</Badge>)}
                     </div>
                   )}
                   
                   {selectedPlaceDetails.photos && selectedPlaceDetails.photos.length > 0 ? (
-                    <div>
+                    <div className="pt-1">
                       <Label className="font-semibold flex items-center text-xs sm:text-sm">
                         <Camera className="mr-2 h-4 w-4 text-primary" />
                         Fotos ({Math.min(selectedPlaceDetails.photos.length, 5)} de {selectedPlaceDetails.photos.length}):
@@ -374,18 +362,18 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                       {selectedPlaceDetails.photos.length > 5 && <p className="text-xs text-muted-foreground mt-1">Mostrando las primeras 5 fotos.</p>}
                     </div>
                   ) : (
-                     <p className="text-xs text-muted-foreground">No hay fotos disponibles para este lugar.</p>
+                     <p className="text-xs text-muted-foreground pt-1">No hay fotos disponibles para este lugar.</p>
                   )}
 
                   {selectedPlaceDetails.latitude !== undefined && selectedPlaceDetails.longitude !== undefined && (
-                    <div className="mt-3">
+                    <div className="pt-1">
                       <Label className="font-semibold flex items-center text-xs sm:text-sm">
                         <Globe className="mr-2 h-4 w-4 text-primary" />
                         Ubicación en el Mapa:
                       </Label>
                       <div className="mt-1 h-[180px] sm:h-[200px] w-full rounded-md overflow-hidden border shadow-inner">
                         <Map
-                          mapId={`selected-city-map-${selectedPlaceDetails.id || Date.now()}`} // Unique mapId
+                          mapId={`selected-city-map-${selectedPlaceDetails.id || Date.now()}`}
                           center={{ lat: selectedPlaceDetails.latitude, lng: selectedPlaceDetails.longitude }}
                           zoom={12}
                           gestureHandling={'greedy'}
@@ -404,12 +392,10 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
               </Card>
             )}
             
-            <Separator className="my-3" />
+            <Separator className="my-3" /> {/* This will also get space-y from parent */}
 
-            {/* Form for dates, budget, notes */}
             <Form {...form}>
-              <form className="space-y-4"> {/* Removed onSubmit here, will be triggered by footer button */}
-                {/* Hidden fields for RHF to hold search-derived data */}
+              <form className="space-y-4"> 
                 <FormField control={form.control} name="name" render={({ field }) => (
                     <FormItem className="hidden">
                         <FormLabel>Nombre Ciudad (del buscador)</FormLabel>
@@ -427,8 +413,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                 <FormField control={form.control} name="lat" render={({ field }) => <ShadcnInput type="hidden" {...field} />} />
                 <FormField control={form.control} name="lng" render={({ field }) => <ShadcnInput type="hidden" {...field} />} />
 
-                {/* Visible form fields */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField control={form.control} name="arrivalDate" render={({ field }) => (
                       <FormItem>
                           <FormLabel className="flex items-center text-xs sm:text-sm"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Fecha de Llegada</FormLabel>
@@ -457,10 +442,10 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                             type="number"
                             placeholder="Ej: 1500"
                             {...field}
-                            value={field.value ?? ''} // Ensure value is not null for input[type=number]
+                            value={field.value ?? ''}
                             onChange={e => {
                                 const value = e.target.value;
-                                field.onChange(value === '' ? undefined : parseFloat(value)); // Allow clearing
+                                field.onChange(value === '' ? undefined : parseFloat(value));
                             }}
                             className="text-sm"
                             />
@@ -481,13 +466,13 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
           </div>
         </ScrollArea>
         
-        <DialogFooter className="pt-4 flex-shrink-0 border-t">
+        <DialogFooter className="pt-4 flex-shrink-0 border-t mt-auto"> {/* Added mt-auto to ensure footer is at bottom */}
           <DialogClose asChild>
             <Button type="button" variant="outline">Cancelar</Button>
           </DialogClose>
           <Button type="button" onClick={form.handleSubmit(handleFormSubmit)} disabled={isSubmitting || isSearching || (!selectedPlaceDetails && !initialData)}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {initialData ? 'Guardar Cambios' : 'Añadir Ciudad al Itinerario'}
+            {initialData ? 'Guardar Cambios' : 'Añadir Ciudad'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -495,3 +480,5 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
   );
 }
 
+
+    
