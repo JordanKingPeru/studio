@@ -96,7 +96,7 @@ export default function ActivityCard({ activity, onEdit, onDelete }: ActivityCar
         {(activity.notes || hasAttachments) && (
           <CardContent className="pt-0 pb-3 space-y-2">
             {activity.notes && (
-              <p className="text-sm text-foreground/80 flex items-start">
+              <p className="text-sm text-foreground/80 flex items-start whitespace-normal break-words">
                 <FileText size={15} className="mr-1.5 mt-0.5 shrink-0 text-muted-foreground" /> 
                 {activity.notes}
               </p>

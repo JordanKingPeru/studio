@@ -23,8 +23,8 @@ import {
   Card, 
   CardContent, 
   CardHeader,
-  CardTitle as ShadcnCardTitle,
-  CardDescription as ShadcnCardDescription
+  CardTitle as ShadcnCardTitle, // Aliased to avoid conflict
+  CardDescription as ShadcnCardDescription // Aliased to avoid conflict
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -84,7 +84,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
   const [searchResults, setSearchResults] = useState<google.maps.places.Place[]>([]);
   const [selectedPlaceDetails, setSelectedPlaceDetails] = useState<PlaceDetailsFromSearch | null>(null);
   const [isSearching, setIsSearching] = useState(false);
-  const [accordionValue, setAccordionValue] = useState<string[]>([]);
+  const [accordionValue, setAccordionValue] = useState<string[]>([]); // For default open state
   
   const placesLibrary = useMapsLibrary('places');
 
@@ -120,12 +120,12 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
             types: [], 
             photos: [] 
         });
-        setAccordionValue(["city-details-item"]);
+        setAccordionValue(["city-details-item"]); // Open accordion for existing data
       } else {
         form.reset({ ...defaultNewCityRHFValues, name: '', country: '', lat: 0, lng: 0 });
         setSearchTerm('');
         setSelectedPlaceDetails(null);
-        setAccordionValue([]); 
+        setAccordionValue([]); // Accordion closed by default for new city
       }
       setSearchResults([]);
       setIsSearching(false);
@@ -206,7 +206,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     };
     
     setSelectedPlaceDetails(placeDetailsToSet);
-    setAccordionValue(["city-details-item"]);
+    setAccordionValue(["city-details-item"]); // Auto-open accordion on selection
     
     form.setValue('name', place.displayName || '', { shouldValidate: true });
     form.setValue('country', countryName || '', { shouldValidate: true });
@@ -237,6 +237,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
       await onSaveCity(dataToSave);
       onOpenChange(false);
     } catch (error) {
+      // Error toast is handled by onSaveCity caller (DashboardView)
     } finally {
       setIsSubmitting(false);
     }
@@ -252,6 +253,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
         if (!open) {
+          // Reset states when dialog closes
           setSearchTerm('');
           setSearchResults([]);
           setSelectedPlaceDetails(null);
@@ -259,7 +261,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         }
         onOpenChange(open);
     }}>
-      <DialogContent className="sm:max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] p-6">
+      <DialogContent className="sm:max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] p-4 sm:p-6">
         <DialogHeader className="flex-shrink-0 pb-2">
           <ShadcnDialogTitle className="font-headline text-2xl text-primary flex items-center">
             <FormIcon size={22} className="mr-2" />
@@ -270,6 +272,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
           </ShadcnDialogDescription>
         </DialogHeader>
 
+        {/* Search Section - Fixed Top */}
         <div className="flex-shrink-0 pt-2 pb-4 grid grid-cols-1 sm:grid-cols-4 items-end gap-2 sm:gap-4">
             <div className="sm:col-span-3 space-y-1">
               <Label htmlFor="city-search-input" className="flex items-center text-sm font-medium">
@@ -291,9 +294,10 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
             </Button>
         </div>
         
-        <div className="flex-1 min-h-0 py-4"> 
+        {/* Scrollable Content Area */}
+        <div className="flex-1 min-h-0"> {/* This div will grow and allow ScrollArea to define its height */}
           <ScrollArea className="h-full w-full">
-            <div className="space-y-4"> 
+            <div className="px-1 py-4 space-y-4"> {/* Padding for scrollable content */}
               {searchResults.length > 0 && !selectedPlaceDetails && (
                 <Card className="shadow-md">
                   <CardHeader className="pb-2 pt-3">
@@ -311,9 +315,9 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                         className="w-full justify-start text-left h-auto py-1.5 sm:py-2 px-2 sm:px-3 hover:bg-accent/50 transition-colors duration-150"
                         onClick={() => handlePlaceSelect(place)}
                       >
-                        <div className="flex flex-col">
-                            <span className="font-semibold text-sm text-foreground">{place.displayName || 'Nombre no disponible'}</span>
-                            <span className="text-xs text-muted-foreground">{place.formattedAddress || 'Dirección no disponible'}</span>
+                        <div className="flex flex-col min-w-0">
+                            <span className="font-semibold text-sm text-foreground truncate">{place.displayName || 'Nombre no disponible'}</span>
+                            <span className="text-xs text-muted-foreground truncate">{place.formattedAddress || 'Dirección no disponible'}</span>
                         </div>
                       </Button>
                     ))}
@@ -326,7 +330,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                   <AccordionItem value="city-details-item" className="border-b-0">
                      <Card className="shadow-lg border-primary">
                       <AccordionTrigger className="w-full px-4 py-3 hover:no-underline data-[state=open]:bg-muted/10 rounded-t-lg">
-                          <div className="flex justify-between items-center w-full">
+                          <div className="flex justify-between items-center w-full min-w-0">
                               <div className="flex items-center text-base sm:text-lg min-w-0">
                                   <Info className="mr-2 h-5 w-5 text-primary shrink-0" />
                                   <span className="font-semibold truncate" title={accordionTriggerTitle}>
@@ -336,9 +340,9 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                           </div>
                       </AccordionTrigger>
                       <AccordionContent className="border-t">
-                          <CardContent className="space-y-3 text-xs sm:text-sm py-3 max-h-[40vh] overflow-y-auto">
-                            <p><strong>Nombre:</strong> {selectedPlaceDetails.displayName}</p>
-                            <p><strong>Dirección:</strong> {selectedPlaceDetails.formattedAddress}</p>
+                          <CardContent className="space-y-3 text-xs sm:text-sm py-3 max-h-[40vh] overflow-y-auto"> {/* Scroll for accordion content */}
+                            <p className="break-words"><strong>Nombre:</strong> {selectedPlaceDetails.displayName}</p>
+                            <p className="break-words"><strong>Dirección:</strong> {selectedPlaceDetails.formattedAddress}</p>
                             {selectedPlaceDetails.country && <p><strong>País:</strong> {selectedPlaceDetails.country}</p>}
                             {selectedPlaceDetails.id && <p><strong>Place ID:</strong> {selectedPlaceDetails.id}</p>}
                             {selectedPlaceDetails.latitude !== undefined && <p><strong>Latitud:</strong> {selectedPlaceDetails.latitude.toFixed(6)}</p>}
@@ -392,6 +396,10 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                                       gestureHandling={'greedy'}
                                       disableDefaultUI={true}
                                       clickableIcons={false}
+                                      zoomControl={true}
+                                      streetViewControl={false}
+                                      mapTypeControl={false}
+                                      fullscreenControl={false}
                                       className="h-full w-full"
                                     >
                                     <AdvancedMarker 
@@ -411,8 +419,10 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
               
               <Separator className="my-3" />
 
+              {/* Form Fields */}
               <Form {...form}>
-                <form className="space-y-4"> 
+                <form className="space-y-4"> {/* No submit handler here, handled by DialogFooter button */}
+                    {/* Hidden fields for data from search */}
                     <FormField control={form.control} name="name" render={({ field }) => (
                         <FormItem className="hidden"><FormLabel>Nombre Ciudad (del buscador)</FormLabel><FormControl><ShadcnInput {...field} readOnly /></FormControl><FormMessage /></FormItem>
                     )} />
@@ -422,6 +432,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                     <FormField control={form.control} name="lat" render={({ field }) => <ShadcnInput type="hidden" {...field} />} />
                     <FormField control={form.control} name="lng" render={({ field }) => <ShadcnInput type="hidden" {...field} />} />
 
+                    {/* Visible Form Fields */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField control={form.control} name="arrivalDate" render={({ field }) => (
                           <FormItem>
@@ -472,13 +483,15 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                     )} />
                 </form>
               </Form>
-            </div>
+            </div> {/* End of scrollable content's inner div */}
           </ScrollArea>
-        </div>
+        </div> {/* End of flex-1 min-h-0 scroll area container */}
         
-        <DialogFooter className="flex-shrink-0 pt-4 pb-6 border-t">
+        {/* Footer - Fixed Bottom */}
+        <DialogFooter className="flex-shrink-0 pt-4 mt-auto border-t"> {/* Added mt-auto */}
           <DialogClose asChild>
             <Button type="button" variant="outline" onClick={() => {
+                // Explicitly reset states on cancel as well
                 setSearchTerm('');
                 setSearchResults([]);
                 setSelectedPlaceDetails(null);
@@ -495,3 +508,4 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     </Dialog>
   );
 }
+

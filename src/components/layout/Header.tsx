@@ -1,3 +1,4 @@
+
 import Link from 'next/link';
 import { CalendarHeart, ListChecks, MapPin, PiggyBank, Briefcase } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -13,9 +14,9 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 max-w-screen-2xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center space-x-2">
-          <Briefcase className="h-7 w-7 text-primary" />
-          <span className="font-headline text-2xl font-bold text-foreground">Family Trip Planner</span>
+        <Link href="/" className="flex items-center space-x-2 min-w-0"> {/* Added min-w-0 */}
+          <Briefcase className="h-7 w-7 text-primary shrink-0" /> {/* Added shrink-0 */}
+          <span className="font-headline text-xl sm:text-2xl font-bold text-foreground truncate">Family Trip Planner</span> {/* Added truncate and responsive text size */}
         </Link>
         <div className="flex items-center space-x-4">
           <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
