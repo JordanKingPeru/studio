@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge'; // Added import
 import Image from 'next/image';
 import CreateTripWizard from '@/components/trips/CreateTripWizard';
 import type { Trip } from '@/lib/types';
@@ -18,9 +19,11 @@ import { v4 as uuidv4 } from 'uuid'; // For generating mock trip IDs
 const fetchTrips = async (): Promise<Trip[]> => {
   await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
   // Retrieve trips from localStorage or return a default list
-  const storedTrips = localStorage.getItem('familyTrips');
-  if (storedTrips) {
-    return JSON.parse(storedTrips);
+  if (typeof window !== 'undefined') {
+    const storedTrips = localStorage.getItem('familyTrips');
+    if (storedTrips) {
+      return JSON.parse(storedTrips);
+    }
   }
   // Default mock trips if nothing in localStorage
   return [
@@ -54,7 +57,9 @@ const fetchTrips = async (): Promise<Trip[]> => {
 };
 
 const saveTripsToLocalStorage = (trips: Trip[]) => {
-  localStorage.setItem('familyTrips', JSON.stringify(trips));
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('familyTrips', JSON.stringify(trips));
+  }
 };
 
 interface TripCardProps {
