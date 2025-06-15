@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input as ShadcnInput } from '@/components/ui/input'; // Renamed to avoid conflict
+import { Input as ShadcnInput } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
@@ -19,14 +19,13 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle as CardTitleShadcn, CardDescription as CardDescriptionShadcn } from '@/components/ui/card'; // Renamed to avoid conflict with DialogTitle
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import Image from 'next/image';
 import { Map, AdvancedMarker, Pin, InfoWindow, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-
 
 import { Globe, MapPin as MapPinIconLucide, CalendarIcon, StickyNote, Search, Loader2, PlusCircle, Edit3, Camera, Info, List } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
@@ -108,7 +107,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         setSelectedPlaceDetails({
             id: initialData.id, 
             displayName: initialData.name,
-            formattedAddress: `${initialData.name}, ${initialData.country}`, // Simplified for initial display
+            formattedAddress: `${initialData.name}, ${initialData.country}`,
             latitude: initialData.coordinates.lat,
             longitude: initialData.coordinates.lng,
             country: initialData.country,
@@ -120,7 +119,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         form.reset({ ...defaultNewCityRHFValues, name: '', country: '', lat: 0, lng: 0 });
         setSearchTerm('');
         setSelectedPlaceDetails(null);
-        setAccordionValue([]);
+        setAccordionValue([]); // Collapse accordion by default for new cities
       }
       setSearchResults([]);
       setIsSearching(false);
@@ -153,13 +152,9 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
       region: 'ES',
     };
 
-    console.log('DEBUG: Initiating Google Maps Place.searchByText with query:', searchTerm, 'and request:', JSON.stringify(request));
-
     try {
       const { places } = await placesLibrary.Place.searchByText(request);
       
-      console.log('DEBUG: Google Maps API Response:', places);
-
       if (places && places.length > 0) {
         setSearchResults(places);
         toast({ title: "Búsqueda Exitosa", description: `Se encontraron ${places.length} lugares.` });
@@ -176,30 +171,21 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
   }, [placesLibrary, searchTerm, toast, form]);
 
   const handlePlaceSelect = (place: google.maps.places.Place) => {
-    console.log('DEBUG: Place selected from list:', JSON.parse(JSON.stringify(place)));
-    
     let lat: number | undefined = undefined;
     let lng: number | undefined = undefined;
 
     if (place.location) {
-        if (typeof place.location.lat === 'function') {
-            lat = place.location.lat();
-        } else if (typeof (place.location as google.maps.LatLngLiteral).lat === 'number') {
-            lat = (place.location as google.maps.LatLngLiteral).lat;
-        }
-        if (typeof place.location.lng === 'function') {
-            lng = place.location.lng();
-        } else if (typeof (place.location as google.maps.LatLngLiteral).lng === 'number') {
-            lng = (place.location as google.maps.LatLngLiteral).lng;
-        }
+        if (typeof place.location.lat === 'function') lat = place.location.lat();
+        else if (typeof (place.location as google.maps.LatLngLiteral).lat === 'number') lat = (place.location as google.maps.LatLngLiteral).lat;
+        
+        if (typeof place.location.lng === 'function') lng = place.location.lng();
+        else if (typeof (place.location as google.maps.LatLngLiteral).lng === 'number') lng = (place.location as google.maps.LatLngLiteral).lng;
     }
 
     let countryName: string | undefined = undefined;
     if (place.addressComponents) {
       const countryComponent = place.addressComponents.find(component => component.types.includes('country'));
-      if (countryComponent) {
-        countryName = countryComponent.longText || countryComponent.shortText;
-      }
+      if (countryComponent) countryName = countryComponent.longText || countryComponent.shortText;
     }
     
     const placeDetailsToSet: PlaceDetailsFromSearch = {
@@ -214,7 +200,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     };
     
     setSelectedPlaceDetails(placeDetailsToSet);
-    setAccordionValue(["city-details-item"]); 
+    setAccordionValue(["city-details-item"]); // Expand accordion when a place is selected
     
     form.setValue('name', place.displayName || '', { shouldValidate: true });
     form.setValue('country', countryName || '', { shouldValidate: true });
@@ -251,8 +237,12 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     }
   };
   
-  const dialogTitle = initialData ? "Editar Ciudad" : "Añadir Nueva Ciudad";
+  const dialogTitleText = initialData ? "Editar Ciudad" : "Añadir Nueva Ciudad";
   const FormIcon = initialData ? Edit3 : PlusCircle;
+
+  const accordionTriggerTitle = selectedPlaceDetails?.displayName 
+    ? `Detalles de: ${selectedPlaceDetails.displayName}` 
+    : 'Detalles del Lugar Seleccionado';
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
@@ -265,18 +255,18 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         }
         onOpenChange(open);
     }}>
-      <DialogContent className="sm:max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
-        <DialogHeader className="p-6 pb-2 flex-shrink-0">
+      <DialogContent className="sm:max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] p-6">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="font-headline text-2xl text-primary flex items-center">
             <FormIcon size={22} className="mr-2" />
-            {dialogTitle}
+            {dialogTitleText}
           </DialogTitle>
           <DialogDescription>
             Busca una ciudad, selecciona un resultado y luego completa las fechas y notas de tu estancia.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 items-end gap-2 sm:gap-4 p-6 pt-2 pb-4 flex-shrink-0">
+        <div className="grid grid-cols-1 sm:grid-cols-4 items-end gap-2 sm:gap-4 pt-2 pb-4 flex-shrink-0">
             <div className="sm:col-span-3 space-y-1">
               <Label htmlFor="city-search-input" className="flex items-center text-sm font-medium">
                   <Search className="mr-2 h-4 w-4 text-muted-foreground" />
@@ -297,18 +287,18 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
             </Button>
         </div>
         
-        <div className="flex-1 min-h-0"> {/* This div is the flex-grow item */}
+        <div className="flex-1 min-h-0 py-4"> {/* Scrollable container with vertical padding */}
             <ScrollArea className="h-full w-full">
-                <div className="px-6 py-4 space-y-4"> {/* Content wrapper with padding */}
+                <div className="space-y-4"> {/* Content wrapper, horizontal padding from DialogContent p-6 */}
                     {searchResults.length > 0 && !selectedPlaceDetails && (
                       <Card className="shadow-md">
-                        <CardHeader className="pb-2 pt-3">
-                          <CardTitle className="text-base sm:text-lg flex items-center">
+                        <CardHeaderShadcn className="pb-2 pt-3">
+                          <CardTitleShadcn className="text-base sm:text-lg flex items-center">
                               <List className="mr-2 h-5 w-5 text-primary" />
                               Resultados de la Búsqueda ({searchResults.length})
-                          </CardTitle>
-                          <CardDescription className="text-xs sm:text-sm">Haz clic en un lugar para ver sus detalles.</CardDescription>
-                        </CardHeader>
+                          </CardTitleShadcn>
+                          <CardDescriptionShadcn className="text-xs sm:text-sm">Haz clic en un lugar para ver sus detalles.</CardDescriptionShadcn>
+                        </CardHeaderShadcn>
                         <CardContent className="space-y-2 max-h-[250px] sm:max-h-[300px] overflow-y-auto py-2">
                           {searchResults.map((place) => (
                             <Button
@@ -333,19 +323,16 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                            <Card className="shadow-lg border-primary">
                             <AccordionTrigger className="w-full px-4 py-3 hover:no-underline data-[state=open]:bg-muted/10 rounded-t-lg">
                                 <div className="flex justify-between items-center w-full">
-                                    <div className="flex items-center text-base sm:text-lg min-w-0"> {/* Added min-w-0 for truncation */}
+                                    <div className="flex items-center text-base sm:text-lg min-w-0">
                                         <Info className="mr-2 h-5 w-5 text-primary shrink-0" />
-                                        <span className="font-semibold truncate" title={selectedPlaceDetails?.displayName ? `Detalles de: ${selectedPlaceDetails.displayName}` : 'Detalles del Lugar Seleccionado'}>
-                                            {selectedPlaceDetails?.displayName
-                                                ? `Detalles de: ${selectedPlaceDetails.displayName}`
-                                                : 'Detalles del Lugar Seleccionado'}
+                                        <span className="font-semibold truncate" title={accordionTriggerTitle}>
+                                            {accordionTriggerTitle}
                                         </span>
                                     </div>
-                                    {/* Chevron will be added by AccordionTrigger component by ShadCN */}
                                 </div>
                             </AccordionTrigger>
                             <AccordionContent>
-                                <CardContent className="space-y-3 text-xs sm:text-sm py-3 border-t max-h-[40vh] overflow-y-auto">
+                                <CardContent className="space-y-3 text-xs sm:text-sm py-3 border-t max-h-[35vh] overflow-y-auto">
                                   <p><strong>Nombre:</strong> {selectedPlaceDetails.displayName}</p>
                                   <p><strong>Dirección:</strong> {selectedPlaceDetails.formattedAddress}</p>
                                   {selectedPlaceDetails.country && <p><strong>País:</strong> {selectedPlaceDetails.country}</p>}
@@ -484,7 +471,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
             </ScrollArea>
         </div>
         
-        <DialogFooter className="p-6 pt-4 flex-shrink-0 border-t mt-auto">
+        <DialogFooter className="pt-4 flex-shrink-0 border-t">
           <DialogClose asChild>
             <Button type="button" variant="outline">Cancelar</Button>
           </DialogClose>
