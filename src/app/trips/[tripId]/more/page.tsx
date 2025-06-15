@@ -3,7 +3,7 @@
 
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Lightbulb, ListChecks, FileText } from 'lucide-react';
+import { Lightbulb, ListChecks, FileText, MoreHorizontal } from 'lucide-react'; // Added MoreHorizontal
 
 export default function TripMorePage() {
   const params = useParams();
