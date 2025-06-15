@@ -6,6 +6,8 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { TripDetails } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button'; // Added import
+import Link from 'next/link'; // Added import
 
 // Mock function to fetch full trip details including activities, cities etc.
 // In a real app, this would fetch from Firestore or your backend.
