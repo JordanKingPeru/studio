@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input as ShadcnInput } from '@/components/ui/input';
+import { Input as ShadcnInput } from '@/components/ui/input'; // Renamed to avoid conflict
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
@@ -53,7 +53,7 @@ interface PlaceDetailsFromSearch {
   latitude?: number;
   longitude?: number;
   country?: string;
-  types?: readonly string[]; 
+  types?: readonly string[];
   photos?: google.maps.places.Photo[];
 }
 
@@ -108,19 +108,19 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         setSelectedPlaceDetails({
             id: initialData.id, 
             displayName: initialData.name,
-            formattedAddress: `${initialData.name}, ${initialData.country}`,
+            formattedAddress: `${initialData.name}, ${initialData.country}`, // Simplified for initial display
             latitude: initialData.coordinates.lat,
             longitude: initialData.coordinates.lng,
             country: initialData.country,
             types: [], 
             photos: [] 
         });
-        setAccordionValue(["city-details-item"]); // Open accordion by default when editing
+        setAccordionValue(["city-details-item"]);
       } else {
         form.reset({ ...defaultNewCityRHFValues, name: '', country: '', lat: 0, lng: 0 });
         setSearchTerm('');
         setSelectedPlaceDetails(null);
-        setAccordionValue([]); // Close accordion when adding new
+        setAccordionValue([]);
       }
       setSearchResults([]);
       setIsSearching(false);
@@ -157,6 +157,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
 
     try {
       const { places } = await placesLibrary.Place.searchByText(request);
+      
       console.log('DEBUG: Google Maps API Response:', places);
 
       if (places && places.length > 0) {
@@ -213,7 +214,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     };
     
     setSelectedPlaceDetails(placeDetailsToSet);
-    setAccordionValue(["city-details-item"]); // Auto-open accordion
+    setAccordionValue(["city-details-item"]); 
     
     form.setValue('name', place.displayName || '', { shouldValidate: true });
     form.setValue('country', countryName || '', { shouldValidate: true });
@@ -296,9 +297,9 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
             </Button>
         </div>
         
-        <div className="flex-1 min-h-0"> 
+        <div className="flex-1 min-h-0"> {/* This div is the flex-grow item */}
             <ScrollArea className="h-full w-full">
-                <div className="px-6 py-4 space-y-4">
+                <div className="px-6 py-4 space-y-4"> {/* Content wrapper with padding */}
                     {searchResults.length > 0 && !selectedPlaceDetails && (
                       <Card className="shadow-md">
                         <CardHeader className="pb-2 pt-3">
@@ -331,16 +332,20 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                         <AccordionItem value="city-details-item" className="border-b-0">
                            <Card className="shadow-lg border-primary">
                             <AccordionTrigger className="w-full px-4 py-3 hover:no-underline data-[state=open]:bg-muted/10 rounded-t-lg">
-                                <CardHeader className="pb-0 pt-0 flex-row justify-between items-center w-full">
-                                    <CardTitle className="text-base sm:text-lg flex items-center">
-                                        <Info className="mr-2 h-5 w-5 text-primary" />
-                                        Detalles del Lugar Seleccionado
-                                    </CardTitle>
-                                    {/* Chevron will be added by AccordionTrigger */}
-                                </CardHeader>
+                                <div className="flex justify-between items-center w-full">
+                                    <div className="flex items-center text-base sm:text-lg min-w-0"> {/* Added min-w-0 for truncation */}
+                                        <Info className="mr-2 h-5 w-5 text-primary shrink-0" />
+                                        <span className="font-semibold truncate" title={selectedPlaceDetails?.displayName ? `Detalles de: ${selectedPlaceDetails.displayName}` : 'Detalles del Lugar Seleccionado'}>
+                                            {selectedPlaceDetails?.displayName
+                                                ? `Detalles de: ${selectedPlaceDetails.displayName}`
+                                                : 'Detalles del Lugar Seleccionado'}
+                                        </span>
+                                    </div>
+                                    {/* Chevron will be added by AccordionTrigger component by ShadCN */}
+                                </div>
                             </AccordionTrigger>
                             <AccordionContent>
-                                <CardContent className="space-y-3 text-xs sm:text-sm py-3 border-t">
+                                <CardContent className="space-y-3 text-xs sm:text-sm py-3 border-t max-h-[40vh] overflow-y-auto">
                                   <p><strong>Nombre:</strong> {selectedPlaceDetails.displayName}</p>
                                   <p><strong>Dirección:</strong> {selectedPlaceDetails.formattedAddress}</p>
                                   {selectedPlaceDetails.country && <p><strong>País:</strong> {selectedPlaceDetails.country}</p>}
