@@ -389,12 +389,8 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                                       mapId={`selected-city-map-${selectedPlaceDetails.id || Date.now()}`}
                                       center={{ lat: selectedPlaceDetails.latitude, lng: selectedPlaceDetails.longitude }}
                                       zoom={12}
-                                      gestureHandling={'greedy'} 
+                                      gestureHandling={'greedy'}
                                       disableDefaultUI={true}
-                                      zoomControl={true}
-                                      streetViewControl={false}
-                                      mapTypeControl={false}
-                                      fullscreenControl={false}
                                       clickableIcons={false}
                                       className="h-full w-full"
                                     >
@@ -499,4 +495,3 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     </Dialog>
   );
 }
-    
