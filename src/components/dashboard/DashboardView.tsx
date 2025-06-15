@@ -5,11 +5,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { TripDetails, Activity, City, Expense } from '@/lib/types';
 import type { CityFormData } from '@/components/map/AddCityDialog';
 import TripHeader from './TripHeader';
-import ItinerarySection from '@/components/itinerary/ItinerarySection';
-import CalendarSection from '@/components/calendar/CalendarSection';
-import MapSection from '@/components/map/MapSection';
-import BudgetSection from '@/components/budget/BudgetSection';
-import { Separator } from '@/components/ui/separator';
+// import ItinerarySection from '@/components/itinerary/ItinerarySection'; // No longer directly part of DashboardView
+// import CalendarSection from '@/components/calendar/CalendarSection'; // No longer directly part of DashboardView
+// import MapSection from '@/components/map/MapSection'; // No longer directly part of DashboardView
+// import BudgetSection from '@/components/budget/BudgetSection'; // No longer directly part of DashboardView
+// import { Separator } from '@/components/ui/separator'; // No longer directly part of DashboardView
 import TodayView from './TodayView';
 import UpcomingMilestone from './UpcomingMilestone';
 import BudgetSnapshot from './BudgetSnapshot';
@@ -19,10 +19,11 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, serverTimestamp, query, orderBy as firestoreOrderBy, addDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation'; // For navigation from BudgetSnapshot
 
 interface DashboardViewProps {
-  tripId: string; // Now receives tripId as a prop
-  initialTripData: TripDetails; // Pre-fetched data for the specific trip
+  tripId: string; 
+  initialTripData: TripDetails; 
 }
 
 export default function DashboardView({ tripId, initialTripData }: DashboardViewProps) {
@@ -30,9 +31,10 @@ export default function DashboardView({ tripId, initialTripData }: DashboardView
   const [isLoadingActivities, setIsLoadingActivities] = useState(true);
   const [cities, setCities] = useState<City[]>(initialTripData.ciudades || []);
   const [isLoadingCities, setIsLoadingCities] = useState(true);
-  const [showFullItinerary, setShowFullItinerary] = useState(false);
+  // const [showFullItinerary, setShowFullItinerary] = useState(false); // This state will be managed by navigation now
   const [currentDate, setCurrentDate] = useState<Date | null>(null);
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
     setCurrentDate(new Date());
@@ -78,7 +80,7 @@ export default function DashboardView({ tripId, initialTripData }: DashboardView
       if (fetchedCities.length > 0) {
         setCities(fetchedCities);
       } else {
-        setCities(initialTripData.ciudades || []); // Fallback to initial if Firestore is empty
+        setCities(initialTripData.ciudades || []); 
       }
     } catch (error: any) {
       console.error("Error fetching cities:", error);
@@ -87,21 +89,18 @@ export default function DashboardView({ tripId, initialTripData }: DashboardView
         title: "Error al cargar ciudades",
         description: `No se pudieron cargar las ciudades. ${error.message}`,
       });
-      setCities(initialTripData.ciudades || []); // Fallback on error
+      setCities(initialTripData.ciudades || []); 
     } finally {
       setIsLoadingCities(false);
     }
   }, [toast, tripId, initialTripData.ciudades]);
 
   useEffect(() => {
-    // Data is initially passed via initialTripData,
-    // then Firestore fetches can update it.
-    // If initialTripData.activities is already populated, use it to avoid initial flash of empty.
     if (initialTripData.activities && initialTripData.activities.length > 0) {
       setActivities(initialTripData.activities);
-      setIsLoadingActivities(false); // Assume initial data is good enough to show
+      setIsLoadingActivities(false); 
     } else {
-      fetchActivities(); // Fetch if initial data is sparse
+      fetchActivities(); 
     }
 
     if (initialTripData.ciudades && initialTripData.ciudades.length > 0) {
@@ -127,13 +126,12 @@ export default function DashboardView({ tripId, initialTripData }: DashboardView
       }));
   }, [activities]);
 
-  // This is the data passed to child components. It uses the dynamic activities/cities states.
   const currentDisplayTripData = useMemo((): TripDetails => ({
-    ...initialTripData, // Base trip info (name, dates, etc.)
-    id: tripId, // Ensure current tripId from prop
-    activities: activities, // Dynamic activities state
-    ciudades: cities, // Dynamic cities state
-    expenses: derivedExpensesFromActivities, // Dynamically derived expenses
+    ...initialTripData, 
+    id: tripId, 
+    activities: activities, 
+    ciudades: cities, 
+    expenses: [...derivedExpensesFromActivities, ...(initialTripData.expenses?.filter(e => !e.id.includes('-expense')) || [])], // Combine derived with initial manual
   }), [initialTripData, tripId, activities, cities, derivedExpensesFromActivities]);
 
 
@@ -152,11 +150,9 @@ export default function DashboardView({ tripId, initialTripData }: DashboardView
     const activityId = activity.id && !activity.id.startsWith('temp-') ? activity.id : doc(collection(db, "trips", tripId, "activities")).id;
     const activityRef = doc(db, "trips", tripId, "activities", activityId);
     
-    // Ensure tripId is part of the activity data
     const activityDataForFirestore: Record<string, any> = { ...activity, id: activityId, tripId };
-    delete (activityDataForFirestore as any).initialTripData; // Remove any extraneous props
+    delete (activityDataForFirestore as any).initialTripData; 
 
-    // Clean up undefined fields before sending to Firestore
      for (const key in activityDataForFirestore) {
       if (Object.prototype.hasOwnProperty.call(activityDataForFirestore, key)) {
         if (activityDataForFirestore[key] === undefined) {
@@ -176,7 +172,7 @@ export default function DashboardView({ tripId, initialTripData }: DashboardView
         title: activity.id && !activity.id.startsWith('temp-') ? "Actividad Actualizada" : "Actividad Añadida",
         description: `"${activity.title}" ha sido guardada.`,
       });
-      fetchActivities(); // Re-fetch to update list
+      fetchActivities(); 
     } catch (error) {
       console.error("Error saving activity:", error);
       toast({
@@ -188,192 +184,13 @@ export default function DashboardView({ tripId, initialTripData }: DashboardView
     }
   };
 
-  const handleSetActivitiesBatchUpdate = async (updatedActivities: Activity[]) => {
-    if (!tripId) return;
-    const batch = writeBatch(db);
-    updatedActivities.forEach(activity => {
-      if (activity.id && !activity.id.startsWith('temp-')) {
-        const activityRef = doc(db, "trips", tripId, "activities", activity.id);
-        // Ensure tripId is part of the update payload if it wasn't there
-        const updatePayload: Partial<Activity> = { ...activity, tripId };
-        
-        const sanitizedPayload: Record<string, any> = {};
-        for (const key in updatePayload) {
-            if (Object.prototype.hasOwnProperty.call(updatePayload, key)) {
-                const typedKey = key as keyof Activity;
-                if (updatePayload[typedKey] !== undefined && typedKey !== 'id' && typedKey !== 'initialTripData') { // Don't write id back, or extraneous props
-                    sanitizedPayload[typedKey] = updatePayload[typedKey];
-                }
-            }
-        }
-        sanitizedPayload.updatedAt = serverTimestamp();
-
-        if (Object.keys(sanitizedPayload).length > 1) { // More than just updatedAt
-            batch.update(activityRef, sanitizedPayload);
-        }
-      }
-    });
-
-    try {
-      await batch.commit();
-      // Optimistically update local state or re-fetch
-      fetchActivities();
-    } catch (error) {
-      console.error("Error batch updating activities:", error);
-      toast({
-        variant: "destructive",
-        title: "Error al Reordenar",
-        description: "No se pudo guardar el nuevo orden de las actividades.",
-      });
-    }
-  };
-
-  const handleDeleteActivityInternal = async (activityId: string) => {
-    if (!tripId) return;
-    const activityToDelete = activities.find(a => a.id === activityId);
-    if (!activityToDelete) return;
-
-    try {
-      const activityRef = doc(db, "trips", tripId, "activities", activityId);
-      await deleteDoc(activityRef);
-      toast({
-        title: "Actividad Eliminada",
-        description: `"${activityToDelete.title}" ha sido eliminada.`,
-      });
-      fetchActivities(); // Re-fetch
-    } catch (error) {
-      console.error("Error deleting activity:", error);
-      toast({
-        variant: "destructive",
-        title: "Error al eliminar",
-        description: `No se pudo eliminar "${activityToDelete.title}".`,
-      });
-    }
-  };
-
-  const handleSaveCity = async (cityData: CityFormData) => {
-    if (!tripId) return;
-    const { id, lat, lng, ...dataToSave } = cityData;
-    const cityObjectForFirestore: Omit<City, 'id'> = {
-      ...dataToSave,
-      tripId: tripId, // Ensure tripId is included
-      coordinates: { lat, lng },
-    };
-
-    try {
-      if (id) { 
-        const cityRef = doc(db, "trips", tripId, "cities", id);
-        await setDoc(cityRef, cityObjectForFirestore, { merge: true });
-        toast({
-          title: "Ciudad Actualizada",
-          description: `"${cityData.name}" ha sido actualizada.`,
-        });
-      } else { 
-        const citiesCollectionRef = collection(db, "trips", tripId, "cities");
-        await addDoc(citiesCollectionRef, cityObjectForFirestore);
-        toast({
-          title: "Ciudad Añadida",
-          description: `"${cityData.name}" ha sido añadida.`,
-        });
-      }
-      fetchCities(); 
-    } catch (error: any) {
-      console.error("Error saving city:", error);
-      toast({
-        variant: "destructive",
-        title: "Error al Guardar Ciudad",
-        description: `No se pudo guardar la ciudad. ${error.message}`,
-      });
-      throw error; 
-    }
-  };
-
-  const handleDeleteCity = async (cityId: string) => {
-    if (!tripId) return;
-    const cityToDelete = cities.find(c => c.id === cityId);
-    if (!cityToDelete) return;
-
-    try {
-      const cityRef = doc(db, "trips", tripId, "cities", cityId);
-      await deleteDoc(cityRef);
-      toast({
-        title: "Ciudad Eliminada",
-        description: `"${cityToDelete.name}" ha sido eliminada.`,
-      });
-      fetchCities(); 
-    } catch (error: any) {
-      console.error("Error deleting city:", error);
-      toast({
-        variant: "destructive",
-        title: "Error al Eliminar Ciudad",
-        description: `No se pudo eliminar "${cityToDelete.name}". ${error.message}`,
-      });
-    }
-  };
+  // Removed handleSetActivitiesBatchUpdate and handleDeleteActivityInternal as they are managed in ItineraryPage now
+  // Removed handleSaveCity and handleDeleteCity as they are managed in MapPage now
 
   const isLoading = isLoadingActivities || isLoadingCities; 
 
-  if (showFullItinerary) {
-    return (
-      <div className="flex flex-col min-h-screen bg-background">
-        <main className="flex-grow container mx-auto px-2 sm:px-4 md:px-6 lg:px-8">
-          <TripHeader
-            tripName={currentDisplayTripData.name || `Viaje Familia ${currentDisplayTripData.familia}`}
-            startDate={currentDisplayTripData.startDate}
-            endDate={currentDisplayTripData.endDate}
-            onViewFullItinerary={() => setShowFullItinerary(true)}
-            isDashboard={false}
-            onReturnToDashboard={() => setShowFullItinerary(false)}
-          />
-          {isLoadingActivities ? ( 
-            <div className="flex justify-center items-center py-10">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="ml-2">Cargando itinerario...</p>
-            </div>
-          ) : (
-            <ItinerarySection
-              tripData={currentDisplayTripData} // Pass the full current trip data
-              activities={activities} // Pass current activities list
-              onAddOrUpdateActivity={handleAddOrUpdateActivity}
-              onSetActivities={handleSetActivitiesBatchUpdate}
-              onDeleteActivity={handleDeleteActivityInternal}
-              tripId={tripId} // Pass tripId
-            />
-          )}
-          <Separator className="my-8 md:my-12" />
-          <CalendarSection tripData={currentDisplayTripData} tripId={tripId} />
-          <Separator className="my-8 md:my-12" />
-          {isLoadingCities ? (
-            <div className="flex justify-center items-center py-10">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="ml-2">Cargando mapa y ciudades...</p>
-            </div>
-          ) : (
-            <MapSection 
-              tripData={currentDisplayTripData} 
-              cities={cities} // Pass current cities list
-              onSaveCity={handleSaveCity}
-              onDeleteCity={handleDeleteCity}
-              tripId={tripId} // Pass tripId
-            />
-          )}
-          <Separator className="my-8 md:my-12" />
-          {isLoadingActivities ? ( 
-             <div className="flex justify-center items-center py-10">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="ml-2">Cargando presupuesto...</p>
-            </div>
-          ) : (
-            <BudgetSection 
-                expenses={derivedExpensesFromActivities} 
-                tripCities={cities}  // Pass current cities list
-                tripId={tripId} // Pass tripId
-            />
-          )}
-        </main>
-      </div>
-    );
-  }
+  // The 'showFullItinerary' logic is removed. Navigation will handle showing different sections.
+  // The DashboardView is now focused solely on displaying the dashboard content.
 
   return (
     <div className="container mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-8 space-y-8">
@@ -381,7 +198,7 @@ export default function DashboardView({ tripId, initialTripData }: DashboardView
         tripName={currentDisplayTripData.name || `Viaje Familia ${currentDisplayTripData.familia}`}
         startDate={currentDisplayTripData.startDate}
         endDate={currentDisplayTripData.endDate}
-        onViewFullItinerary={() => setShowFullItinerary(true)}
+        onViewFullItinerary={() => router.push(`/trips/${tripId}/itinerary`)} // Navigate to full itinerary
         isDashboard={true}
       />
       {isLoading ? (
@@ -392,18 +209,23 @@ export default function DashboardView({ tripId, initialTripData }: DashboardView
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <TodayView
-              tripData={currentDisplayTripData} // Pass full current trip data
-              onAddActivity={handleAddOrUpdateActivity}
+              tripData={currentDisplayTripData} 
+              onAddActivity={handleAddOrUpdateActivity} // This might be an AI suggestion adding to today
               currentCityForToday={currentCityToday}
               currentDate={currentDate}
-              tripId={tripId} // Pass tripId
+              tripId={tripId} 
             />
           </div>
           <div className="space-y-6">
             <UpcomingMilestone tripData={currentDisplayTripData} currentDate={currentDate} tripId={tripId}/>
-            <BudgetSnapshot expenses={derivedExpensesFromActivities} currentCity={currentCityToday} tripId={tripId} />
+            <BudgetSnapshot 
+                expenses={currentDisplayTripData.expenses} // Pass all expenses
+                currentCity={currentCityToday} 
+                tripId={tripId} 
+                onNavigateToBudget={() => router.push(`/trips/${tripId}/budget`)} // Prop for navigation
+            />
             <QuickActions
-                onViewFullItinerary={() => setShowFullItinerary(true)}
+                onViewFullItinerary={() => router.push(`/trips/${tripId}/itinerary`)}
                 tripId={tripId}
             />
           </div>

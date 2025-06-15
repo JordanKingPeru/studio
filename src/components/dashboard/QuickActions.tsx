@@ -4,23 +4,21 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, Map, CheckSquare, ListChecks } from 'lucide-react';
-import { useRouter } from 'next/navigation'; // For navigation
+import { useRouter } from 'next/navigation'; 
 
 interface QuickActionsProps {
-  onViewFullItinerary?: () => void;
-  tripId: string; // Added tripId
+  onViewFullItinerary?: () => void; // This will navigate to itinerary page now
+  tripId: string; 
 }
 
 export default function QuickActions({ onViewFullItinerary, tripId }: QuickActionsProps) {
   const router = useRouter();
 
   const handleNavigateToMap = () => {
-    // In a multi-trip context, this should navigate to the specific trip's map
     router.push(`/trips/${tripId}/map`);
   };
   
   const handleNavigateToChecklists = () => {
-    // Navigate to the "More" section which will contain checklists
     router.push(`/trips/${tripId}/more`);
   };
 
@@ -36,9 +34,8 @@ export default function QuickActions({ onViewFullItinerary, tripId }: QuickActio
         <Button 
             variant="outline" 
             className="w-full justify-start" 
-            // TODO: Implement Add Expense FAB in BudgetSection as per Phase 2.2
-            onClick={() => alert('Próximamente: Añadir nuevo gasto (FAB en sección Presupuesto).')}
-            disabled 
+            onClick={() => alert('Funcionalidad movida al FAB en la sección de Presupuesto.')} // Updated message
+            disabled // Keep disabled as per Phase 2.2 (FAB in BudgetSection)
         >
           <PlusCircle size={18} className="mr-2" />
           Añadir Gasto
@@ -46,7 +43,7 @@ export default function QuickActions({ onViewFullItinerary, tripId }: QuickActio
         <Button 
             variant="outline" 
             className="w-full justify-start"
-            onClick={handleNavigateToMap} // Navigate to current trip's map
+            onClick={handleNavigateToMap} 
         >
           <Map size={18} className="mr-2" />
           Ver Mapa del Viaje
@@ -55,7 +52,7 @@ export default function QuickActions({ onViewFullItinerary, tripId }: QuickActio
            <Button 
             variant="outline" 
             className="w-full justify-start"
-            onClick={onViewFullItinerary}
+            onClick={onViewFullItinerary} // This prop will now trigger navigation
             >
             <ListChecks size={18} className="mr-2" />
             Ver Itinerario Completo
@@ -64,7 +61,7 @@ export default function QuickActions({ onViewFullItinerary, tripId }: QuickActio
         <Button 
             variant="outline" 
             className="w-full justify-start"
-            onClick={handleNavigateToChecklists} // Navigate to "More" section for checklists
+            onClick={handleNavigateToChecklists} 
         >
           <CheckSquare size={18} className="mr-2" />
           Ver Checklists / Más

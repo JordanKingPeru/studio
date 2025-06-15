@@ -4,23 +4,21 @@
 import type { City, Expense } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Wallet, TrendingDown, TrendingUp, AlertTriangle, Info } from 'lucide-react';
+import { Wallet, TrendingDown, TrendingUp, AlertTriangle, Info, ArrowRightCircle } from 'lucide-react';
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 interface BudgetSnapshotProps {
-  expenses: Expense[]; // Should be pre-filtered for the current trip
-  currentCity: City | undefined; // City object for the current city today
-  tripId: string; // Added tripId for context
+  expenses: Expense[]; 
+  currentCity: City | undefined; 
+  tripId: string; 
+  onNavigateToBudget: () => void; // Callback to navigate to full budget page
 }
 
-export default function BudgetSnapshot({ expenses, currentCity, tripId }: BudgetSnapshotProps) {
-  // Expenses are already filtered by tripId by the parent (DashboardView)
-  // currentCity should also belong to the current tripId
-
+export default function BudgetSnapshot({ expenses, currentCity, tripId, onNavigateToBudget }: BudgetSnapshotProps) {
   const currentCityBudget = useMemo(() => {
     if (!currentCity || typeof currentCity.budget === 'undefined' || currentCity.tripId !== tripId) {
-      // Also check if currentCity belongs to the current trip
       return null;
     }
 
@@ -55,51 +53,49 @@ export default function BudgetSnapshot({ expenses, currentCity, tripId }: Budget
     };
   }, [currentCity, expenses, tripId]);
 
-  if (!currentCityBudget || typeof currentCityBudget.budget === 'undefined') {
-    return (
-      <Card className="rounded-xl shadow-lg">
-        <CardHeader>
-          <CardTitle className="font-headline text-xl text-primary flex items-center">
-            <Wallet size={22} className="mr-2" />Presupuesto
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-4">
-            <Info size={28} className="mx-auto text-muted-foreground mb-2" />
-            <p className="text-muted-foreground">
-              {currentCity ? `No hay presupuesto para ${currentCity.name}.` : "Selecciona ciudad."}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const { name, budget, totalSpentInCity, percentageSpent, statusMessage, progressColorClass, IconComponent } = currentCityBudget;
-
   return (
-    <Card className="rounded-xl shadow-lg">
+    <Card className="rounded-xl shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={onNavigateToBudget}>
       <CardHeader>
-        <CardTitle className="font-headline text-xl text-primary flex items-center">
-          <Wallet size={22} className="mr-2" />Presupuesto de {name}
-        </CardTitle>
-        <CardDescription className="flex items-center text-sm">
-            <IconComponent size={16} className={cn("mr-1.5", 
-                progressColorClass === "progress-indicator-warning" ? "text-orange-500" :
-                progressColorClass === "progress-indicator-danger" ? "text-red-500" :
-                "text-green-500"
-            )} />
-            {statusMessage}
-        </CardDescription>
+        <div className="flex justify-between items-center">
+            <CardTitle className="font-headline text-xl text-primary flex items-center">
+              <Wallet size={22} className="mr-2" />
+              {currentCityBudget ? `Presupuesto (${currentCityBudget.name})` : "Presupuesto"}
+            </CardTitle>
+            <ArrowRightCircle size={20} className="text-muted-foreground group-hover:text-primary transition-colors"/>
+        </div>
+        {currentCityBudget && (
+            <CardDescription className="flex items-center text-sm">
+                <currentCityBudget.IconComponent size={16} className={cn("mr-1.5", 
+                    currentCityBudget.progressColorClass === "progress-indicator-warning" ? "text-orange-500" :
+                    currentCityBudget.progressColorClass === "progress-indicator-danger" ? "text-red-500" :
+                    "text-green-500"
+                )} />
+                {currentCityBudget.statusMessage}
+            </CardDescription>
+        )}
       </CardHeader>
       <CardContent className="space-y-3">
-        <Progress value={percentageSpent} className={cn("h-3 rounded-full", progressColorClass)} />
-        <div className="text-sm text-muted-foreground">
-          Gastado: <span className="font-semibold text-foreground">{totalSpentInCity.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span> de <span className="font-semibold text-foreground">{budget.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
-        </div>
-        <p className="text-xs font-medium text-accent">
-          {Math.round(percentageSpent)}% del presupuesto utilizado.
-        </p>
+        {!currentCityBudget || typeof currentCityBudget.budget === 'undefined' ? (
+            <div className="text-center py-4">
+                <Info size={28} className="mx-auto text-muted-foreground mb-2" />
+                <p className="text-muted-foreground text-sm">
+                {currentCity ? `No hay presupuesto para ${currentCity.name}.` : "Selecciona ciudad o define presupuesto."}
+                </p>
+                 <Button variant="link" size="sm" className="mt-1 text-xs" onClick={(e) => { e.stopPropagation(); onNavigateToBudget(); }}>
+                    Ir a Presupuesto
+                </Button>
+            </div>
+        ) : (
+            <>
+                <Progress value={currentCityBudget.percentageSpent} className={cn("h-3 rounded-full", currentCityBudget.progressColorClass)} />
+                <div className="text-sm text-muted-foreground">
+                Gastado: <span className="font-semibold text-foreground">{currentCityBudget.totalSpentInCity.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span> de <span className="font-semibold text-foreground">{currentCityBudget.budget.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                </div>
+                <p className="text-xs font-medium text-accent">
+                {Math.round(currentCityBudget.percentageSpent)}% del presupuesto utilizado.
+                </p>
+            </>
+        )}
       </CardContent>
     </Card>
   );

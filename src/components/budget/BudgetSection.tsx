@@ -6,19 +6,19 @@ import { useState, useMemo } from 'react';
 import SectionCard from '@/components/ui/SectionCard';
 import BudgetChart from './BudgetChart';
 import CumulativeBudgetChart from './CumulativeBudgetChart';
-import { PiggyBank, PlusCircle, ListOrdered, Euro, Tag } from 'lucide-react';
+import { PiggyBank, ListOrdered, Euro, Tag, Plus } from 'lucide-react'; // Removed PlusCircle
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '../ui/badge';
-// import ExpenseForm from './ExpenseForm'; // TODO: Implement in Phase 2
 
 interface BudgetSectionProps {
   expenses: Expense[];
-  tripCities: City[]; // For ExpenseForm context
-  tripId: string; // Added tripId
+  tripCities: City[]; 
+  tripId: string; 
+  onAddExpenseClick: () => void; // Callback to open the AddExpenseModal
 }
 
 interface GroupedExpenses {
@@ -28,11 +28,8 @@ interface GroupedExpenses {
   };
 }
 
-export default function BudgetSection({ expenses, tripCities, tripId }: BudgetSectionProps) {
-  // const [isExpenseFormOpen, setIsExpenseFormOpen] = useState(false);
-  // const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+export default function BudgetSection({ expenses, tripCities, tripId, onAddExpenseClick }: BudgetSectionProps) {
   
-  // Filter expenses for the current trip
   const currentTripExpenses = useMemo(() => {
     return expenses.filter(exp => exp.tripId === tripId);
   }, [expenses, tripId]);
@@ -41,7 +38,7 @@ export default function BudgetSection({ expenses, tripCities, tripId }: BudgetSe
 
   const groupedExpenses = useMemo((): GroupedExpenses => {
     return currentTripExpenses.reduce((acc: GroupedExpenses, expense: Expense) => {
-      const category = expense.category;
+      const category = String(expense.category); // Ensure category is a string
       if (!acc[category]) {
         acc[category] = { expenses: [], total: 0 };
       }
@@ -51,21 +48,13 @@ export default function BudgetSection({ expenses, tripCities, tripId }: BudgetSe
     }, {});
   }, [currentTripExpenses]);
 
-  const headerActions = (
-    // TODO: Implement FAB for "Añadir Gasto" as per Phase 2.2
-    <Button onClick={() => alert("Próximamente: Añadir nuevo gasto (FAB)")} disabled>
-      <PlusCircle size={20} className="mr-2" />
-      Añadir Gasto
-    </Button>
-  );
-
+  // Header actions are removed as FAB is primary action
   return (
     <SectionCard
       id="budget"
       title="Presupuesto y Gastos"
       icon={<PiggyBank size={32} />}
       description={`Sigue tus gastos. Total General: ${totalOverallCost.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}`}
-      headerActions={headerActions} // This might be removed if FAB is used
     >
       <div className="space-y-8">
         <BudgetChart expenses={currentTripExpenses} />
@@ -127,17 +116,16 @@ export default function BudgetSection({ expenses, tripCities, tripId }: BudgetSe
             ) : ( <p className="text-muted-foreground text-center py-4">No hay gastos registrados.</p> )}
           </CardContent>
         </Card>
-        {/* 
-        <ExpenseForm
-          isOpen={isExpenseFormOpen}
-          onClose={() => setIsExpenseFormOpen(false)}
-          onSubmit={handleAddExpense} // This function would need to handle tripId
-          cities={tripCities.filter(c => c.tripId === tripId)} 
-          initialData={editingExpense}
-          tripId={tripId}
-        />
-        */}
       </div>
+      {/* Floating Action Button (FAB) for Add Expense */}
+      <Button
+        className="fixed bottom-20 right-6 sm:bottom-8 sm:right-8 h-14 w-14 rounded-full shadow-xl z-50"
+        size="icon"
+        onClick={onAddExpenseClick}
+        aria-label="Añadir Nuevo Gasto"
+      >
+        <Plus className="h-7 w-7" />
+      </Button>
     </SectionCard>
   );
 }

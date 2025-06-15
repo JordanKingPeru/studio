@@ -8,7 +8,7 @@ import ActivityList from './ActivityList';
 import ActivityForm from './ActivityForm';
 import AISuggestionButton from '@/components/ai/AISuggestionButton';
 import { Button } from '@/components/ui/button';
-import { ListChecks, PlusCircle } from 'lucide-react';
+import { ListChecks, PlusCircle, RotateCcw } from 'lucide-react';
 
 interface ItinerarySectionProps {
   tripData: TripDetails; 
@@ -16,7 +16,7 @@ interface ItinerarySectionProps {
   onAddOrUpdateActivity: (activity: Activity) => Promise<void>; 
   onSetActivities: (activities: Activity[]) => Promise<void>; 
   onDeleteActivity: (activityId: string) => Promise<void>; 
-  tripId: string; // Added tripId
+  tripId: string; 
 }
 
 export default function ItinerarySection({ 
@@ -29,9 +29,9 @@ export default function ItinerarySection({
 }: ItinerarySectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [scrollToTodaySignal, setScrollToTodaySignal] = useState(0);
   
   const handleFormSubmit = async (activity: Activity) => {
-    // Ensure tripId is set for the activity before submission
     await onAddOrUpdateActivity({ ...activity, tripId });
     setEditingActivity(null);
     setIsFormOpen(false);
@@ -45,15 +45,23 @@ export default function ItinerarySection({
   const handleDeleteActivityLocal = async (activityId: string) => {
     await onDeleteActivity(activityId);
   };
+
+  const triggerScrollToToday = () => {
+    setScrollToTodaySignal(prev => prev + 1);
+  };
   
   const headerActions = (
     <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+       <Button onClick={triggerScrollToToday} variant="outline" className="w-full sm:w-auto">
+        <RotateCcw size={18} className="mr-2" />
+        Ir a Hoy
+      </Button>
       <AISuggestionButton 
-        cities={tripData.ciudades} 
-        tripFamilia={tripData.familia || "Familia"} // Use tripData.name or a default
+        cities={tripData.ciudades.filter(c => c.tripId === tripId)} 
+        tripFamilia={tripData.familia || tripData.name}
         tripDates={{ inicio: tripData.startDate, fin: tripData.endDate }}
         onAddActivity={handleFormSubmit} 
-        tripId={tripId} // Pass tripId to AI button
+        tripId={tripId} 
       />
       <Button onClick={() => handleOpenForm()} className="w-full sm:w-auto">
         <PlusCircle size={20} className="mr-2" />
@@ -76,15 +84,16 @@ export default function ItinerarySection({
         onEditActivity={handleOpenForm}
         onDeleteActivity={handleDeleteActivityLocal}
         onSetActivities={onSetActivities} 
-        tripId={tripId} // Pass tripId
+        tripId={tripId} 
+        scrollToTodaySignal={scrollToTodaySignal}
       />
       <ActivityForm 
         isOpen={isFormOpen} 
         onClose={() => { setIsFormOpen(false); setEditingActivity(null); }} 
         onSubmit={handleFormSubmit}
-        cities={tripData.ciudades}
+        cities={tripData.ciudades.filter(c => c.tripId === tripId)}
         initialData={editingActivity}
-        tripId={tripId} // Pass tripId
+        tripId={tripId} 
       />
     </SectionCard>
   );

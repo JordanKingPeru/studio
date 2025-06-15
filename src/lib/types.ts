@@ -73,14 +73,27 @@ export interface Activity {
   updatedAt?: any; // Firestore Timestamp or ISO string
 }
 
+export enum ExpenseCategory {
+  COMIDA = "Comida",
+  TRANSPORTE = "Transporte",
+  ALOJAMIENTO = "Alojamiento",
+  OCIO = "Ocio",
+  COMPRAS = "Compras",
+  OTROS = "Otros",
+}
+export const expenseCategories: ExpenseCategory[] = Object.values(ExpenseCategory);
+
+
 export interface Expense {
   id: string;
   tripId: string; // Foreign Key to Trip.id
   city: string; // Name of the city (should ideally be cityId in future)
   date: string; // YYYY-MM-DD
-  category: string;
+  category: ExpenseCategory | ActivityCategory; // Allow both for derived vs manual
   description: string;
   amount: number;
+  createdAt?: any; // Firestore Timestamp or ISO string
+  updatedAt?: any; // Firestore Timestamp or ISO string
 }
 
 // This TripDetails is becoming more of a "FullTripData" loaded for a specific trip.
@@ -91,7 +104,7 @@ export interface TripDetails extends Trip { // Extends Trip to include its base 
   ciudades: City[];
   paises: string[]; // Could be derived from cities
   activities: Activity[];
-  expenses: Expense[]; // Derived from activities with cost
+  expenses: Expense[]; // Derived from activities with cost, and manually added ones
 }
 
 
@@ -136,3 +149,13 @@ export interface CreateTripStepProps {
 
 export const GOOGLE_MAPS_LIBRARIES = ['routes', 'marker', 'places'] as Array<'routes' | 'marker' | 'places'>;
 export const GOOGLE_MAPS_SCRIPT_ID = 'app-google-maps-script';
+
+export type ExpenseFormData = {
+    description: string;
+    amount: number;
+    category: ExpenseCategory;
+    date: string;
+    city: string;
+    tripId: string;
+    id?: string;
+};
