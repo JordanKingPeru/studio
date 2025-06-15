@@ -12,8 +12,8 @@ import { Card } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, Plane, Briefcase, CalendarRange, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { CalendarDays, Plane, Briefcase, CalendarRange, ChevronDown, ChevronUp, GripVertical, RotateCcw } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -35,7 +35,8 @@ interface ActivityListProps {
   tripData: TripDetails;
   onEditActivity: (activity: Activity) => void;
   onDeleteActivity: (activityId: string) => void;
-  onSetActivities: (activities: Activity[]) => void; // For updating order after DND
+  onSetActivities: (activities: Activity[]) => void; 
+  tripId: string; // Added tripId
 }
 
 const groupActivitiesByWeekAndDay = (
@@ -43,10 +44,11 @@ const groupActivitiesByWeekAndDay = (
   tripData: TripDetails
 ): ItineraryWeek[] => {
   const weeks: ItineraryWeek[] = [];
-  if (!tripData.inicio || !tripData.fin) return weeks;
+  if (!tripData.startDate || !tripData.endDate) return weeks;
 
-  const tripStartDate = parseISO(tripData.inicio);
-  const tripEndDate = parseISO(tripData.fin);
+  // Use startDate and endDate from TripDetails (which extends Trip)
+  const tripStartDate = parseISO(tripData.startDate);
+  const tripEndDate = parseISO(tripData.endDate);
   const today = new Date(); 
 
   if (isBefore(tripEndDate, tripStartDate)) return weeks;
@@ -62,7 +64,6 @@ const groupActivitiesByWeekAndDay = (
     const weekLabelFull = `Semana del ${format(weekStartDate, "d 'de' MMM.", { locale: es })} al ${format(weekEndDate, "d 'de' MMM. 'de' yyyy", { locale: es })}`;
     const weekLabelShort = `Sem: ${format(weekStartDate, "d MMM.", { locale: es })} - ${format(weekEndDate, "d MMM. yy", { locale: es })}`;
 
-
     const daysInThisWeek: ItineraryDay[] = [];
     const daysInterval = eachDayOfInterval({ start: weekStartDate, end: weekEndDate });
 
@@ -72,7 +73,7 @@ const groupActivitiesByWeekAndDay = (
       }
       const dateStr = format(dayDate, 'yyyy-MM-dd');
       const activitiesForDay = activities
-        .filter(act => act.date === dateStr)
+        .filter(act => act.date === dateStr && act.tripId === tripData.id) // Ensure activities match tripId
         .sort((a, b) => {
           const timeComparison = a.time.localeCompare(b.time);
           if (timeComparison !== 0) return timeComparison;
@@ -80,10 +81,13 @@ const groupActivitiesByWeekAndDay = (
         });
 
       const currentCity = tripData.ciudades.find(c =>
+        c.tripId === tripData.id && // Ensure city matches tripId
         !isBefore(dayDate, parseISO(c.arrivalDate)) && !isAfter(dayDate, parseISO(c.departureDate))
       );
       const cityInfo = currentCity ? `${currentCity.name}, ${currentCity.country}` : 'En tránsito / Sin ciudad asignada';
-      const isTravelDay = tripData.ciudades.some(c => c.arrivalDate === dateStr || c.departureDate === dateStr);
+      const isTravelDay = tripData.ciudades.some(c => c.tripId === tripData.id && (c.arrivalDate === dateStr || c.departureDate === dateStr));
+      
+      // Workday logic needs to check trip-specific work dates if they become part of Trip entity
       const isWorkDay = tripData.trabajo_ini && tripData.trabajo_fin &&
         !isBefore(dayDate, parseISO(tripData.trabajo_ini)) &&
         !isAfter(dayDate, parseISO(tripData.trabajo_fin));
@@ -128,10 +132,12 @@ const groupActivitiesByWeekAndDay = (
 };
 
 
-export default function ActivityList({ activities, tripData, onEditActivity, onDeleteActivity, onSetActivities }: ActivityListProps) {
+export default function ActivityList({ activities, tripData, onEditActivity, onDeleteActivity, onSetActivities, tripId }: ActivityListProps) {
   const [processedWeeks, setProcessedWeeks] = useState<ItineraryWeek[]>([]);
   const [openWeekKeys, setOpenWeekKeys] = useState<string[]>([]);
   const [openDayKeys, setOpenDayKeys] = useState<Record<string, string[]>>({});
+  const [scrollToTodaySignal, setScrollToTodaySignal] = useState(0);
+
 
   useEffect(() => {
     const newProcessedWeeks = groupActivitiesByWeekAndDay(activities, tripData);
@@ -141,6 +147,17 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
       .filter(week => week.isDefaultExpanded)
       .map(week => week.weekStartDate);
     setOpenWeekKeys(defaultOpenWeeks);
+
+    // Initialize openDayKeys for defaultOpenWeeks
+    const initialOpenDays: Record<string, string[]> = {};
+    defaultOpenWeeks.forEach(weekKey => {
+      const week = newProcessedWeeks.find(w => w.weekStartDate === weekKey);
+      if (week) {
+        initialOpenDays[weekKey] = week.days.filter(d => d.activities.length > 0).map(d => d.date);
+      }
+    });
+    setOpenDayKeys(initialOpenDays);
+
   }, [activities, tripData]);
 
   const sensors = useSensors(
@@ -155,9 +172,8 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
 
     if (active && over && active.id !== over.id) {
       const activeId = active.id as string;
-      const overId = over.id as string; // Can be an activity ID or a day's droppable area ID (format: `day-${dateStr}`)
+      const overId = over.id as string; 
 
-      // Find which day the active item belongs to
       let activeDay: ItineraryDay | undefined;
       let activeDayActivities: Activity[] = [];
       
@@ -165,7 +181,7 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
         for (const day of week.days) {
           if (day.activities.find(act => act.id === activeId)) {
             activeDay = day;
-            activeDayActivities = [...day.activities]; // Operate on a copy
+            activeDayActivities = [...day.activities]; 
             break;
           }
         }
@@ -176,61 +192,49 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
 
       const oldIndex = activeDayActivities.findIndex(act => act.id === activeId);
       
-      // Check if `over.id` corresponds to an activity within the same day, or the day container itself
       let newIndexInDay: number;
       const overIsActivity = activeDayActivities.some(act => act.id === overId);
 
       if (overIsActivity) {
         newIndexInDay = activeDayActivities.findIndex(act => act.id === overId);
       } else if (over.id === `day-${activeDay.date}`) {
-        // Dropped onto the day container, assume end of list or determine based on coordinates (complex)
-        // For simplicity, let's assume it's dropped at the end if not over another activity
         newIndexInDay = activeDayActivities.length -1; 
       } else {
-        // Dropped somewhere unexpected, or over a different day (not yet supported)
         return;
       }
 
-
       if (oldIndex === -1 || newIndexInDay === -1) return;
       
-      // 1. Reorder activities for the specific day
       const reorderedDayActivities = arrayMove(activeDayActivities, oldIndex, newIndexInDay);
       const movedActivity = reorderedDayActivities.find(a => a.id === activeId)!;
 
-      // 2. Adjust time of the moved activity
       const movedActivityCurrentIndex = reorderedDayActivities.findIndex(a => a.id === activeId);
       let newTime = movedActivity.time;
 
-      if (movedActivityCurrentIndex > 0) { // Has a previous activity
+      if (movedActivityCurrentIndex > 0) { 
         const prevActivity = reorderedDayActivities[movedActivityCurrentIndex - 1];
         const prevActivityDateTime = parseISO(`${activeDay.date}T${prevActivity.time}`);
         newTime = format(addHours(prevActivityDateTime, 1), 'HH:mm');
-      } else if (reorderedDayActivities.length > 1) { // Is first, and has a next activity
+      } else if (reorderedDayActivities.length > 1) { 
         const nextActivity = reorderedDayActivities[movedActivityCurrentIndex + 1];
         const nextActivityDateTime = parseISO(`${activeDay.date}T${nextActivity.time}`);
         newTime = format(subHours(nextActivityDateTime, 1), 'HH:mm');
       }
-      // Ensure time is valid (e.g., not negative after subtraction)
-      // For simplicity, we assume valid positive times for now.
-      // Date-fns handles wrap-around for add/sub hours if it crosses midnight, but HH:mm format keeps it within the day.
-
-      // 3. Update the moved activity and re-assign order for all activities in that day
+      
       const finalDayActivities = reorderedDayActivities.map((act, index) => {
         if (act.id === activeId) {
-          return { ...act, time: newTime, order: index * 10 };
+          return { ...act, time: newTime, order: index * 10, tripId }; // Ensure tripId
         }
-        return { ...act, order: index * 10 };
+        return { ...act, order: index * 10, tripId }; // Ensure tripId
       });
       
-      // 4. Update the global activities list
       const updatedGlobalActivities = activities.map(act => {
         const updatedActInDay = finalDayActivities.find(fa => fa.id === act.id);
         if (act.date === activeDay?.date && updatedActInDay) {
-          return updatedActInDay;
+          return { ...updatedActInDay, tripId }; // Ensure tripId
         }
-        return act;
-      }).sort((a, b) => { // Re-sort global list
+        return { ...act, tripId }; // Ensure tripId
+      }).sort((a, b) => { 
         const dateComparison = a.date.localeCompare(b.date);
         if (dateComparison !== 0) return dateComparison;
         const timeComparison = a.time.localeCompare(b.time);
@@ -242,10 +246,14 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
     }
   };
 
-
   const handleToggleAllWeeks = (expand: boolean) => {
     if (expand) {
       setOpenWeekKeys(processedWeeks.map(w => w.weekStartDate));
+      const allOpenDays: Record<string, string[]> = {};
+      processedWeeks.forEach(week => {
+        allOpenDays[week.weekStartDate] = week.days.filter(d => d.activities.length > 0).map(d => d.date);
+      });
+      setOpenDayKeys(allOpenDays);
     } else {
       setOpenWeekKeys([]);
       setOpenDayKeys({}); 
@@ -255,6 +263,40 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
   const handleDayAccordionChange = (weekKey: string, newOpenDays: string[]) => {
     setOpenDayKeys(prev => ({ ...prev, [weekKey]: newOpenDays }));
   };
+
+  const scrollToToday = () => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const todayElement = document.getElementById(`day-card-${todayStr}`);
+    if (todayElement) {
+      // Expand week and day accordions if necessary
+      const weekOfToday = processedWeeks.find(w => w.days.some(d => d.date === todayStr));
+      if (weekOfToday) {
+        if (!openWeekKeys.includes(weekOfToday.weekStartDate)) {
+          setOpenWeekKeys(prev => [...prev, weekOfToday.weekStartDate]);
+        }
+        setOpenDayKeys(prev => ({
+          ...prev,
+          [weekOfToday.weekStartDate]: [...(prev[weekOfToday.weekStartDate] || []), todayStr]
+        }));
+      }
+      // Use a timeout to allow accordion to open before scrolling
+      setTimeout(() => {
+         todayElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300); // Adjust timeout as needed
+    } else {
+      // Fallback or alert if today is not in the itinerary
+      console.log("El día de hoy no está en el itinerario o no tiene actividades.");
+    }
+    setScrollToTodaySignal(s => s + 1); // Trigger re-render if needed for effects
+  };
+  
+  useEffect(() => {
+    if (scrollToTodaySignal > 0) { // Check if scrollToToday was called
+        // This effect can be used if direct scrollIntoView is not sufficient
+        // due to dynamic content loading or accordion animations.
+        // For now, the setTimeout in scrollToToday handles most cases.
+    }
+  }, [scrollToTodaySignal, openWeekKeys, openDayKeys, processedWeeks]);
 
   if (processedWeeks.length === 0 && activities.length > 0) {
      return <p className="text-muted-foreground text-center py-8">Procesando itinerario...</p>;
@@ -270,13 +312,18 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
       onDragEnd={handleDragEnd}
     >
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row justify-end gap-2 mb-4">
-          <Button variant="outline" size="sm" onClick={() => handleToggleAllWeeks(true)}>
-            <ChevronDown className="mr-2 h-4 w-4" /> Expandir Semanas
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => handleToggleAllWeeks(false)}>
-            <ChevronUp className="mr-2 h-4 w-4" /> Colapsar Semanas
-          </Button>
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-2 mb-4">
+            <Button variant="default" size="sm" onClick={scrollToToday} className="w-full sm:w-auto">
+                <RotateCcw className="mr-2 h-4 w-4" /> Ir a Hoy
+            </Button>
+            <div className="flex gap-2 w-full sm:w-auto">
+                <Button variant="outline" size="sm" onClick={() => handleToggleAllWeeks(true)} className="flex-1 sm:flex-initial">
+                    <ChevronDown className="mr-2 h-4 w-4" /> Expandir
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => handleToggleAllWeeks(false)} className="flex-1 sm:flex-initial">
+                    <ChevronUp className="mr-2 h-4 w-4" /> Colapsar
+                </Button>
+            </div>
         </div>
         <Accordion type="multiple" value={openWeekKeys} onValueChange={setOpenWeekKeys} className="w-full space-y-4">
           {processedWeeks.map((week) => (
@@ -303,14 +350,14 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
                     {week.days.length > 0 ? (
                       <Accordion
                         type="multiple"
-                        value={openDayKeys[week.weekStartDate] || week.days.filter(d => d.activities.length > 0).map(d => d.date)} // Expand days with activities by default
+                        value={openDayKeys[week.weekStartDate] || []} // Use controlled state
                         onValueChange={(days) => handleDayAccordionChange(week.weekStartDate, days)}
                         className="w-full space-y-2"
                       >
                         {week.days.map((day) => {
                           const dayActivityIds = day.activities.map(act => act.id);
                           return (
-                            <AccordionItem key={day.date} value={day.date} className="border-none">
+                            <AccordionItem key={day.date} value={day.date} id={`day-card-${day.date}`} className="border-none">
                               <Card className="rounded-xl shadow-md overflow-hidden bg-background">
                                 <AccordionTrigger className="w-full px-3 py-2 sm:px-4 sm:py-3 hover:no-underline data-[state=closed]:hover:bg-accent/10 data-[state=open]:hover:bg-accent/20 data-[state=open]:bg-accent/10 rounded-t-xl transition-colors">
                                   <div className="flex justify-between items-center w-full">

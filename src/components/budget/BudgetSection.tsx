@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Expense, City } from '@/lib/types'; // Added City
+import type { Expense, City } from '@/lib/types'; 
 import { useState, useMemo } from 'react';
 import SectionCard from '@/components/ui/SectionCard';
 import BudgetChart from './BudgetChart';
@@ -13,12 +13,12 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '../ui/badge';
-// Placeholder for ExpenseForm - can be a Dialog similar to ActivityForm
-// import ExpenseForm from './ExpenseForm';
+// import ExpenseForm from './ExpenseForm'; // TODO: Implement in Phase 2
 
 interface BudgetSectionProps {
   expenses: Expense[];
-  tripCities: City[]; // Needed if we implement Add Expense Form later
+  tripCities: City[]; // For ExpenseForm context
+  tripId: string; // Added tripId
 }
 
 interface GroupedExpenses {
@@ -28,23 +28,19 @@ interface GroupedExpenses {
   };
 }
 
-export default function BudgetSection({ expenses, tripCities }: BudgetSectionProps) {
+export default function BudgetSection({ expenses, tripCities, tripId }: BudgetSectionProps) {
   // const [isExpenseFormOpen, setIsExpenseFormOpen] = useState(false);
   // const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  
+  // Filter expenses for the current trip
+  const currentTripExpenses = useMemo(() => {
+    return expenses.filter(exp => exp.tripId === tripId);
+  }, [expenses, tripId]);
 
-  // const handleAddExpense = (expense: Expense) => {
-  //   // This would typically call a prop function to add/update in Firestore
-  //   // For now, if BudgetSection managed its own state (which it no longer does):
-  //   // setExpenses(prev => [...prev, expense]);
-  //   // setIsExpenseFormOpen(false);
-  //   // setEditingExpense(null);
-  //   alert("Simulating adding expense: " + expense.description);
-  // };
-
-  const totalOverallCost = useMemo(() => expenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0), [expenses]);
+  const totalOverallCost = useMemo(() => currentTripExpenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0), [currentTripExpenses]);
 
   const groupedExpenses = useMemo((): GroupedExpenses => {
-    return expenses.reduce((acc: GroupedExpenses, expense: Expense) => {
+    return currentTripExpenses.reduce((acc: GroupedExpenses, expense: Expense) => {
       const category = expense.category;
       if (!acc[category]) {
         acc[category] = { expenses: [], total: 0 };
@@ -53,27 +49,27 @@ export default function BudgetSection({ expenses, tripCities }: BudgetSectionPro
       acc[category].total += Number(expense.amount || 0);
       return acc;
     }, {});
-  }, [expenses]);
+  }, [currentTripExpenses]);
 
   const headerActions = (
-    <Button onClick={() => alert("Próximamente: Añadir nuevo gasto")} disabled>
+    // TODO: Implement FAB for "Añadir Gasto" as per Phase 2.2
+    <Button onClick={() => alert("Próximamente: Añadir nuevo gasto (FAB)")} disabled>
       <PlusCircle size={20} className="mr-2" />
       Añadir Gasto
     </Button>
   );
-
 
   return (
     <SectionCard
       id="budget"
       title="Presupuesto y Gastos"
       icon={<PiggyBank size={32} />}
-      description={`Sigue tus gastos y mantén el presupuesto bajo control. Total General: ${totalOverallCost.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}`}
-      headerActions={headerActions}
+      description={`Sigue tus gastos. Total General: ${totalOverallCost.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}`}
+      headerActions={headerActions} // This might be removed if FAB is used
     >
       <div className="space-y-8">
-        <BudgetChart expenses={expenses} />
-        <CumulativeBudgetChart expenses={expenses} />
+        <BudgetChart expenses={currentTripExpenses} />
+        <CumulativeBudgetChart expenses={currentTripExpenses} />
 
         <Card className="rounded-xl shadow-lg">
           <CardHeader>
@@ -81,7 +77,7 @@ export default function BudgetSection({ expenses, tripCities }: BudgetSectionPro
               <ListOrdered size={22} className="mr-2" />
               Lista de Gastos por Categoría
             </CardTitle>
-            <CardDescription>Detalle de todos los gastos registrados, agrupados por categoría.</CardDescription>
+            <CardDescription>Detalle de todos los gastos registrados, agrupados.</CardDescription>
           </CardHeader>
           <CardContent>
             {Object.keys(groupedExpenses).length > 0 ? (
@@ -121,27 +117,24 @@ export default function BudgetSection({ expenses, tripCities }: BudgetSectionPro
                                 </li>
                               ))}
                             </ul>
-                          ) : (
-                             <p className="text-muted-foreground text-sm py-3 px-1">No hay gastos en esta categoría.</p>
-                          )}
+                          ) : ( <p className="text-muted-foreground text-sm py-3 px-1">No hay gastos.</p> )}
                         </div>
                       </AccordionContent>
                     </Card>
                   </AccordionItem>
                 ))}
               </Accordion>
-            ) : (
-               <p className="text-muted-foreground text-center py-4">No hay gastos registrados.</p>
-            )}
+            ) : ( <p className="text-muted-foreground text-center py-4">No hay gastos registrados.</p> )}
           </CardContent>
         </Card>
-        {/* Placeholder for ExpenseForm Dialog
+        {/* 
         <ExpenseForm
           isOpen={isExpenseFormOpen}
           onClose={() => setIsExpenseFormOpen(false)}
-          onSubmit={handleAddExpense}
-          cities={tripCities} // Pass tripCities here
+          onSubmit={handleAddExpense} // This function would need to handle tripId
+          cities={tripCities.filter(c => c.tripId === tripId)} 
           initialData={editingExpense}
+          tripId={tripId}
         />
         */}
       </div>

@@ -1,3 +1,4 @@
+
 "use client";
 import type { TripDetails } from '@/lib/types';
 import SectionCard from '@/components/ui/SectionCard';
@@ -7,16 +8,20 @@ import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 
 interface CalendarSectionProps {
-  tripData: TripDetails;
+  tripData: TripDetails; // This will be the full data for the specific trip
+  tripId: string; // Added tripId for context, though tripData should be pre-filtered
 }
 
-export default function CalendarSection({ tripData }: CalendarSectionProps) {
+export default function CalendarSection({ tripData, tripId }: CalendarSectionProps) {
+  // Filter cities for the current trip
+  const currentTripCities = tripData.ciudades.filter(c => c.tripId === tripId);
+
   const keyMilestones = [
-    { date: tripData.inicio, label: 'Inicio del Viaje', icon: <Plane size={18} className="text-green-500" />, type: 'trip' },
+    { date: tripData.startDate, label: 'Inicio del Viaje', icon: <Plane size={18} className="text-green-500" />, type: 'trip' },
     tripData.trabajo_ini && { date: tripData.trabajo_ini, label: 'Inicio Periodo Laboral', icon: <Briefcase size={18} className="text-blue-500" />, type: 'work' },
     tripData.trabajo_fin && { date: tripData.trabajo_fin, label: 'Fin Periodo Laboral', icon: <Briefcase size={18} className="text-blue-500" />, type: 'work' },
-    ...tripData.ciudades.map(city => ({ date: city.arrivalDate, label: `Llegada a ${city.name}`, icon: <Plane size={18} className="text-purple-500" />, type: 'city' })),
-    { date: tripData.fin, label: 'Fin del Viaje', icon: <CalendarCheck2 size={18} className="text-red-500" />, type: 'trip' },
+    ...currentTripCities.map(city => ({ date: city.arrivalDate, label: `Llegada a ${city.name}`, icon: <Plane size={18} className="text-purple-500" />, type: 'city' })),
+    { date: tripData.endDate, label: 'Fin del Viaje', icon: <CalendarCheck2 size={18} className="text-red-500" />, type: 'trip' },
   ].filter(Boolean).sort((a,b) => parseISO(a!.date).getTime() - parseISO(b!.date).getTime());
 
 
@@ -51,7 +56,7 @@ export default function CalendarSection({ tripData }: CalendarSectionProps) {
         </div>
         <div className="text-center p-4 border-2 border-dashed border-border rounded-lg">
           <p className="text-muted-foreground">
-            Integración con calendario completo (ej. react-big-calendar) y exportación a Google Calendar / .ics próximamente.
+            Integración con calendario completo y exportación próximamente.
           </p>
           <img data-ai-hint="calendar schedule" src="https://placehold.co/600x300.png" alt="Placeholder for a calendar view" className="mt-4 rounded-md mx-auto opacity-50" />
         </div>

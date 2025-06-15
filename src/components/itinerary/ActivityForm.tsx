@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Progress } from '@/components/ui/progress';
 import { CalendarIcon, DollarSign, Edit3, TagIcon, TextIcon, ClockIcon, MapPinIcon, Paperclip, UploadCloud, Trash2, FileText, Loader2 } from 'lucide-react';
-import { storage } from '@/lib/firebase'; // Import Firebase storage instance
+import { storage } from '@/lib/firebase'; 
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import { useToast } from "@/hooks/use-toast";
 
@@ -27,14 +27,15 @@ const activityAttachmentSchema = z.object({
 });
 
 const activitySchema = z.object({
-  id: z.string().optional(), // Will be set on creation
+  id: z.string().optional(),
+  tripId: z.string(), // Added tripId
   title: z.string().min(1, "El título es obligatorio"),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido (YYYY-MM-DD)"),
   time: z.string().regex(/^\d{2}:\d{2}$/, "Formato de hora inválido (HH:MM)"),
   category: z.custom<ActivityCategory>((val) => activityCategories.includes(val as ActivityCategory), "Categoría inválida"),
   city: z.string().min(1, "La ciudad es obligatoria"),
   notes: z.string().optional(),
-  cost: z.number().optional().nullable(), // Allow null as well for easier handling with parseFloat
+  cost: z.number().optional().nullable(),
   order: z.number().optional(),
   attachments: z.array(activityAttachmentSchema).optional(),
 });
@@ -47,9 +48,10 @@ interface ActivityFormProps {
   onSubmit: (data: Activity) => void;
   cities: City[];
   initialData?: Activity | null;
+  tripId: string; // Added tripId
 }
 
-export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initialData }: ActivityFormProps) {
+export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initialData, tripId }: ActivityFormProps) {
   const [uploadingFile, setUploadingFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -57,22 +59,23 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
   
   const formActivityId = React.useMemo(() => initialData?.id || `temp-${Date.now().toString()}`, [initialData?.id]);
 
-
   const form = useForm<ActivityFormData>({
     resolver: zodResolver(activitySchema),
     defaultValues: initialData ? {
       ...initialData,
+      tripId: initialData.tripId || tripId, // Ensure tripId is set
       id: initialData.id,
       cost: initialData.cost ?? undefined,
       order: initialData.order ?? Date.now(),
       attachments: initialData.attachments || [],
     } : {
       id: formActivityId, 
+      tripId: tripId, // Set tripId for new activities
       title: '',
       date: new Date().toISOString().split('T')[0],
       time: new Date().toTimeString().substring(0,5),
       category: 'Ocio',
-      city: cities[0]?.name || '',
+      city: cities.find(c => c.tripId === tripId)?.name || cities[0]?.name || '', // Prefer city from current trip
       notes: '',
       cost: undefined,
       order: Date.now(),
@@ -81,31 +84,36 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
   });
 
   useEffect(() => {
-    const idToUseInForm = initialData?.id || formActivityId; 
+    const idToUseInForm = initialData?.id || formActivityId;
+    const currentTripCities = cities.filter(c => c.tripId === tripId);
+    const defaultCity = currentTripCities[0]?.name || cities[0]?.name || '';
 
     if (initialData) {
       form.reset({
         ...initialData,
+        tripId: initialData.tripId || tripId, // Ensure tripId
         id: initialData.id, 
         cost: initialData.cost ?? undefined,
         order: initialData.order ?? Date.now(),
         attachments: initialData.attachments || [],
+        city: initialData.city || defaultCity, // Ensure city is set, prefer initialData's city
       });
     } else {
        form.reset({ 
         id: idToUseInForm, 
+        tripId: tripId, // Ensure tripId
         title: '',
         date: new Date().toISOString().split('T')[0],
         time: new Date().toTimeString().substring(0,5),
         category: 'Ocio',
-        city: cities[0]?.name || '',
+        city: defaultCity,
         notes: '',
         cost: undefined,
         order: Date.now(),
         attachments: [],
       });
     }
-  }, [initialData, form, cities, formActivityId]); 
+  }, [initialData, form, cities, formActivityId, tripId, isOpen]); // Added isOpen to re-run when dialog opens
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -115,7 +123,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
         toast({
             variant: "destructive",
             title: "Error de Configuración",
-            description: "Firebase Storage no está disponible. Verifica la configuración de Firebase en src/lib/firebase.ts.",
+            description: "Firebase Storage no está disponible.",
         });
         setUploadError("Firebase Storage no configurado.");
         return;
@@ -125,49 +133,30 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
     setUploadProgress(0);
     setUploadError(null);
 
-    const activityIdForPath = form.getValues('id'); 
+    const activityIdForPath = form.getValues('id') || `temp-${Date.now()}`; // Use form's current ID or generate temp
+    const currentTripId = form.getValues('tripId'); // Get tripId from form
 
-    if (!activityIdForPath) {
-        console.error("Activity ID is undefined in form. Cannot generate storage path.");
-        setUploadError("Error interno: No se pudo determinar el ID de la actividad para la subida.");
-        setUploadingFile(null);
-        setUploadProgress(null);
-        toast({ variant: "destructive", title: "Error de Subida", description: "ID de actividad no encontrado en el formulario." });
+    if (!currentTripId) {
+        console.error("Trip ID is undefined in form. Cannot generate storage path.");
+        setUploadError("Error interno: No se pudo determinar el ID del viaje para la subida.");
+        toast({ variant: "destructive", title: "Error de Subida", description: "ID de viaje no encontrado en el formulario." });
         return;
     }
     
-    const filePath = `trips/defaultTrip/attachments/${activityIdForPath}/${file.name}`;
+    const filePath = `trips/${currentTripId}/attachments/${activityIdForPath}/${file.name}`;
     const fileStorageRef = storageRef(storage, filePath);
 
     try {
       const uploadTask = uploadBytesResumable(fileStorageRef, file);
-
       uploadTask.on('state_changed',
         (snapshot) => {
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
           setUploadProgress(progress);
         },
-        (error: any) => { // Explicitly type error as any
-          console.error("Upload failed. Full error object:", error);
-          if (error.serverResponse) {
-            console.error("Server response:", error.serverResponse);
-          }
-          
-          let descriptionToast = "Ocurrió un error desconocido al subir el archivo. Revisa la consola del navegador para más detalles técnicos.";
-          if (error.code === 'storage/unauthorized') {
-            descriptionToast = "Permiso denegado para subir el archivo. Revisa las reglas de Firebase Storage y la configuración CORS de tu bucket.";
-          } else if (error.code === 'storage/object-not-found') {
-            descriptionToast = "Error en la ruta del archivo al intentar subir. Contacta soporte.";
-          } else if (error.code === 'storage/unknown' && error.serverResponse) {
-            descriptionToast = `Error del servidor: ${JSON.stringify(error.serverResponse)}. Revisa la consola para detalles y verifica la configuración CORS de tu bucket.`;
-          } else if (error.code === 'storage/unknown') {
-            descriptionToast = "Error desconocido de Storage. Verifica la configuración CORS de tu bucket, las reglas de Storage y la conexión de red. Revisa la consola para más detalles.";
-          }
-          
-          setUploadError(`Error al subir: ${error.message || descriptionToast}`);
-          setUploadingFile(null);
-          setUploadProgress(null);
-          toast({ variant: "destructive", title: "Error de Subida", description: descriptionToast });
+        (error: any) => { 
+          console.error("Upload failed:", error);
+          setUploadError(`Error al subir: ${error.message || "Error desconocido"}`);
+          toast({ variant: "destructive", title: "Error de Subida", description: error.message || "Desconocido" });
         },
         async () => {
           try {
@@ -180,11 +169,9 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
             };
             const currentAttachments = form.getValues('attachments') || [];
             form.setValue('attachments', [...currentAttachments, newAttachment]);
-            toast({ title: "Archivo Subido", description: `${file.name} se ha subido correctamente.` });
+            toast({ title: "Archivo Subido", description: `${file.name} subido.` });
           } catch (getUrlError: any) {
-            console.error("Error getting download URL:", getUrlError);
             setUploadError(`Error al obtener URL: ${getUrlError.message}`);
-            toast({ variant: "destructive", title: "Error Post-Subida", description: `No se pudo obtener la URL del archivo: ${getUrlError.message}` });
           } finally {
             setUploadingFile(null);
             setUploadProgress(null);
@@ -192,28 +179,23 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
         }
       );
     } catch (error: any) { 
-        console.error("Error starting upload:", error);
         setUploadError(`Error al iniciar subida: ${error.message}`);
-        setUploadingFile(null);
-        setUploadProgress(null);
-        toast({ variant: "destructive", title: "Error de Subida", description: error.message });
     }
   };
 
   const handleRemoveAttachment = (indexToRemove: number) => {
     const currentAttachments = form.getValues('attachments') || [];
     const attachmentToRemove = currentAttachments[indexToRemove];
-    
     form.setValue('attachments', currentAttachments.filter((_, index) => index !== indexToRemove));
-    toast({ title: "Adjunto Eliminado de la Lista", description: `${attachmentToRemove.fileName} ha sido quitado.` });
+    toast({ title: "Adjunto Eliminado", description: `${attachmentToRemove.fileName} quitado.` });
   };
 
-  const handleSubmit = (data: ActivityFormData) => {
-    const finalActivityId = data.id || (initialData?.id || formActivityId); 
-    
+  const handleSubmitInternal = (data: ActivityFormData) => {
+    const finalActivityId = data.id || (initialData?.id || formActivityId);
     onSubmit({
       ...data,
       id: finalActivityId,
+      tripId: data.tripId || tripId, // Ensure tripId is passed through
       cost: data.cost ? Number(data.cost) : undefined,
       order: data.order ?? Date.now(),
       attachments: data.attachments || [],
@@ -225,8 +207,12 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
     setUploadingFile(null);
     setUploadProgress(null);
     setUploadError(null);
+    // form.reset(); // Reset is now handled by useEffect on isOpen change
     onClose();
   };
+  
+  const tripSpecificCities = cities.filter(c => c.tripId === tripId);
+
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onCloseAndReset()}>
@@ -238,157 +224,90 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
           </DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6 py-4">
+          <form onSubmit={form.handleSubmit(handleSubmitInternal)} className="space-y-6 py-4">
             <FormField
               control={form.control}
               name="title"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center"><TextIcon className="mr-2 h-4 w-4 text-muted-foreground" />Título</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ej: Visita al Museo del Prado" {...field} />
-                  </FormControl>
+                  <FormControl><Input placeholder="Ej: Visita al Museo del Prado" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="date"
-                render={({ field }) => (
+              <FormField control={form.control} name="date" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Fecha</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
+                    <FormControl><Input type="date" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="time"
-                render={({ field }) => (
+              )} />
+              <FormField control={form.control} name="time" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><ClockIcon className="mr-2 h-4 w-4 text-muted-foreground" />Hora</FormLabel>
-                    <FormControl>
-                      <Input type="time" {...field} />
-                    </FormControl>
+                    <FormControl><Input type="time" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
-                )}
-              />
+              )} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
+              <FormField control={form.control} name="category" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><TagIcon className="mr-2 h-4 w-4 text-muted-foreground" />Categoría</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona una categoría" />
-                        </SelectTrigger>
-                      </FormControl>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Selecciona categoría" /></SelectTrigger></FormControl>
                       <SelectContent>
-                        {activityCategories.map(cat => (
-                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                        ))}
+                        {activityCategories.map(cat => (<SelectItem key={cat} value={cat}>{cat}</SelectItem>))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
+              )} />
+              <FormField control={form.control} name="city" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><MapPinIcon className="mr-2 h-4 w-4 text-muted-foreground" />Ciudad</FormLabel>
                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona una ciudad" />
-                        </SelectTrigger>
-                      </FormControl>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Selecciona ciudad" /></SelectTrigger></FormControl>
                       <SelectContent>
-                        {cities.map(city => (
-                          <SelectItem key={city.name} value={city.name}>{city.name}</SelectItem>
+                        {tripSpecificCities.length > 0 ? tripSpecificCities.map(city => (
+                          <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
+                        )) : cities.map(city => ( // Fallback if no tripSpecificCities, though should not happen if tripData is loaded
+                             <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
-                )}
-              />
+              )} />
             </div>
-            <FormField
-              control={form.control}
-              name="cost"
-              render={({ field }) => (
+            <FormField control={form.control} name="cost" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center"><DollarSign className="mr-2 h-4 w-4 text-muted-foreground" />Coste (opcional)</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="Ej: 25"
-                      {...field} 
-                      value={field.value ?? ''} 
-                      onChange={e => {
-                        const value = e.target.value;
-                        field.onChange(value === '' ? undefined : parseFloat(value));
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
+                    <Input type="number" placeholder="Ej: 25" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} />
+                  </FormControl><FormMessage />
                 </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
+            )} />
+            <FormField control={form.control} name="notes" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center"><TextIcon className="mr-2 h-4 w-4 text-muted-foreground" />Notas (opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Añade detalles adicionales aquí..." {...field} />
-                  </FormControl>
+                  <FormControl><Textarea placeholder="Añade detalles adicionales..." {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
-              )}
-            />
-
+            )} />
             <div className="space-y-3">
               <FormLabel className="flex items-center"><Paperclip className="mr-2 h-4 w-4 text-muted-foreground" />Adjuntos</FormLabel>
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('file-upload-input')?.click()} disabled={!!uploadingFile}>
-                  {uploadingFile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-                  {uploadingFile ? 'Subiendo...' : 'Seleccionar Archivo'}
-                </Button>
-                <Input 
-                    id="file-upload-input"
-                    type="file" 
-                    className="hidden" 
-                    onChange={handleFileSelect}
-                    disabled={!!uploadingFile}
-                />
-              </div>
-
+              <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`file-upload-input-${formActivityId}`)?.click()} disabled={!!uploadingFile}>
+                {uploadingFile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                {uploadingFile ? 'Subiendo...' : 'Seleccionar Archivo'}
+              </Button>
+              <Input id={`file-upload-input-${formActivityId}`} type="file" className="hidden" onChange={handleFileSelect} disabled={!!uploadingFile} />
               {uploadingFile && uploadProgress !== null && (
-                <div className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="truncate max-w-[200px]">{uploadingFile.name}</span>
-                    <span>{Math.round(uploadProgress)}%</span>
-                  </div>
-                  <Progress value={uploadProgress} className="h-2" />
-                </div>
+                <div className="space-y-1"><div className="flex justify-between text-sm"><span className="truncate max-w-[200px]">{uploadingFile.name}</span><span>{Math.round(uploadProgress)}%</span></div><Progress value={uploadProgress} className="h-2" /></div>
               )}
               {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
-
               {(form.watch('attachments')?.length || 0) > 0 && (
                 <div className="mt-2 space-y-2">
                   <p className="text-xs text-muted-foreground">Archivos adjuntos:</p>
@@ -396,24 +315,18 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
                     {form.watch('attachments')?.map((att, index) => (
                       <li key={index} className="flex items-center justify-between p-1.5 bg-muted/50 rounded-md text-sm">
                         <a href={att.downloadURL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline truncate">
-                          <FileText className="h-4 w-4 shrink-0" />
-                          <span className="truncate" title={att.fileName}>{att.fileName}</span>
+                          <FileText className="h-4 w-4 shrink-0" /><span className="truncate" title={att.fileName}>{att.fileName}</span>
                         </a>
-                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive/80" onClick={() => handleRemoveAttachment(index)} disabled={!!uploadingFile}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive/80" onClick={() => handleRemoveAttachment(index)} disabled={!!uploadingFile}><Trash2 className="h-4 w-4" /></Button>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
             </div>
-
             <DialogFooter className="pt-4">
-              <DialogClose asChild>
-                <Button type="button" variant="outline" onClick={onCloseAndReset}>Cancelar</Button>
-              </DialogClose>
-              <Button type="submit" variant="default" disabled={!!uploadingFile}>
+              <DialogClose asChild><Button type="button" variant="outline" onClick={onCloseAndReset}>Cancelar</Button></DialogClose>
+              <Button type="submit" variant="default" disabled={!!uploadingFile || !form.formState.isValid}>
                 {uploadingFile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {initialData ? 'Guardar Cambios' : 'Añadir Actividad'}
               </Button>
@@ -424,4 +337,3 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
     </Dialog>
   );
 }
-

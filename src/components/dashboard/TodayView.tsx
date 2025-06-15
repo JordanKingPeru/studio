@@ -12,12 +12,13 @@ import { CalendarDays, Loader2 } from 'lucide-react';
 
 interface TodayViewProps {
   tripData: TripDetails;
-  onAddActivity: (activity: Activity) => void;
+  onAddActivity: (activity: Activity) => Promise<void>; // Changed from void to Promise<void>
   currentCityForToday: City | undefined;
   currentDate: Date | null;
+  tripId: string; // Added tripId
 }
 
-export default function TodayView({ tripData, onAddActivity, currentCityForToday, currentDate }: TodayViewProps) {
+export default function TodayView({ tripData, onAddActivity, currentCityForToday, currentDate, tripId }: TodayViewProps) {
 
   const todayString = useMemo(() => {
     if (!currentDate) return '';
@@ -30,11 +31,11 @@ export default function TodayView({ tripData, onAddActivity, currentCityForToday
   }, [currentDate]);
 
   const todaysActivities = useMemo(() => {
-    if (!currentDate) return []; 
+    if (!currentDate || !tripData.activities) return []; 
     return tripData.activities
-      .filter(act => act.date === todayString)
+      .filter(act => act.tripId === tripId && act.date === todayString) // Filter by tripId
       .sort((a, b) => a.time.localeCompare(b.time));
-  }, [tripData.activities, todayString, currentDate]);
+  }, [tripData.activities, todayString, currentDate, tripId]);
 
   const displayCityName = currentCityForToday?.name || "Destino";
 
@@ -53,6 +54,9 @@ export default function TodayView({ tripData, onAddActivity, currentCityForToday
       </Card>
     );
   }
+  
+  // Ensure cities being passed to AISuggestionButton are filtered for the current trip
+  const currentTripCities = tripData.ciudades.filter(c => c.tripId === tripId);
 
   return (
     <Card className="rounded-xl shadow-lg">
@@ -76,10 +80,11 @@ export default function TodayView({ tripData, onAddActivity, currentCityForToday
               Día libre. ¿Qué te apetece hacer hoy? 🏖️
             </p>
             <AISuggestionButton
-              cities={tripData.ciudades}
-              tripFamilia={tripData.familia}
-              tripDates={{ inicio: tripData.inicio, fin: tripData.fin }}
+              cities={currentTripCities} // Pass filtered cities
+              tripFamilia={tripData.familia || tripData.name} // Use trip name or familia
+              tripDates={{ inicio: tripData.startDate, fin: tripData.endDate }}
               onAddActivity={onAddActivity}
+              tripId={tripId} // Pass tripId
             />
           </div>
         )}

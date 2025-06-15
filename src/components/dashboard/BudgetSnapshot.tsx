@@ -9,66 +9,65 @@ import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 
 interface BudgetSnapshotProps {
-  expenses: Expense[];
-  currentCity: City | undefined;
+  expenses: Expense[]; // Should be pre-filtered for the current trip
+  currentCity: City | undefined; // City object for the current city today
+  tripId: string; // Added tripId for context
 }
 
-export default function BudgetSnapshot({ expenses, currentCity }: BudgetSnapshotProps) {
+export default function BudgetSnapshot({ expenses, currentCity, tripId }: BudgetSnapshotProps) {
+  // Expenses are already filtered by tripId by the parent (DashboardView)
+  // currentCity should also belong to the current tripId
+
   const currentCityBudget = useMemo(() => {
-    if (!currentCity || typeof currentCity.budget === 'undefined') {
+    if (!currentCity || typeof currentCity.budget === 'undefined' || currentCity.tripId !== tripId) {
+      // Also check if currentCity belongs to the current trip
       return null;
     }
 
-    const cityExpenses = expenses.filter(exp => exp.city === currentCity.name);
+    const cityExpenses = expenses.filter(exp => exp.city === currentCity.name && exp.tripId === tripId);
     const totalSpentInCity = cityExpenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
     const budget = currentCity.budget;
-    const percentageSpent = budget > 0 ? Math.min(Math.max((totalSpentInCity / budget) * 100, 0), 150) : 0; // Cap at 150% for visual
+    const percentageSpent = budget > 0 ? Math.min(Math.max((totalSpentInCity / budget) * 100, 0), 150) : 0;
 
-    let statusMessage = "Presupuesto no definido para esta ciudad.";
+    let statusMessage = "Presupuesto no definido.";
     let progressColorClass = "";
     let IconComponent = Info;
 
     if (typeof budget !== 'undefined') {
         if (percentageSpent <= 70) {
-        statusMessage = "¡Vas muy bien con el presupuesto!";
-        progressColorClass = ""; // Default primary color
+        statusMessage = "¡Vas muy bien!";
+        progressColorClass = ""; 
         IconComponent = TrendingUp;
         } else if (percentageSpent <= 90) {
-        statusMessage = "¡Ojo! Te estás acercando al límite del presupuesto.";
+        statusMessage = "¡Ojo! Acercándote al límite.";
         progressColorClass = "progress-indicator-warning";
         IconComponent = AlertTriangle;
         } else {
-        statusMessage = "Has excedido el presupuesto para esta ciudad.";
+        statusMessage = "Has excedido el presupuesto.";
         progressColorClass = "progress-indicator-danger";
         IconComponent = TrendingDown;
         }
     }
     
     return {
-      name: currentCity.name,
-      budget,
-      totalSpentInCity,
-      percentageSpent,
-      statusMessage,
-      progressColorClass,
-      IconComponent,
+      name: currentCity.name, budget, totalSpentInCity, percentageSpent,
+      statusMessage, progressColorClass, IconComponent,
     };
-  }, [currentCity, expenses]);
+  }, [currentCity, expenses, tripId]);
 
   if (!currentCityBudget || typeof currentCityBudget.budget === 'undefined') {
     return (
       <Card className="rounded-xl shadow-lg">
         <CardHeader>
           <CardTitle className="font-headline text-xl text-primary flex items-center">
-            <Wallet size={22} className="mr-2" />
-            Presupuesto
+            <Wallet size={22} className="mr-2" />Presupuesto
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-4">
             <Info size={28} className="mx-auto text-muted-foreground mb-2" />
             <p className="text-muted-foreground">
-              {currentCity ? `No hay presupuesto definido para ${currentCity.name}.` : "Selecciona una ciudad para ver el presupuesto."}
+              {currentCity ? `No hay presupuesto para ${currentCity.name}.` : "Selecciona ciudad."}
             </p>
           </div>
         </CardContent>
@@ -82,8 +81,7 @@ export default function BudgetSnapshot({ expenses, currentCity }: BudgetSnapshot
     <Card className="rounded-xl shadow-lg">
       <CardHeader>
         <CardTitle className="font-headline text-xl text-primary flex items-center">
-          <Wallet size={22} className="mr-2" />
-          Presupuesto de {name}
+          <Wallet size={22} className="mr-2" />Presupuesto de {name}
         </CardTitle>
         <CardDescription className="flex items-center text-sm">
             <IconComponent size={16} className={cn("mr-1.5", 
