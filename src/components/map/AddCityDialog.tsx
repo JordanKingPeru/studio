@@ -6,25 +6,25 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input as ShadcnInput } from '@/components/ui/input';
+import { Input as ShadcnInput } from '@/components/ui/input'; // Renamed to avoid conflict if Input from lucide is used
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogTitle,
+  DialogTitle as ShadcnDialogTitle, // Aliased to avoid conflict
+  DialogDescription as ShadcnDialogDescription, // Aliased to avoid conflict
   DialogFooter,
-  DialogDescription,
   DialogClose,
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { 
   Card, 
   CardContent, 
-  CardHeader, 
-  CardTitle as ShadcnCardTitle, 
-  CardDescription as ShadcnCardDescription
+  CardHeader, // No conflict, keep as is
+  CardTitle as ShadcnCardTitle, // Aliased
+  CardDescription as ShadcnCardDescription // Aliased
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -84,7 +84,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
   const [searchResults, setSearchResults] = useState<google.maps.places.Place[]>([]);
   const [selectedPlaceDetails, setSelectedPlaceDetails] = useState<PlaceDetailsFromSearch | null>(null);
   const [isSearching, setIsSearching] = useState(false);
-  const [accordionValue, setAccordionValue] = useState<string[]>([]); // For default open state
+  const [accordionValue, setAccordionValue] = useState<string[]>([]);
   
   const placesLibrary = useMapsLibrary('places');
 
@@ -120,7 +120,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
             types: [], 
             photos: [] 
         });
-        setAccordionValue(["city-details-item"]); // Open accordion by default when editing
+        setAccordionValue(["city-details-item"]);
       } else {
         form.reset({ ...defaultNewCityRHFValues, name: '', country: '', lat: 0, lng: 0 });
         setSearchTerm('');
@@ -148,9 +148,6 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     setAccordionValue([]);
     form.setValue('name', '');
     form.setValue('country', '');
-    // No resetear lat/lng a 0 aquí intencionalmente si el usuario quiere buscar OTRA ciudad después de una selección
-    // form.setValue('lat', 0); 
-    // form.setValue('lng', 0);
 
     const request: google.maps.places.SearchByTextRequest = {
       textQuery: searchTerm,
@@ -181,11 +178,11 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     let lat: number | undefined = undefined;
     let lng: number | undefined = undefined;
 
-    if (place.location) { // location is LatLngLiteral | LatLng
-        if (typeof (place.location as google.maps.LatLng).lat === 'function') { // It's a LatLng object
+    if (place.location) {
+        if (typeof (place.location as google.maps.LatLng).lat === 'function') {
             lat = (place.location as google.maps.LatLng).lat();
             lng = (place.location as google.maps.LatLng).lng();
-        } else { // It's a LatLngLiteral
+        } else {
             lat = (place.location as google.maps.LatLngLiteral).lat;
             lng = (place.location as google.maps.LatLngLiteral).lng;
         }
@@ -209,12 +206,12 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     };
     
     setSelectedPlaceDetails(placeDetailsToSet);
-    setAccordionValue(["city-details-item"]); 
+    setAccordionValue(["city-details-item"]);
     
     form.setValue('name', place.displayName || '', { shouldValidate: true });
     form.setValue('country', countryName || '', { shouldValidate: true });
-    if (lat !== undefined) form.setValue('lat', lat, { shouldValidate: true }); else form.setValue('lat', 0, {shouldValidate: true}); // Default to 0 if undefined
-    if (lng !== undefined) form.setValue('lng', lng, { shouldValidate: true }); else form.setValue('lng', 0, {shouldValidate: true}); // Default to 0 if undefined
+    if (lat !== undefined) form.setValue('lat', lat, { shouldValidate: true }); else form.setValue('lat', 0, {shouldValidate: true});
+    if (lng !== undefined) form.setValue('lng', lng, { shouldValidate: true }); else form.setValue('lng', 0, {shouldValidate: true});
 
     setSearchResults([]);
   };
@@ -229,7 +226,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
 
     const dataToSave: CityFormData = {
         ...data,
-        id: initialData?.id, // Preserve ID if editing
+        id: initialData?.id,
         name: selectedPlaceDetails?.displayName || data.name,
         country: selectedPlaceDetails?.country || data.country,
         lat: selectedPlaceDetails?.latitude ?? data.lat,
@@ -256,20 +253,19 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
         if (!open) {
-            // Keep searchTerm and selectedPlaceDetails if form is simply closed
-            // Reset them only if 'Cancel' implies a full reset or on successful submit
+            // Reset logic when dialog is explicitly closed by user action (e.g. Cancel or X button)
         }
         onOpenChange(open);
     }}>
       <DialogContent className="sm:max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] p-0">
         <DialogHeader className="flex-shrink-0 p-6 pb-2">
-          <DialogTitle className="font-headline text-2xl text-primary flex items-center">
+          <ShadcnDialogTitle className="font-headline text-2xl text-primary flex items-center">
             <FormIcon size={22} className="mr-2" />
             {dialogTitleText}
-          </DialogTitle>
-          <DialogDescription>
+          </ShadcnDialogTitle>
+          <ShadcnDialogDescription>
             Busca una ciudad y luego completa los detalles de tu estancia.
-          </DialogDescription>
+          </ShadcnDialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 sm:grid-cols-4 items-end gap-2 sm:gap-4 px-6 pb-4 flex-shrink-0">
@@ -295,7 +291,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         
         <div className="flex-1 min-h-0">
             <ScrollArea className="h-full w-full">
-                <div className="px-6 py-4 space-y-4"> 
+                <div className="px-6 py-4 space-y-4">
                     {searchResults.length > 0 && !selectedPlaceDetails && (
                       <Card className="shadow-md">
                         <CardHeader className="pb-2 pt-3">
@@ -391,7 +387,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                                             mapId={`selected-city-map-${selectedPlaceDetails.id || Date.now()}`}
                                             center={{ lat: selectedPlaceDetails.latitude, lng: selectedPlaceDetails.longitude }}
                                             zoom={12}
-                                            gestureHandling={'greedy'}
+                                            gestureHandling={'cooperative'} // Changed to cooperative
                                             disableDefaultUI={true}
                                             zoomControl={true}
                                             streetViewControl={false}
@@ -484,13 +480,11 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         <DialogFooter className="px-6 pt-4 pb-6 flex-shrink-0 border-t mt-auto">
           <DialogClose asChild>
             <Button type="button" variant="outline" onClick={() => {
-                // Clear search and selection when cancelling explicitly
                 setSearchTerm('');
                 setSearchResults([]);
                 setSelectedPlaceDetails(null);
                 setAccordionValue([]);
-                // form.reset(); // Optionally reset form to defaults or initialData if present
-                onOpenChange(false); // Then close
+                onOpenChange(false);
             }}>Cancelar</Button>
           </DialogClose>
           <Button type="button" onClick={form.handleSubmit(handleFormSubmit)} disabled={isSubmitting || isSearching || (!selectedPlaceDetails && !initialData)}>
@@ -502,3 +496,5 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
     </Dialog>
   );
 }
+
+    
