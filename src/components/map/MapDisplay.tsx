@@ -9,39 +9,34 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 
 interface MapDisplayProps {
   cities: City[];
-  // isLoaded prop is no longer needed as APIProvider handles loading globally
 }
 
 const mapContainerStyle = {
   width: '100%',
   height: '100%',
-  borderRadius: '0.75rem', // Consistent with MapSection's rounded-xl on the parent
+  borderRadius: '0.75rem', 
 };
 
-const defaultCenter: Coordinates = { lat: 40.416775, lng: -3.703790 }; // Default to Madrid or a general world view
+const defaultCenter: Coordinates = { lat: 40.416775, lng: -3.703790 }; 
 
 export default function MapDisplay({ cities }: MapDisplayProps) {
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
   const [mapCenter, setMapCenter] = useState<Coordinates>(defaultCenter);
-  const [mapZoom, setMapZoom] = useState<number>(2); // Start zoomed out
+  const [mapZoom, setMapZoom] = useState<number>(2); 
 
   const validCities = useMemo(() => cities.filter(city =>
     typeof city.coordinates?.lat === 'number' &&
     typeof city.coordinates?.lng === 'number' &&
-    // Allow 0,0 only if it's not the default placeholder (e.g. if a city truly is at 0,0)
-    // For now, we'll assume 0,0 is generally uninitialized unless it has a name.
     (city.coordinates.lat !== 0 || city.coordinates.lng !== 0 || (city.id && city.name))
   ), [cities]);
 
   useEffect(() => {
     if (validCities.length === 1) {
       setMapCenter(validCities[0].coordinates);
-      setMapZoom(7); // Zoom in on a single city
+      setMapZoom(7); 
     } else if (validCities.length > 1) {
-      // Simple logic: center on the first city, keep zoom broader.
-      // A more complex approach would calculate a bounding box.
       setMapCenter(validCities[0].coordinates);
-      setMapZoom(3); // Adjust as needed for multiple cities
+      setMapZoom(3); 
     } else {
       setMapCenter(defaultCenter);
       setMapZoom(2);
@@ -50,25 +45,18 @@ export default function MapDisplay({ cities }: MapDisplayProps) {
 
   const handleMarkerClick = useCallback((city: City) => {
     setSelectedCity(city);
-    setMapCenter(city.coordinates); // Center map on clicked city
-    setMapZoom(9); // Zoom in a bit more on selected city
+    setMapCenter(city.coordinates); 
+    setMapZoom(9); 
   }, []);
   
   const handleInfoWindowClose = useCallback(() => {
     setSelectedCity(null);
-    // Optionally, reset zoom/center if desired when an infowindow closes
-    // if (validCities.length === 1) setMapZoom(7);
-    // else if (validCities.length > 1) setMapZoom(3);
   }, []);
 
 
-  // The APIProvider in ClientProviders handles the actual loading state for the whole app.
-  // We assume here that if MapDisplay is rendered, the API should be available.
-  // A more robust check could involve useContext if a global load status is needed here.
-
   return (
     <Map
-      mapId="main-trip-map" // Optional: for Cloud-based Map Styling
+      mapId="main-trip-map" 
       style={mapContainerStyle}
       center={mapCenter}
       zoom={mapZoom}
@@ -78,7 +66,7 @@ export default function MapDisplay({ cities }: MapDisplayProps) {
       mapTypeControl={false}
       fullscreenControl={false}
       zoomControl={true}
-      clickableIcons={false} // Good practice
+      clickableIcons={false} 
     >
       {validCities.map((city) => (
         <AdvancedMarker
@@ -87,8 +75,6 @@ export default function MapDisplay({ cities }: MapDisplayProps) {
           onClick={() => handleMarkerClick(city)}
           title={city.name}
         >
-          {/* You can customize the marker Pin, e.g., color */}
-          {/* <Pin borderColor="blue" glyphColor="white" background="red" /> */}
         </AdvancedMarker>
       ))}
 
@@ -96,7 +82,7 @@ export default function MapDisplay({ cities }: MapDisplayProps) {
         <InfoWindow
           position={selectedCity.coordinates}
           onCloseClick={handleInfoWindowClose}
-          pixelOffset={[0,-30]} // Adjust as needed
+          pixelOffset={[0,-30]} 
         >
           <Card className="w-48 shadow-none border-none p-0 m-0">
             <CardHeader className="p-2 pb-1">
@@ -104,7 +90,6 @@ export default function MapDisplay({ cities }: MapDisplayProps) {
             </CardHeader>
             <CardContent className="p-2 pt-0">
                 <p className="text-xs text-muted-foreground">{selectedCity.country}</p>
-                {/* Add more details if desired, e.g., dates */}
             </CardContent>
           </Card>
         </InfoWindow>
