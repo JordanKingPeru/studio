@@ -29,7 +29,7 @@ export default function TripHeader({ tripName, startDate, endDate, onViewFullIti
             </Button>
           )}
           <div className="min-w-0">
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-headline font-bold text-primary truncate" title={tripName}>
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-headline font-bold text-primary" title={tripName}>
               {tripName}
             </h1>
             <p className="text-lg text-muted-foreground flex items-center gap-2 mt-1">
