@@ -14,8 +14,6 @@ import { useAuth } from '@/context/AuthContext'; // Import useAuth
 import SignOutButton from '@/components/auth/SignOutButton'; // Import SignOutButton
 import UserAvatar from '@/components/auth/UserAvatar'; // Import UserAvatar
 
-// Removed mock fetchTripName, will use currentUser from AuthContext
-
 interface TripAppLayoutProps {
   children: React.ReactNode;
   tripId: string;
@@ -23,19 +21,14 @@ interface TripAppLayoutProps {
 
 export default function TripAppLayout({ children, tripId }: TripAppLayoutProps) {
   const pathname = usePathname();
-  const routerNav = useRouter(); // Renamed to avoid conflict
-  const { currentUser } = useAuth(); // Get user from context
-  const [tripName, setTripName] = useState<string | null>(null); // Keep local state for trip name if needed
-  const [isLoadingName, setIsLoadingName] = useState(true); // Or manage through currentUser.loading
+  const routerNav = useRouter(); 
+  const { currentUser } = useAuth(); 
+  const [tripName, setTripName] = useState<string | null>(null); 
+  const [isLoadingName, setIsLoadingName] = useState(true); 
 
   useEffect(() => {
-    // Simulate fetching trip-specific details like its name if not part of UserProfile or if needed separately
-    // For now, we'll assume the tripId is enough for navigation, and a generic title or currentUser's name can be used.
-    // If Trip name is stored with Trip object and needs to be fetched per tripId:
     const fetchTripDetails = async () => {
         setIsLoadingName(true);
-        // Placeholder: in a real app, fetch trip details by tripId
-        // For now, use a generic name or part of user's name if available
         const storedTrips = localStorage.getItem('familyTrips');
         if (storedTrips && currentUser) {
             const trips: Array<{id: string, name: string, userId: string}> = JSON.parse(storedTrips);
@@ -48,10 +41,10 @@ export default function TripAppLayout({ children, tripId }: TripAppLayoutProps) 
         }
         setIsLoadingName(false);
     };
-    if (currentUser) { // Only fetch if user is loaded
+    if (currentUser) { 
         fetchTripDetails();
-    } else if (!currentUser && !isLoadingName) { // If no user and not already loading, set a default
-        setIsLoadingName(true); // set loading true while checking
+    } else if (!currentUser && !isLoadingName) { 
+        setIsLoadingName(true); 
         setTripName('Detalles del Viaje');
         setIsLoadingName(false);
     }
@@ -100,16 +93,17 @@ export default function TripAppLayout({ children, tripId }: TripAppLayoutProps) 
             {navItems.map((item) => {
               const isActive = pathname === item.href || (item.href.endsWith('/dashboard') && pathname === `/trips/${tripId}`);
               return (
-                <Link key={item.label} href={item.href} passHref legacyBehavior>
-                  <a className={cn(
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className={cn(
                       "flex flex-col items-center justify-center h-full w-full text-xs p-1 focus:outline-none focus:ring-2 focus:ring-primary rounded-none",
                       isActive ? "text-primary" : "text-muted-foreground hover:text-primary/80"
                     )}
                     aria-current={isActive ? "page" : undefined}
-                  >
-                    <item.icon className={cn("h-5 w-5 mb-0.5", isActive ? "text-primary" : "")} />
-                    {item.label}
-                  </a>
+                >
+                  <item.icon className={cn("h-5 w-5 mb-0.5", isActive ? "text-primary" : "")} />
+                  {item.label}
                 </Link>
               );
             })}
@@ -139,9 +133,8 @@ export default function TripAppLayout({ children, tripId }: TripAppLayoutProps) 
               const isActive = pathname === item.href || (item.href.endsWith('/dashboard') && pathname === `/trips/${tripId}`);
               return (
                 <li key={item.label}>
-                  <Link href={item.href} passHref legacyBehavior>
+                  <Link href={item.href} asChild>
                     <Button
-                      as="a"
                       variant={isActive ? "secondary" : "ghost"}
                       className={cn(
                         "w-full justify-start",
@@ -174,7 +167,7 @@ export default function TripAppLayout({ children, tripId }: TripAppLayoutProps) 
           </div>
         </div>
       </aside>
-      <main className="flex-grow p-0 sm:ml-64"> {/* Removed main padding */}
+      <main className="flex-grow p-0 sm:ml-64"> 
          <div className="container mx-auto px-0 py-0">
              {children}
          </div>
