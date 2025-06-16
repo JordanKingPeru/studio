@@ -18,6 +18,7 @@ import { useAuth } from '@/context/AuthContext'; // Import useAuth
 import { signOutUser } from '@/firebase/auth'; // Import signOutUser
 import { useRouter } from 'next/navigation';
 import UserAvatar from '@/components/auth/UserAvatar';
+import { useToast } from "@/hooks/use-toast"; // Import useToast
 
 
 // Mock API call - adjust for userId filtering
@@ -57,10 +58,10 @@ interface TripCardProps {
 function TripCard({ trip }: TripCardProps) {
   const tripIsPast = isPast(parseISO(trip.endDate));
   const router = useRouter();
+  const { toast } = useToast(); // Now useToast is defined
 
   const handleCardClick = () => {
     if (tripIsPast) {
-      // router.push(`/trips/${trip.id}/summary`); // For future Phase 3 Post-Mortem
        toast({ title: "Resumen del Viaje", description: "Funcionalidad de resumen post-viaje próximamente."});
     } else {
       router.push(`/trips/${trip.id}/dashboard`);
@@ -244,3 +245,4 @@ export default function MyTripsPage() {
     </div>
   );
 }
+
