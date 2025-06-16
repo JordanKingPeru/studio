@@ -34,6 +34,12 @@ const nextConfig: NextConfig = {
         hostname: 'elcomercio.pe', // Added for elcomercio.pe images
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn0.uncomo.com', // Added for cdn0.uncomo.com images
+        port: '',
+        pathname: '/**',
       }
     ],
   },
