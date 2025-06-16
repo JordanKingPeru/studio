@@ -46,13 +46,18 @@ export default function SignupPage() {
       // Firebase onAuthStateChanged will handle redirect via ProtectedRoute and AuthContext
       const intendedPath = localStorage.getItem('intendedPath') || '/';
       localStorage.removeItem('intendedPath');
-      router.push(intendedPath); 
+      router.push(intendedPath);
     } catch (error: any) {
-      console.error("Signup error:", error);
+      if (error.code === 'auth/email-already-in-use') {
+        // This is a common, handled error. The toast is sufficient.
+        // console.info("Signup attempt with existing email:", data.email); // Optional: log as info if needed
+      } else {
+        console.error("Signup error:", error); // Log other unexpected errors
+      }
       toast({
         variant: 'destructive',
         title: 'Error al registrarse',
-        description: error.code === 'auth/email-already-in-use' 
+        description: error.code === 'auth/email-already-in-use'
           ? 'Este email ya está registrado. Intenta iniciar sesión.'
           : error.message || 'Ocurrió un error desconocido.',
       });
