@@ -133,19 +133,19 @@ export default function TripAppLayout({ children, tripId }: TripAppLayoutProps) 
               const isActive = pathname === item.href || (item.href.endsWith('/dashboard') && pathname === `/trips/${tripId}`);
               return (
                 <li key={item.label}>
-                  <Link href={item.href} asChild>
-                    <Button
-                      variant={isActive ? "secondary" : "ghost"}
-                      className={cn(
-                        "w-full justify-start",
-                        isActive ? "text-primary-foreground bg-primary hover:bg-primary/90" : "text-foreground hover:bg-muted"
-                      )}
-                      aria-current={isActive ? "page" : undefined}
-                    >
+                  <Button
+                    asChild
+                    variant={isActive ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start",
+                      isActive ? "text-primary-foreground bg-primary hover:bg-primary/90" : "text-foreground hover:bg-muted"
+                    )}
+                  >
+                    <Link href={item.href} aria-current={isActive ? "page" : undefined}>
                       <item.icon className={cn("mr-3 h-5 w-5", isActive ? "" : "text-muted-foreground group-hover:text-foreground")} />
                       {item.label}
-                    </Button>
-                  </Link>
+                    </Link>
+                  </Button>
                 </li>
               );
             })}
