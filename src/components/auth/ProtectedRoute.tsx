@@ -18,16 +18,18 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
 
   useEffect(() => {
     if (!loading && !currentUser) {
-      // Save the intended path to redirect after login
+      // Only redirect to login if the user is NOT already on login or signup page
       if (pathname !== '/login' && pathname !== '/signup') {
-        localStorage.setItem('intendedPath', pathname);
+        localStorage.setItem('intendedPath', pathname); // Save the path they were trying to access
+        router.push('/login');
       }
-      router.push('/login');
+      // If they ARE on /login or /signup and not authenticated, let them stay and navigate between them.
     }
   }, [currentUser, loading, router, pathname]);
 
+  // Show loader if initial auth check is happening,
+  // OR if user is not authenticated AND is trying to access a protected route (not /login or /signup).
   if (loading || (!currentUser && (pathname !== '/login' && pathname !== '/signup'))) {
-    // Show loader if still loading or if not authenticated and not on public auth pages
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -35,13 +37,8 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
   
-  // If authenticated or on a public auth page, render children
-  if (currentUser || pathname === '/login' || pathname === '/signup') {
-    return <>{children}</>;
-  }
-
-  // Fallback, should ideally be caught by useEffect redirect
-  return null; 
+  // If authenticated, or if not authenticated but on a public auth page (/login or /signup), render children.
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;
