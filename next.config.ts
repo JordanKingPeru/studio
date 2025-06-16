@@ -28,6 +28,12 @@ const nextConfig: NextConfig = {
         hostname: 'places.googleapis.com', // For Places API photos
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'elcomercio.pe', // Added for elcomercio.pe images
+        port: '',
+        pathname: '/**',
       }
     ],
   },
