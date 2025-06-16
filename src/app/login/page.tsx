@@ -60,7 +60,7 @@ export default function LoginPage() {
       toast({
         variant: 'destructive',
         title: 'Error al iniciar sesión',
-        description: error.message === "Firebase: Error (auth/invalid-credential)." 
+        description: error.code === "auth/invalid-credential"
           ? "Credenciales inválidas. Por favor, revisa tu email y contraseña."
           : error.message || 'Ocurrió un error desconocido.',
       });
