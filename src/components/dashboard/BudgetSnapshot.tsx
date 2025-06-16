@@ -4,7 +4,7 @@
 import type { City, Expense } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Wallet, TrendingDown, TrendingUp, AlertTriangle, Info, ArrowRightCircle } from 'lucide-react';
+import { Wallet, TrendingDown, TrendingUp, AlertTriangle, Info, ArrowRightCircle, PartyPopper } from 'lucide-react'; // Added PartyPopper
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ interface BudgetSnapshotProps {
   expenses: Expense[]; 
   currentCity: City | undefined; 
   tripId: string; 
-  onNavigateToBudget: () => void; // Callback to navigate to full budget page
+  onNavigateToBudget: () => void;
 }
 
 export default function BudgetSnapshot({ expenses, currentCity, tripId, onNavigateToBudget }: BudgetSnapshotProps) {
@@ -30,26 +30,32 @@ export default function BudgetSnapshot({ expenses, currentCity, tripId, onNaviga
     let statusMessage = "Presupuesto no definido.";
     let progressColorClass = "";
     let IconComponent = Info;
+    let positiveFeedback = "";
 
     if (typeof budget !== 'undefined') {
-        if (percentageSpent <= 70) {
-        statusMessage = "¡Vas muy bien!";
-        progressColorClass = ""; 
-        IconComponent = TrendingUp;
+        if (percentageSpent <= 50) {
+            statusMessage = "¡Vas muy bien!";
+            progressColorClass = ""; 
+            IconComponent = TrendingUp;
+            positiveFeedback = "¡Estás gestionando el presupuesto de maravilla! Considera darte un capricho. 🎉";
+        } else if (percentageSpent <= 70) {
+            statusMessage = "Controlando gastos.";
+            progressColorClass = ""; 
+            IconComponent = TrendingUp;
         } else if (percentageSpent <= 90) {
-        statusMessage = "¡Ojo! Acercándote al límite.";
-        progressColorClass = "progress-indicator-warning";
-        IconComponent = AlertTriangle;
+            statusMessage = "¡Ojo! Acercándote al límite.";
+            progressColorClass = "progress-indicator-warning";
+            IconComponent = AlertTriangle;
         } else {
-        statusMessage = "Has excedido el presupuesto.";
-        progressColorClass = "progress-indicator-danger";
-        IconComponent = TrendingDown;
+            statusMessage = "Has excedido el presupuesto.";
+            progressColorClass = "progress-indicator-danger";
+            IconComponent = TrendingDown;
         }
     }
     
     return {
       name: currentCity.name, budget, totalSpentInCity, percentageSpent,
-      statusMessage, progressColorClass, IconComponent,
+      statusMessage, progressColorClass, IconComponent, positiveFeedback
     };
   }, [currentCity, expenses, tripId]);
 
@@ -94,6 +100,12 @@ export default function BudgetSnapshot({ expenses, currentCity, tripId, onNaviga
                 <p className="text-xs font-medium text-accent">
                 {Math.round(currentCityBudget.percentageSpent)}% del presupuesto utilizado.
                 </p>
+                {currentCityBudget.positiveFeedback && (
+                    <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-md text-xs text-green-700 dark:text-green-300 flex items-center">
+                        <PartyPopper size={16} className="mr-2 shrink-0"/>
+                        <span>{currentCityBudget.positiveFeedback}</span>
+                    </div>
+                )}
             </>
         )}
       </CardContent>

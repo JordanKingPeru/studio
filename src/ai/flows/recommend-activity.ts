@@ -21,8 +21,8 @@ const RecommendActivityInputSchema = z.object({
 export type RecommendActivityInput = z.infer<typeof RecommendActivityInputSchema>;
 
 const RecommendActivityOutputSchema = z.object({
-  activity: z.string().describe('A recommended activity for the trip.'),
-  reason: z.string().describe('Why this activity is recommended.'),
+  activity: z.string().describe('A recommended activity for the trip. Must be in Spanish.'),
+  reason: z.string().describe('Why this activity is recommended. Must be very concise and in Spanish.'),
   suggestedTime: z.string().optional().describe('A suggested time for the activity in HH:MM format. Example: "14:30"'),
 });
 export type RecommendActivityOutput = z.infer<typeof RecommendActivityOutputSchema>;
@@ -35,14 +35,19 @@ const recommendActivityPrompt = ai.definePrompt({
   name: 'recommendActivityPrompt',
   input: {schema: RecommendActivityInputSchema},
   output: {schema: RecommendActivityOutputSchema},
-  prompt: `You are a travel expert specializing in family trips. Based on the trip details, city, and interests, recommend one activity.
-Also suggest an ideal time (HH:MM format, e.g., "10:00" or "15:30") for this activity.
+  prompt: `You are a concise travel assistant. Recommend a single, compelling activity.
+If interests are not provided, focus on popular or family-friendly options if context suggests it.
+The entire response MUST be in Spanish. The reason MUST be very short (10-15 words max).
 
-Trip Details: {{{tripDetails}}}
+Trip Context: {{{tripDetails}}}
 City: {{{city}}}
 Interests: {{{interests}}}
 
-Respond with the activity, the reason, and the suggested time. IMPORTANT: Your entire response (activity, reason, and suggestedTime if provided) MUST be in Spanish.
+Provide the activity name, a very short reason, and a suggested time (HH:MM format, e.g., "10:00" or "15:30").
+Example output format:
+Activity: Visita al Museo del Prado
+Reason: Explora obras maestras del arte español en un entorno culturalmente rico.
+SuggestedTime: "11:00"
 `,
 });
 

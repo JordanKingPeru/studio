@@ -8,14 +8,15 @@ import { es } from 'date-fns/locale';
 import ActivitySummaryCard from './ActivitySummaryCard';
 import AISuggestionButton from '@/components/ai/AISuggestionButton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { CalendarDays, Loader2 } from 'lucide-react';
+import { CalendarDays, Loader2, Lightbulb } from 'lucide-react'; // Added Lightbulb
+import { Button } from '@/components/ui/button';
 
 interface TodayViewProps {
   tripData: TripDetails;
-  onAddActivity: (activity: Activity) => Promise<void>; // Changed from void to Promise<void>
+  onAddActivity: (activity: Activity) => Promise<void>;
   currentCityForToday: City | undefined;
   currentDate: Date | null;
-  tripId: string; // Added tripId
+  tripId: string;
 }
 
 export default function TodayView({ tripData, onAddActivity, currentCityForToday, currentDate, tripId }: TodayViewProps) {
@@ -33,7 +34,7 @@ export default function TodayView({ tripData, onAddActivity, currentCityForToday
   const todaysActivities = useMemo(() => {
     if (!currentDate || !tripData.activities) return []; 
     return tripData.activities
-      .filter(act => act.tripId === tripId && act.date === todayString) // Filter by tripId
+      .filter(act => act.tripId === tripId && act.date === todayString)
       .sort((a, b) => a.time.localeCompare(b.time));
   }, [tripData.activities, todayString, currentDate, tripId]);
 
@@ -55,8 +56,32 @@ export default function TodayView({ tripData, onAddActivity, currentCityForToday
     );
   }
   
-  // Ensure cities being passed to AISuggestionButton are filtered for the current trip
   const currentTripCities = tripData.ciudades.filter(c => c.tripId === tripId);
+
+  // Simulated proactive AI suggestion for free day
+  const freeDaySuggestion = {
+    activity: "Paseo por el Parque del Retiro y visita al Palacio de Cristal",
+    reason: "Una actividad relajante y cultural, perfecta para un día soleado en Madrid.",
+    category: "Ocio",
+    time: "11:00"
+  };
+
+  const handleAddSimulatedSuggestion = () => {
+    if (!currentDate) return;
+    const newActivity: Activity = {
+      id: `ai-sugg-${Date.now()}`,
+      tripId: tripId,
+      date: todayString,
+      time: freeDaySuggestion.time,
+      title: freeDaySuggestion.activity,
+      category: freeDaySuggestion.category as Activity["category"],
+      notes: freeDaySuggestion.reason,
+      city: currentCityForToday?.name || "N/A",
+      order: Date.now(),
+      attachments: [],
+    };
+    onAddActivity(newActivity);
+  };
 
   return (
     <Card className="rounded-xl shadow-lg">
@@ -75,16 +100,32 @@ export default function TodayView({ tripData, onAddActivity, currentCityForToday
             ))}
           </div>
         ) : (
-          <div className="text-center py-6">
-            <p className="text-lg text-muted-foreground mb-4">
+          <div className="text-center py-6 space-y-4">
+            <p className="text-lg text-muted-foreground">
               Día libre. ¿Qué te apetece hacer hoy? 🏖️
             </p>
+            
+            {/* Simulated Proactive AI Suggestion */}
+            <Card className="bg-accent/10 border-accent/30 rounded-lg p-4 text-left shadow-sm">
+              <div className="flex items-start space-x-3">
+                <Lightbulb className="h-6 w-6 text-accent shrink-0 mt-1" />
+                <div>
+                  <p className="text-sm font-semibold text-accent-foreground">Sugerencia IA (Simulada):</p>
+                  <p className="text-sm text-foreground mt-0.5">{freeDaySuggestion.activity}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{freeDaySuggestion.reason}</p>
+                  <Button size="sm" variant="outline" className="mt-2 text-xs" onClick={handleAddSimulatedSuggestion}>
+                    Añadir al Itinerario
+                  </Button>
+                </div>
+              </div>
+            </Card>
+            
             <AISuggestionButton
-              cities={currentTripCities} // Pass filtered cities
-              tripFamilia={tripData.familia || tripData.name} // Use trip name or familia
+              cities={currentTripCities}
+              tripFamilia={tripData.familia || tripData.name}
               tripDates={{ inicio: tripData.startDate, fin: tripData.endDate }}
               onAddActivity={onAddActivity}
-              tripId={tripId} // Pass tripId
+              tripId={tripId}
             />
           </div>
         )}
