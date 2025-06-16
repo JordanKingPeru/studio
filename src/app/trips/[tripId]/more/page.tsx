@@ -3,7 +3,7 @@
 
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Lightbulb, ListChecks, FileText, MoreHorizontal, CheckSquare, Briefcase, Plane } from 'lucide-react';
+import { Lightbulb, ListChecks, FileText, MoreHorizontal, CheckSquare, Briefcase, Plane, Trash2 } from 'lucide-react'; // Added Trash2
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -48,13 +48,23 @@ export default function TripMorePage() {
     // Simulate loading checklist for this tripId (or generating default if none)
     // For now, we'll just generate a default one if the list is empty
     // In a real app, you'd fetch based on tripId
-    if (checklistItems.length === 0) {
-        // Try to load from localStorage first
+    if (tripId) { // Ensure tripId is available before accessing localStorage
         const storedChecklist = localStorage.getItem(`checklist-${tripId}`);
         if (storedChecklist) {
-            setChecklistItems(JSON.parse(storedChecklist));
-        } else {
-            generateDefaultChecklist(); // Or leave empty and let user generate
+            try {
+                const parsedChecklist = JSON.parse(storedChecklist);
+                if (Array.isArray(parsedChecklist)) {
+                     setChecklistItems(parsedChecklist);
+                } else {
+                    console.warn("Stored checklist format is invalid, generating default.");
+                    generateDefaultChecklist();
+                }
+            } catch (e) {
+                console.error("Error parsing stored checklist:", e);
+                generateDefaultChecklist();
+            }
+        } else if (checklistItems.length === 0) { // Only generate if no stored and current is empty
+            // generateDefaultChecklist(); // Optionally auto-generate, or let user click button
         }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -62,7 +72,7 @@ export default function TripMorePage() {
 
   useEffect(() => {
     // Save to localStorage whenever checklistItems changes
-    if (checklistItems.length > 0) { // Only save if there's something to save
+    if (tripId && checklistItems.length > 0) { // Only save if there's something to save and tripId is valid
         localStorage.setItem(`checklist-${tripId}`, JSON.stringify(checklistItems));
     }
   }, [checklistItems, tripId]);
@@ -86,6 +96,7 @@ export default function TripMorePage() {
     };
     setChecklistItems(prevItems => [...prevItems, newItem]);
     setNewItemLabel('');
+    // setNewItemCategory('Otros'); // Optionally reset category too
   };
 
   const handleDeleteItem = (id: string) => {
