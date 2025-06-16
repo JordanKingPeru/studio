@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, LogOut } from 'lucide-react';
+import { Plus, LogOut, Trash2, AlertTriangle } from 'lucide-react'; // Added Trash2, AlertTriangle
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,12 +14,21 @@ import { TripType, TripStyle } from '@/lib/types';
 import { format, parseISO, isPast } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { v4 as uuidv4 } from 'uuid';
-import { useAuth } from '@/context/AuthContext'; // Import useAuth
-import { signOutUser } from '@/firebase/auth'; // Import signOutUser
+import { useAuth } from '@/context/AuthContext';
+import { signOutUser } from '@/firebase/auth';
 import { useRouter } from 'next/navigation';
 import UserAvatar from '@/components/auth/UserAvatar';
-import { useToast } from "@/hooks/use-toast"; // Import useToast
-
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"; // Added AlertDialog imports
 
 // Mock API call - adjust for userId filtering
 const fetchTrips = async (userId: string | undefined): Promise<Trip[]> => {
@@ -53,12 +62,13 @@ const saveTripsToLocalStorage = (trips: Trip[], userId: string | undefined) => {
 
 interface TripCardProps {
   trip: Trip;
+  onRequestDelete: (tripId: string) => void;
 }
 
-function TripCard({ trip }: TripCardProps) {
+function TripCard({ trip, onRequestDelete }: TripCardProps) {
   const tripIsPast = isPast(parseISO(trip.endDate));
   const router = useRouter();
-  const { toast } = useToast(); // Now useToast is defined
+  const { toast } = useToast();
 
   const handleCardClick = () => {
     if (tripIsPast) {
@@ -68,10 +78,15 @@ function TripCard({ trip }: TripCardProps) {
     }
   };
 
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click event
+    onRequestDelete(trip.id);
+  };
+
   return (
     <Card 
-        className={`overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 h-full flex flex-col rounded-xl cursor-pointer ${tripIsPast ? 'opacity-70 hover:opacity-90' : ''}`}
-        onClick={handleCardClick}
+        className={`relative overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 h-full flex flex-col rounded-xl group ${tripIsPast ? 'opacity-70 hover:opacity-90' : 'cursor-pointer'}`}
+        onClick={!tripIsPast ? handleCardClick : undefined} // Only allow click if not past, or let button handle it
     >
       {trip.coverImageUrl ? (
         <div className="relative w-full h-48">
@@ -106,6 +121,15 @@ function TripCard({ trip }: TripCardProps) {
             )}
         </div>
       </CardContent>
+      <Button 
+        variant="destructive" 
+        size="icon" 
+        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 z-10 h-8 w-8"
+        onClick={handleDeleteClick}
+        aria-label="Eliminar viaje"
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
     </Card>
   );
 }
@@ -114,13 +138,16 @@ export default function MyTripsPage() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
-  const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  const { currentUser } = useAuth(); 
   const router = useRouter();
-  const { toast } = useToast(); // For toast notifications
+  const { toast } = useToast(); 
+
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [tripToDeleteId, setTripToDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadTrips = async () => {
-      if (!currentUser) { // Only load if user is authenticated
+      if (!currentUser) { 
         setIsLoading(false);
         return;
       }
@@ -130,7 +157,7 @@ export default function MyTripsPage() {
       setIsLoading(false);
     };
     loadTrips();
-  }, [currentUser]); // Reload trips when currentUser changes
+  }, [currentUser]); 
 
 
   const handleTripCreated = (newTripData: Omit<Trip, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
@@ -138,13 +165,12 @@ export default function MyTripsPage() {
       toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión para crear un viaje." });
       return;
     }
-    // Check trip limit for free tier
     if (currentUser.subscription?.status === 'free' && trips.length >= (currentUser.subscription.maxTrips || 1) ) {
         toast({
             variant: "destructive",
             title: "Límite Alcanzado",
             description: "Has alcanzado el límite de viajes para el plan gratuito. ¡Actualiza a Pro para crear más!",
-            action: (<Button onClick={() => router.push('/subscription')}>Ver Planes</Button>) // Placeholder, link to future subscription page
+            action: (<Button onClick={() => router.push('/subscription')}>Ver Planes</Button>)
         });
         setIsWizardOpen(false);
         return;
@@ -153,7 +179,7 @@ export default function MyTripsPage() {
     const newTrip: Trip = {
       ...newTripData,
       id: uuidv4(),
-      userId: currentUser.uid, // Assign current user's ID
+      userId: currentUser.uid, 
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -161,7 +187,6 @@ export default function MyTripsPage() {
     setTrips(updatedTrips);
     saveTripsToLocalStorage(updatedTrips, currentUser.uid);
     setIsWizardOpen(false);
-    // Optionally navigate to the new trip's dashboard
     router.push(`/trips/${newTrip.id}/dashboard`);
   };
 
@@ -169,17 +194,41 @@ export default function MyTripsPage() {
     try {
       await signOutUser();
       toast({ title: 'Sesión Cerrada', description: 'Has cerrado sesión correctamente.' });
-      router.push('/login'); // Redirect to login after sign out
+      router.push('/login'); 
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message || 'No se pudo cerrar sesión.' });
     }
+  };
+
+  const requestDeleteTrip = (tripId: string) => {
+    setTripToDeleteId(tripId);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!tripToDeleteId || !currentUser) return;
+
+    const tripBeingDeleted = trips.find(t => t.id === tripToDeleteId);
+    if (!tripBeingDeleted) return;
+
+    const updatedTrips = trips.filter(trip => trip.id !== tripToDeleteId);
+    setTrips(updatedTrips);
+    saveTripsToLocalStorage(updatedTrips, currentUser.uid);
+    
+    toast({
+      title: "Viaje Eliminado",
+      description: `El viaje "${tripBeingDeleted.name}" ha sido eliminado.`,
+    });
+
+    setIsDeleteDialogOpen(false);
+    setTripToDeleteId(null);
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4"> {/* Increased gap for title spacing */}
              {currentUser && <UserAvatar user={currentUser} />}
             <h1 className="text-2xl font-bold font-headline text-primary">
               {currentUser ? `${currentUser.displayName?.split(' ')[0]}'s Viajes` : 'Mis Viajes'}
@@ -220,7 +269,7 @@ export default function MyTripsPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {trips.map((trip) => (
-              <TripCard key={trip.id} trip={trip} />
+              <TripCard key={trip.id} trip={trip} onRequestDelete={requestDeleteTrip} />
             ))}
           </div>
         )}
@@ -230,19 +279,41 @@ export default function MyTripsPage() {
           size="icon"
           onClick={() => setIsWizardOpen(true)}
           aria-label="Crear Nuevo Viaje"
-          disabled={!currentUser} // Disable if no user
+          disabled={!currentUser} 
         >
           <Plus className="h-8 w-8" />
         </Button>
       </main>
-      {currentUser && ( // Only render wizard if user is logged in
+      {currentUser && ( 
         <CreateTripWizard
             isOpen={isWizardOpen}
             onClose={() => setIsWizardOpen(false)}
             onTripCreated={handleTripCreated}
         />
       )}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center">
+              <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
+              ¿Estás seguro de eliminar este viaje?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. Se eliminará permanentemente el viaje
+              "{trips.find(t => t.id === tripToDeleteId)?.name || 'seleccionado'}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setTripToDeleteId(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              Eliminar Viaje
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
