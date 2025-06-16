@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { Activity, ActivityCategory, City, ActivityAttachment } from '@/lib/types';
 import { activityCategories } from '@/lib/types';
 import { useForm } from 'react-hook-form';
@@ -28,7 +28,7 @@ const activityAttachmentSchema = z.object({
 
 const activitySchema = z.object({
   id: z.string().optional(),
-  tripId: z.string(), // Added tripId
+  tripId: z.string(), 
   title: z.string().min(1, "El título es obligatorio"),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido (YYYY-MM-DD)"),
   time: z.string().regex(/^\d{2}:\d{2}$/, "Formato de hora inválido (HH:MM)"),
@@ -48,7 +48,7 @@ interface ActivityFormProps {
   onSubmit: (data: Activity) => void;
   cities: City[];
   initialData?: Activity | null;
-  tripId: string; // Added tripId
+  tripId: string; 
 }
 
 export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initialData, tripId }: ActivityFormProps) {
@@ -57,25 +57,18 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
   const [uploadError, setUploadError] = useState<string | null>(null);
   const { toast } = useToast();
   
-  const formActivityId = React.useMemo(() => initialData?.id || `temp-${Date.now().toString()}`, [initialData?.id]);
+  const formActivityId = useMemo(() => initialData?.id || `temp-${Date.now().toString()}`, [initialData?.id]);
 
   const form = useForm<ActivityFormData>({
     resolver: zodResolver(activitySchema),
-    defaultValues: initialData ? {
-      ...initialData,
-      tripId: initialData.tripId || tripId, // Ensure tripId is set
-      id: initialData.id,
-      cost: initialData.cost ?? undefined,
-      order: initialData.order ?? Date.now(),
-      attachments: initialData.attachments || [],
-    } : {
-      id: formActivityId, 
-      tripId: tripId, // Set tripId for new activities
+    defaultValues: { // Default values will be overridden by useEffect if isOpen
+      id: formActivityId,
+      tripId: tripId,
       title: '',
       date: new Date().toISOString().split('T')[0],
       time: new Date().toTimeString().substring(0,5),
       category: 'Ocio',
-      city: cities.find(c => c.tripId === tripId)?.name || cities[0]?.name || '', // Prefer city from current trip
+      city: '',
       notes: '',
       cost: undefined,
       order: Date.now(),
@@ -84,36 +77,42 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
   });
 
   useEffect(() => {
-    const idToUseInForm = initialData?.id || formActivityId;
-    const currentTripCities = cities.filter(c => c.tripId === tripId);
-    const defaultCity = currentTripCities[0]?.name || cities[0]?.name || '';
+    if (isOpen) {
+      const idToUseInForm = initialData?.id || formActivityId;
+      const currentTripCities = cities.filter(c => c.tripId === tripId);
+      const defaultCity = currentTripCities[0]?.name || cities[0]?.name || '';
 
-    if (initialData) {
-      form.reset({
-        ...initialData,
-        tripId: initialData.tripId || tripId, // Ensure tripId
-        id: initialData.id, 
-        cost: initialData.cost ?? undefined,
-        order: initialData.order ?? Date.now(),
-        attachments: initialData.attachments || [],
-        city: initialData.city || defaultCity, // Ensure city is set, prefer initialData's city
-      });
-    } else {
-       form.reset({ 
-        id: idToUseInForm, 
-        tripId: tripId, // Ensure tripId
-        title: '',
-        date: new Date().toISOString().split('T')[0],
-        time: new Date().toTimeString().substring(0,5),
-        category: 'Ocio',
-        city: defaultCity,
-        notes: '',
-        cost: undefined,
-        order: Date.now(),
-        attachments: [],
-      });
+      if (initialData) {
+        form.reset({
+          ...initialData,
+          tripId: initialData.tripId || tripId,
+          id: initialData.id, 
+          cost: initialData.cost ?? undefined,
+          order: initialData.order ?? Date.now(),
+          attachments: initialData.attachments || [],
+          city: initialData.city || defaultCity,
+        });
+      } else {
+         form.reset({ 
+          id: idToUseInForm, 
+          tripId: tripId,
+          title: '',
+          date: new Date().toISOString().split('T')[0],
+          time: new Date().toTimeString().substring(0,5),
+          category: 'Ocio',
+          city: defaultCity,
+          notes: '',
+          cost: undefined,
+          order: Date.now(),
+          attachments: [],
+        });
+      }
+      setUploadingFile(null);
+      setUploadProgress(null);
+      setUploadError(null);
     }
-  }, [initialData, form, cities, formActivityId, tripId, isOpen]); // Added isOpen to re-run when dialog opens
+  }, [isOpen, initialData, cities, formActivityId, tripId, form.reset]);
+
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -133,8 +132,8 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
     setUploadProgress(0);
     setUploadError(null);
 
-    const activityIdForPath = form.getValues('id') || `temp-${Date.now()}`; // Use form's current ID or generate temp
-    const currentTripId = form.getValues('tripId'); // Get tripId from form
+    const activityIdForPath = form.getValues('id') || `temp-${Date.now()}`;
+    const currentTripId = form.getValues('tripId'); 
 
     if (!currentTripId) {
         console.error("Trip ID is undefined in form. Cannot generate storage path.");
@@ -195,27 +194,19 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
     onSubmit({
       ...data,
       id: finalActivityId,
-      tripId: data.tripId || tripId, // Ensure tripId is passed through
+      tripId: data.tripId || tripId,
       cost: data.cost ? Number(data.cost) : undefined,
       order: data.order ?? Date.now(),
       attachments: data.attachments || [],
     });
-    onCloseAndReset();
+    onClose(); // onClose will trigger useEffect if isOpen changes
   };
 
-  const onCloseAndReset = () => {
-    setUploadingFile(null);
-    setUploadProgress(null);
-    setUploadError(null);
-    // form.reset(); // Reset is now handled by useEffect on isOpen change
-    onClose();
-  };
-  
-  const tripSpecificCities = cities.filter(c => c.tripId === tripId);
+  const tripSpecificCities = useMemo(() => cities.filter(c => c.tripId === tripId), [cities, tripId]);
 
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onCloseAndReset()}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="sm:max-w-[525px] rounded-xl shadow-2xl">
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl text-primary flex items-center">
@@ -256,7 +247,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
               <FormField control={form.control} name="category" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><TagIcon className="mr-2 h-4 w-4 text-muted-foreground" />Categoría</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Selecciona categoría" /></SelectTrigger></FormControl>
                       <SelectContent>
                         {activityCategories.map(cat => (<SelectItem key={cat} value={cat}>{cat}</SelectItem>))}
@@ -268,12 +259,12 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
               <FormField control={form.control} name="city" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><MapPinIcon className="mr-2 h-4 w-4 text-muted-foreground" />Ciudad</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value}>
+                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Selecciona ciudad" /></SelectTrigger></FormControl>
                       <SelectContent>
                         {tripSpecificCities.length > 0 ? tripSpecificCities.map(city => (
                           <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
-                        )) : cities.map(city => ( // Fallback if no tripSpecificCities, though should not happen if tripData is loaded
+                        )) : cities.map(city => ( 
                              <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -325,7 +316,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
               )}
             </div>
             <DialogFooter className="pt-4">
-              <DialogClose asChild><Button type="button" variant="outline" onClick={onCloseAndReset}>Cancelar</Button></DialogClose>
+              <DialogClose asChild><Button type="button" variant="outline" onClick={onClose}>Cancelar</Button></DialogClose>
               <Button type="submit" variant="default" disabled={!!uploadingFile || !form.formState.isValid}>
                 {uploadingFile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {initialData ? 'Guardar Cambios' : 'Añadir Actividad'}

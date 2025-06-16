@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { SubmitHandler } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -46,52 +46,49 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
   const [suggestedDate, setSuggestedDate] = useState('');
   const [suggestedTime, setSuggestedTime] = useState('12:00');
   
-  // Filter cities specific to the current tripId
-  const currentTripCities = cities.filter(c => c.tripId === tripId);
-
-  const defaultTripDetailsGlobal = `Viaje para ${tripFamilia} desde ${format(parseISO(tripDates.inicio), "dd/MM/yyyy")} hasta ${format(parseISO(tripDates.fin), "dd/MM/yyyy")}.`;
+  const currentTripCities = useMemo(() => cities.filter(c => c.tripId === tripId), [cities, tripId]);
 
   const form = useForm<SuggestionFormData>({
     resolver: zodResolver(suggestionSchema),
     defaultValues: {
-      city: currentTripCities[0]?.name || '',
+      city: '', // Will be set in useEffect
       interests: '',
-      tripDetails: defaultTripDetailsGlobal,
+      tripDetails: '', // Will be set in useEffect
     },
   });
   
   useEffect(() => {
     if (isOpen) {
         const initialCityName = currentTripCities[0]?.name || '';
-        const initialCityData = currentTripCities.find(c => c.name === initialCityName);
-        
-        let currentTripDetailsText = defaultTripDetailsGlobal;
-        if (initialCityData) {
-            currentTripDetailsText = `Viaje para ${tripFamilia} a ${initialCityData.name} (llegada: ${format(parseISO(initialCityData.arrivalDate), "dd/MM/yyyy")}, salida: ${format(parseISO(initialCityData.departureDate), "dd/MM/yyyy")}).`;
+        const selectedCityObject = currentTripCities.find(c => c.name === initialCityName);
+
+        let detailsText;
+        if (selectedCityObject) {
+            detailsText = `Viaje para ${tripFamilia} a ${selectedCityObject.name} (llegada: ${format(parseISO(selectedCityObject.arrivalDate), "dd/MM/yyyy")}, salida: ${format(parseISO(selectedCityObject.departureDate), "dd/MM/yyyy")}).`;
+        } else {
+            detailsText = `Viaje para ${tripFamilia} desde ${format(parseISO(tripDates.inicio), "dd/MM/yyyy")} hasta ${format(parseISO(tripDates.fin), "dd/MM/yyyy")}.`;
         }
 
         form.reset({
             city: initialCityName,
             interests: '',
-            tripDetails: currentTripDetailsText,
+            tripDetails: detailsText,
         });
         setSuggestion(null);
         setError(null);
         
-        const cityForDate = initialCityData || (currentTripCities[0] ? currentTripCities[0] : undefined);
+        const cityForDate = selectedCityObject || (currentTripCities.length > 0 ? currentTripCities[0] : undefined);
         const initialDateForOutput = cityForDate?.arrivalDate || tripDates.inicio;
         setSuggestedDate(initialDateForOutput);
         setSuggestedTime("12:00");
     }
-  }, [isOpen, currentTripCities, tripDates.inicio, tripDates.fin, form, tripFamilia, defaultTripDetailsGlobal]);
+  }, [isOpen, currentTripCities, tripFamilia, tripDates.inicio, tripDates.fin, form.reset]);
 
   const handleGenerateSuggestion: SubmitHandler<SuggestionFormData> = async (data) => {
     setIsLoading(true);
     setError(null);
     setSuggestion(null);
     try {
-      // Pass tripType and tripStyle to recommendActivity if the flow supports it
-      // For now, keeping it as is.
       const result = await recommendActivity(data); 
       setSuggestion(result);
 
@@ -115,7 +112,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
       
       const newActivity: Activity = {
         id: `ai-${Date.now()}`,
-        tripId: tripId, // Ensure tripId is set
+        tripId: tripId, 
         date: suggestedDate, 
         time: suggestedTime,
         title: suggestion.activity,
@@ -167,14 +164,16 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
                       field.onChange(value); 
                       const selectedCityObject = currentTripCities.find(c => c.name === value);
                       setSuggestedDate(selectedCityObject?.arrivalDate || tripDates.inicio); 
+                      
+                      let citySpecificTripDetails;
                       if (selectedCityObject) {
-                        const citySpecificTripDetails = `Viaje para ${tripFamilia} a ${selectedCityObject.name} (llegada: ${format(parseISO(selectedCityObject.arrivalDate), "dd/MM/yyyy")}, salida: ${format(parseISO(selectedCityObject.departureDate), "dd/MM/yyyy")}).`;
-                        form.setValue('tripDetails', citySpecificTripDetails, { shouldValidate: true, shouldDirty: true });
+                        citySpecificTripDetails = `Viaje para ${tripFamilia} a ${selectedCityObject.name} (llegada: ${format(parseISO(selectedCityObject.arrivalDate), "dd/MM/yyyy")}, salida: ${format(parseISO(selectedCityObject.departureDate), "dd/MM/yyyy")}).`;
                       } else {
-                        form.setValue('tripDetails', defaultTripDetailsGlobal, { shouldValidate: true, shouldDirty: true });
+                        citySpecificTripDetails = `Viaje para ${tripFamilia} desde ${format(parseISO(tripDates.inicio), "dd/MM/yyyy")} hasta ${format(parseISO(tripDates.fin), "dd/MM/yyyy")}.`;
                       }
+                      form.setValue('tripDetails', citySpecificTripDetails, { shouldValidate: true, shouldDirty: true });
                     }} 
-                    defaultValue={field.value}
+                    value={field.value} // Use value instead of defaultValue for controlled component
                   >
                     <FormControl><SelectTrigger><SelectValue placeholder="Selecciona ciudad" /></SelectTrigger></FormControl>
                     <SelectContent>
