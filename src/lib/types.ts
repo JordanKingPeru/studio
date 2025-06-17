@@ -21,6 +21,22 @@ export enum TripStyle {
   ADVENTURE = 'ADVENTURE', 
 }
 
+export const tripTypeTranslations: Record<TripType, { label: string; example: string }> = {
+  [TripType.LEISURE]: { label: "Ocio", example: "Vacaciones relajantes, turismo general, desconexión." },
+  [TripType.BUSINESS]: { label: "Negocios", example: "Viajes de trabajo, conferencias, reuniones profesionales." },
+  [TripType.DIGITAL_NOMAD]: { label: "Nómada Digital", example: "Trabajar remotamente mientras se viaja y explora nuevos lugares." },
+  [TripType.EVENT]: { label: "Evento Especial", example: "Asistir a bodas, conciertos, festivales, competiciones deportivas." },
+};
+
+export const tripStyleTranslations: Record<TripStyle, { label: string; example: string }> = {
+  [TripStyle.BACKPACKER]: { label: "Mochilero", example: "Presupuesto ajustado, aventura, hostales, exploración independiente y flexible." },
+  [TripStyle.LUXURY]: { label: "Lujo", example: "Hoteles de alta gama, experiencias exclusivas, máximo confort y servicio premium." },
+  [TripStyle.FAMILY]: { label: "Familiar", example: "Actividades para todas las edades, comodidad para niños, destinos y alojamientos amigables para familias." },
+  [TripStyle.CLASSIC]: { label: "Clásico", example: "Turismo tradicional, visitas a monumentos históricos, rutas culturales, guías turísticas." },
+  [TripStyle.ADVENTURE]: { label: "Aventura", example: "Deportes extremos, senderismo, naturaleza salvaje, exploración activa y desafíos." },
+};
+
+
 export interface Trip {
   id: string; 
   userId: string; 
@@ -181,3 +197,4 @@ export type ExpenseFormData = {
     tripId: string;
     id?: string;
 };
+

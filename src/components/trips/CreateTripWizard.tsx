@@ -12,12 +12,13 @@ import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Trip } from '@/lib/types'; // Keep this for the output type
-import { TripType, TripStyle } from '@/lib/types';
-import { ChevronLeft, ChevronRight, ArrowRight, Rocket, Palette, Users, Sparkles, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { TripType, TripStyle, tripTypeTranslations, tripStyleTranslations } from '@/lib/types';
+import { ChevronLeft, ChevronRight, ArrowRight, Rocket, Palette, Users, Sparkles, Image as ImageIconLucide, Loader2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { generateTripCoverImage, type GenerateTripCoverImageInput } from '@/ai/flows/generate-trip-cover-image';
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image'; // For preview
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Extended Zod schema for form data including AI prompt fields
 const tripWizardSchema = z.object({
@@ -254,7 +255,22 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
                     <Controller name="tripType" control={control} render={({ field }) => (
                         <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger><SelectValue placeholder="Selecciona tipo" /></SelectTrigger>
-                        <SelectContent>{Object.values(TripType).map(type => (<SelectItem key={type} value={type}>{type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}</SelectItem>))}</SelectContent>
+                        <SelectContent>
+                          {Object.values(TripType).map(type => (
+                            <TooltipProvider key={type} delayDuration={100}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <SelectItem value={type}>
+                                    {tripTypeTranslations[type].label}
+                                  </SelectItem>
+                                </TooltipTrigger>
+                                <TooltipContent side="right" align="start" className="max-w-xs">
+                                  <p className="text-xs">{tripTypeTranslations[type].example}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ))}
+                        </SelectContent>
                         </Select>
                     )} />
                     {errors.tripType && <p className="text-sm text-destructive mt-1">{errors.tripType.message}</p>}
@@ -264,7 +280,22 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
                     <Controller name="tripStyle" control={control} render={({ field }) => (
                         <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger><SelectValue placeholder="Selecciona estilo" /></SelectTrigger>
-                        <SelectContent>{Object.values(TripStyle).map(style => (<SelectItem key={style} value={style}>{style.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}</SelectItem>))}</SelectContent>
+                        <SelectContent>
+                          {Object.values(TripStyle).map(style => (
+                             <TooltipProvider key={style} delayDuration={100}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <SelectItem value={style}>
+                                    {tripStyleTranslations[style].label}
+                                  </SelectItem>
+                                </TooltipTrigger>
+                                <TooltipContent side="right" align="start" className="max-w-xs">
+                                  <p className="text-xs">{tripStyleTranslations[style].example}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ))}
+                        </SelectContent>
                         </Select>
                     )} />
                     {errors.tripStyle && <p className="text-sm text-destructive mt-1">{errors.tripStyle.message}</p>}
@@ -285,7 +316,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
               )}
               {!generatedCoverImagePreview && !isGeneratingCoverImage && (
                  <div className="mt-2 border border-dashed rounded-md p-4 flex flex-col justify-center items-center bg-muted/30 h-[150px]">
-                    <ImageIcon className="h-12 w-12 text-muted-foreground mb-2"/>
+                    <ImageIconLucide className="h-12 w-12 text-muted-foreground mb-2"/>
                     <p className="text-sm text-muted-foreground text-center">La imagen generada aparecerá aquí.</p>
                  </div>
               )}
@@ -360,4 +391,3 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
   );
 }
 
-    
