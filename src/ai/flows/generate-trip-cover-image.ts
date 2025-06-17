@@ -12,7 +12,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { TripType, TripStyle } from '@/lib/types'; // Assuming these enums are in types.ts
 
-export const GenerateTripCoverImageInputSchema = z.object({
+const GenerateTripCoverImageInputSchema = z.object({
   tripName: z.string().describe('El nombre o destino principal del viaje.'),
   startDate: z.string().describe('Fecha de inicio del viaje (YYYY-MM-DD).'),
   endDate: z.string().describe('Fecha de fin del viaje (YYYY-MM-DD).'),
@@ -25,7 +25,7 @@ export const GenerateTripCoverImageInputSchema = z.object({
 });
 export type GenerateTripCoverImageInput = z.infer<typeof GenerateTripCoverImageInputSchema>;
 
-export const GenerateTripCoverImageOutputSchema = z.object({
+const GenerateTripCoverImageOutputSchema = z.object({
   imageDataUri: z.string().describe("La imagen generada como un data URI (e.g., 'data:image/png;base64,...')."),
 });
 export type GenerateTripCoverImageOutput = z.infer<typeof GenerateTripCoverImageOutputSchema>;
