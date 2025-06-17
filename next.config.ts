@@ -40,6 +40,12 @@ const nextConfig: NextConfig = {
         hostname: 'cdn0.uncomo.com', // Added for cdn0.uncomo.com images
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com', // For Firebase Storage images
+        port: '',
+        pathname: '/**',
       }
     ],
   },

@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Badge } from '@/components/ui/badge';
 import NextImage from 'next/image'; // Renombrado para evitar conflicto
 import CreateTripWizard from '@/components/trips/CreateTripWizard';
-import type { Trip, CreateTripWizardData } from '@/lib/types';
+import type { Trip, CreateTripWizardData, UserProfile } from '@/lib/types';
 import { format, parseISO, isPast } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
@@ -27,8 +27,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase'; // Import storage
 import { collection, query, where, getDocs, orderBy, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion, arrayRemove, writeBatch } from "firebase/firestore";
+import { ref as storageRef, uploadString, getDownloadURL, deleteObject as deleteStorageObject } from "firebase/storage"; // Import storage functions
+import { v4 as uuidv4 } from 'uuid';
 
 
 const fetchTripsFromFirestore = async (userId: string | undefined, userEmail: string | null | undefined): Promise<Trip[]> => {
@@ -269,27 +271,60 @@ export default function MyTripsPage() {
         return;
     }
 
+    let finalCoverImageUrl = '';
+    const base64CoverImage = wizardData.coverImageUrl;
+
+    // Prepare trip data for Firestore (initially without coverImageUrl if it's base64)
     const tripToSaveInFirestore = {
       name: wizardData.name,
       startDate: wizardData.startDate,
       endDate: wizardData.endDate,
-      coverImageUrl: wizardData.coverImageUrl || '',
+      // coverImageUrl will be added/updated after potential upload
       tripType: wizardData.tripType,
       tripStyle: wizardData.tripStyle,
       ownerUid: currentUser.uid,
       editorUids: [],
       pendingInvites: wizardData.pendingInvites || [],
-      familia: `${wizardData.numAdults || 0} Adultos, ${wizardData.numChildren || 0} Niños`, // Example familia string
+      familia: `${wizardData.numAdults || 0} Adultos, ${wizardData.numChildren || 0} Niños`,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
 
     try {
+      // Create the trip document in Firestore first to get its ID
       const docRef = await addDoc(collection(db, "trips"), tripToSaveInFirestore);
+      const tripId = docRef.id;
+
+      if (base64CoverImage && base64CoverImage.startsWith('data:image')) {
+        toast({ title: "Procesando Portada...", description: "Subiendo imagen de portada, por favor espera." });
+        try {
+          const imageName = `cover-${uuidv4()}.png`; // Generate unique name
+          const imagePath = `trip_covers/${tripId}/${imageName}`;
+          const imageStorageRef = storageRef(storage, imagePath);
+          
+          // uploadString expects data_url, base64, or base64url string.
+          // If it's a data_url (e.g., 'data:image/png;base64,iVBORw0KGgo...'), uploadString handles it.
+          const uploadResult = await uploadString(imageStorageRef, base64CoverImage, 'data_url');
+          finalCoverImageUrl = await getDownloadURL(uploadResult.ref);
+
+          // Update the Firestore document with the new Storage URL
+          await updateDoc(docRef, { coverImageUrl: finalCoverImageUrl, updatedAt: serverTimestamp() });
+          toast({ title: "Portada Subida", description: "Imagen de portada guardada correctamente." });
+        } catch (uploadError: any) {
+          console.error("Error uploading cover image to Firebase Storage:", uploadError);
+          toast({ variant: "destructive", title: "Error de Portada", description: `No se pudo subir la imagen de portada: ${uploadError.message}. El viaje se creó sin portada.` });
+          // Trip is already created, coverImageUrl will remain empty or as initially set (if any)
+        }
+      } else if (base64CoverImage) { // It's a non-base64 URL, use it directly
+        finalCoverImageUrl = base64CoverImage;
+         await updateDoc(docRef, { coverImageUrl: finalCoverImageUrl, updatedAt: serverTimestamp() });
+      }
+      
+
       await loadTrips(); // Re-fetch trips
       setIsWizardOpen(false);
-      router.push(`/trips/${docRef.id}/map`);
-      toast({ title: "¡Viaje Creado!", description: `"${wizardData.name}" se ha guardado. Añade tus destinos en el mapa.`});
+      router.push(`/trips/${tripId}/map`); // Navigate to map page
+      toast({ title: "¡Viaje Creado!", description: `"${wizardData.name}" se ha guardado. ${finalCoverImageUrl ? 'Portada añadida. ' : ''}Añade tus destinos en el mapa.`});
     } catch (error: any) {
         console.error("Error creating trip in Firestore:", error);
         toast({ variant: "destructive", title: "Error al Crear Viaje", description: `No se pudo guardar el viaje: ${error.message}` });
@@ -322,18 +357,28 @@ export default function MyTripsPage() {
     }
 
     try {
-        // Before deleting the trip, delete its subcollections if any.
-        // This is important for data cleanup and to avoid orphaned data.
-        const subcollectionsToDelete = ["activities", "cities", "expenses"];
         const batch = writeBatch(db);
 
+        // Delete subcollections
+        const subcollectionsToDelete = ["activities", "cities", "expenses"];
         for (const subcollectionName of subcollectionsToDelete) {
             const subcollectionRef = collection(db, "trips", tripToDeleteId, subcollectionName);
             const snapshot = await getDocs(subcollectionRef);
-            snapshot.docs.forEach(docSnap => {
-                batch.delete(docSnap.ref);
-            });
+            snapshot.docs.forEach(docSnap => batch.delete(docSnap.ref));
         }
+        
+        // Delete cover image from Storage if it exists
+        if (tripBeingDeleted.coverImageUrl && tripBeingDeleted.coverImageUrl.includes('firebasestorage.googleapis.com')) {
+            try {
+                const imageStorageRefToDelete = storageRef(storage, tripBeingDeleted.coverImageUrl);
+                await deleteStorageObject(imageStorageRefToDelete);
+            } catch (storageError: any) {
+                 // Log error but don't block trip deletion if image deletion fails
+                console.error("Error deleting cover image from Storage:", storageError);
+                toast({variant: "destructive", title: "Aviso", description: "No se pudo eliminar la imagen de portada del almacenamiento, pero el viaje será eliminado."});
+            }
+        }
+
         // Delete the main trip document
         batch.delete(doc(db, "trips", tripToDeleteId));
         await batch.commit();
@@ -454,7 +499,7 @@ export default function MyTripsPage() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               Esta acción no se puede deshacer. Se eliminará permanentemente el viaje
-              "{trips.find(t => t.id === tripToDeleteId)?.name || 'seleccionado'}" y todos sus datos asociados.
+              "{trips.find(t => t.id === tripToDeleteId)?.name || 'seleccionado'}", todos sus datos asociados y su imagen de portada.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
