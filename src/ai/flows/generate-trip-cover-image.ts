@@ -104,17 +104,25 @@ const generateTripCoverImageFlow = ai.defineFlow(
   async (input) => {
     const { media } = await ai.generate({
       model: 'googleai/gemini-2.0-flash-exp',
-      prompt: handlebarsPromptTemplate, // Use the template string directly
-      promptConfig: input, // Pass the input data for Handlebars rendering
+      prompt: handlebarsPromptTemplate,
+      promptConfig: input,
       config: {
-        responseModalities: ['TEXT', 'IMAGE'], // Corrected: MUST provide both TEXT and IMAGE
+        responseModalities: ['TEXT', 'IMAGE'],
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        ],
       },
     });
 
     if (!media?.url) {
-      throw new Error('La IA no pudo generar una imagen o no devolvió una URL válida.');
+      console.error('Image generation failed. Input:', input, 'Response media:', media);
+      throw new Error('La IA no pudo generar una imagen o no devolvió una URL válida. Intenta ajustar los detalles del viaje o reintentar.');
     }
 
     return { imageDataUri: media.url };
   }
 );
+
