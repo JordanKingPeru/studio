@@ -7,18 +7,18 @@ export interface Coordinates {
 }
 
 export enum TripType {
-  LEISURE = 'LEISURE', 
-  BUSINESS = 'BUSINESS', 
-  DIGITAL_NOMAD = 'DIGITAL_NOMAD', 
-  EVENT = 'EVENT', 
+  LEISURE = 'LEISURE',
+  BUSINESS = 'BUSINESS',
+  DIGITAL_NOMAD = 'DIGITAL_NOMAD',
+  EVENT = 'EVENT',
 }
 
 export enum TripStyle {
-  BACKPACKER = 'BACKPACKER', 
-  LUXURY = 'LUXURY', 
-  FAMILY = 'FAMILY', 
-  CLASSIC = 'CLASSIC', 
-  ADVENTURE = 'ADVENTURE', 
+  BACKPACKER = 'BACKPACKER',
+  LUXURY = 'LUXURY',
+  FAMILY = 'FAMILY',
+  CLASSIC = 'CLASSIC',
+  ADVENTURE = 'ADVENTURE',
 }
 
 export const tripTypeTranslations: Record<TripType, { label: string; example: string }> = {
@@ -38,18 +38,19 @@ export const tripStyleTranslations: Record<TripStyle, { label: string; example: 
 
 
 export interface Trip {
-  id: string; 
-  userId: string; 
-  name: string; 
-  startDate: string; 
-  endDate: string; 
-  coverImageUrl?: string; 
-  tripType: TripType; 
-  tripStyle: TripStyle; 
-  collaborators?: string[]; 
-  familia?: string; 
-  createdAt: string; 
-  updatedAt: string; 
+  id: string;
+  ownerUid: string; // Cambiado de userId
+  name: string;
+  startDate: string;
+  endDate: string;
+  coverImageUrl?: string;
+  tripType: TripType;
+  tripStyle: TripStyle;
+  editorUids?: string[]; // Anteriormente collaborators, ahora para UIDs de editores
+  pendingInvites?: string[]; // Emails de usuarios invitados
+  familia?: string; // Mantener si se usa, o considerar integrarlo en detalles del viaje
+  createdAt: any; // Firestore serverTimestamp se convierte a string en cliente, o es Timestamp
+  updatedAt: any; // Firestore serverTimestamp se convierte a string en cliente, o es Timestamp
 }
 
 export interface UserProfile {
@@ -72,21 +73,19 @@ export interface AuthContextType {
   currentUser: UserProfile | null;
   loading: boolean;
   isFetchingProfile: boolean;
-  // Explicitly list auth functions if they are directly exposed by context,
-  // otherwise they might be used internally or through a separate service.
 }
 
 
 export interface City {
-  id: string; 
-  tripId: string; 
+  id: string;
+  tripId: string;
   name: string;
   country: string;
-  arrivalDate: string; 
-  departureDate: string; 
+  arrivalDate: string;
+  departureDate: string;
   coordinates: Coordinates;
   notes?: string;
-  budget?: number; 
+  budget?: number;
 }
 
 export type ActivityCategory = 'Viaje' | 'Comida' | 'Cultural' | 'Ocio' | 'Trabajo' | 'Alojamiento' | 'Otro';
@@ -96,24 +95,24 @@ export const activityCategories: ActivityCategory[] = ['Viaje', 'Comida', 'Cultu
 export interface ActivityAttachment {
   fileName: string;
   downloadURL: string;
-  uploadedAt: string; 
-  fileType: string; 
+  uploadedAt: string;
+  fileType: string;
 }
 
 export interface Activity {
   id: string;
-  tripId: string; 
-  date: string; 
-  time: string; 
+  tripId: string;
+  date: string;
+  time: string;
   title: string;
   category: ActivityCategory;
   notes?: string;
   cost?: number;
-  city: string; 
-  order: number; 
+  city: string;
+  order: number;
   attachments?: ActivityAttachment[];
-  createdAt?: any; 
-  updatedAt?: any; 
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 export enum ExpenseCategory {
@@ -129,21 +128,25 @@ export const expenseCategories: ExpenseCategory[] = Object.values(ExpenseCategor
 
 export interface Expense {
   id: string;
-  tripId: string; 
-  city: string; 
-  date: string; 
-  category: ExpenseCategory | ActivityCategory; 
+  tripId: string;
+  city: string;
+  date: string;
+  category: ExpenseCategory | ActivityCategory; // Puede ser de un tipo de actividad o gasto manual
   description: string;
   amount: number;
-  createdAt?: any; 
-  updatedAt?: any; 
+  createdAt?: any;
+  updatedAt?: any;
 }
 
-export interface TripDetails extends Trip { 
+export interface TripDetails extends Omit<Trip, 'ownerUid'> { // ownerUid ya está en Trip
+  userId: string; // Para mantener compatibilidad donde se espera userId, pero es ownerUid
   ciudades: City[];
-  paises: string[]; 
+  paises: string[];
   activities: Activity[];
-  expenses: Expense[]; 
+  expenses: Expense[];
+  // Si 'familia' u otros campos específicos de TripDetails son necesarios, deben estar aquí
+  // y asegurarse que Trip base no los duplique o que se manejen correctamente.
+  // Para este caso, `Trip` ya tiene `familia`, por lo que `TripDetails` lo hereda.
 }
 
 
@@ -157,7 +160,7 @@ export interface WeatherData {
 
 export type ItineraryDay = {
   date: string;
-  cityInfo: string; 
+  cityInfo: string;
   activities: Activity[];
   isWorkDay?: boolean;
   isTravelDay?: boolean;
@@ -169,21 +172,30 @@ export type BudgetPerCity = {
 };
 
 export interface ItineraryWeek {
-  weekStartDate: string; 
-  weekEndDate: string; 
-  weekLabel: string; 
-  weekLabelShort: string; 
+  weekStartDate: string;
+  weekEndDate: string;
+  weekLabel: string;
+  weekLabelShort: string;
   days: ItineraryDay[];
   totalWeeklyCost: number;
   isDefaultExpanded: boolean;
 }
 
-export interface CreateTripStepProps {
-  formData: Partial<Trip>;
-  updateFormData: (data: Partial<Trip>) => void;
-  onNext: () => void;
-  onBack?: () => void;
+// Este tipo se usará para el formulario del wizard, que puede ser un subconjunto de Trip
+export interface CreateTripWizardData {
+  name: string;
+  startDate: string;
+  endDate: string;
+  coverImageUrl?: string;
+  tripType: TripType;
+  tripStyle: TripStyle;
+  pendingInvites?: string[]; // Para los emails de los invitados
+  numTravelers?: number;
+  numAdults?: number;
+  numChildren?: number;
+  childrenAges?: string;
 }
+
 
 export const GOOGLE_MAPS_LIBRARIES = ['routes', 'marker', 'places'] as Array<'routes' | 'marker' | 'places'>;
 export const GOOGLE_MAPS_SCRIPT_ID = 'app-google-maps-script';
@@ -197,4 +209,3 @@ export type ExpenseFormData = {
     tripId: string;
     id?: string;
 };
-

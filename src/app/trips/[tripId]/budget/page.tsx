@@ -22,15 +22,16 @@ async function fetchBaseTripData(tripId: string): Promise<Trip | null> {
   const data = tripSnap.data();
   return {
     id: tripSnap.id,
-    userId: data.userId,
+    ownerUid: data.ownerUid, // Changed from userId
     name: data.name,
     startDate: data.startDate,
     endDate: data.endDate,
     coverImageUrl: data.coverImageUrl,
     tripType: data.tripType,
     tripStyle: data.tripStyle,
+    editorUids: data.editorUids || [],
+    pendingInvites: data.pendingInvites || [],
     familia: data.familia,
-    collaborators: data.collaborators,
     createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt || Date.now()).toISOString(),
     updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt || Date.now()).toISOString(),
   } as Trip;
@@ -53,19 +54,19 @@ export default function TripBudgetPage() {
       const activitiesCollectionRef = collection(db, "trips", tripId, "activities");
       const activitiesQuery = query(activitiesCollectionRef, firestoreOrderBy("date"), firestoreOrderBy("order"), firestoreOrderBy("time"));
       const activitiesSnapshot = await getDocs(activitiesQuery);
-      const fetchedActivities: Activity[] = activitiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as Activity));
+      const fetchedActivities: Activity[] = activitiesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data(), tripId } as Activity));
       setActivities(fetchedActivities);
 
       const citiesCollectionRef = collection(db, "trips", tripId, "cities");
       const citiesQuery = query(citiesCollectionRef, firestoreOrderBy("arrivalDate"));
       const citiesSnapshot = await getDocs(citiesQuery);
-      const fetchedCities: City[] = citiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as City));
+      const fetchedCities: City[] = citiesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data(), tripId } as City));
       setCities(fetchedCities);
-      
+
       const expensesCollectionRef = collection(db, "trips", tripId, "expenses");
       const expensesQuery = query(expensesCollectionRef, firestoreOrderBy("date", "desc"));
       const expensesSnapshot = await getDocs(expensesQuery);
-      const fetchedManualExpenses: Expense[] = expensesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as Expense));
+      const fetchedManualExpenses: Expense[] = expensesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data(), tripId } as Expense));
       setManualExpenses(fetchedManualExpenses);
 
       setTripData(prev => {
@@ -79,7 +80,7 @@ export default function TripBudgetPage() {
         const allExpenses = [...derivedExpenses, ...fetchedManualExpenses];
         const paises = Array.from(new Set(fetchedCities.map(city => city.country)));
 
-        return { ...prev, activities: fetchedActivities, ciudades: fetchedCities, expenses: allExpenses, paises };
+        return { ...prev, activities: fetchedActivities, ciudades: fetchedCities, expenses: allExpenses, paises, userId: prev.ownerUid };
       });
 
     } catch (error: any) {
@@ -95,12 +96,13 @@ export default function TripBudgetPage() {
         if (!isMounted) return;
         setIsLoading(true);
         try {
-            const baseTripData = await fetchBaseTripData(tripId);
+            const baseTrip = await fetchBaseTripData(tripId);
             if (!isMounted) return;
 
-            if (baseTripData) {
-                setTripData({ 
-                    ...baseTripData,
+            if (baseTrip) {
+                setTripData({
+                    ...baseTrip,
+                    userId: baseTrip.ownerUid, // Ensure userId is set for TripDetails compatibility
                     activities: [], ciudades: [], expenses: [], paises: [],
                 });
                 await fetchTripSubCollections();
@@ -162,7 +164,7 @@ export default function TripBudgetPage() {
     try {
         await setDoc(newExpenseRef, newExpenseToSave);
         toast({ title: "Gasto Añadido", description: `"${expenseData.description}" añadido correctamente.` });
-        fetchTripSubCollections(); 
+        fetchTripSubCollections();
         setIsExpenseModalOpen(false);
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error al Añadir Gasto", description: error.message });
@@ -177,12 +179,12 @@ export default function TripBudgetPage() {
       </div>
     );
   }
-  
+
   return (
     <div className="py-8 relative">
       <BudgetSection
         expenses={allExpenses}
-        tripCities={cities} 
+        tripCities={cities}
         tripId={tripId}
         onAddExpenseClick={() => setIsExpenseModalOpen(true)}
       />

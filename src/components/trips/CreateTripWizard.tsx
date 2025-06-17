@@ -11,30 +11,27 @@ import { Textarea } from '@/components/ui/textarea';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Trip } from '@/lib/types'; // Keep this for the output type
+import type { CreateTripWizardData } from '@/lib/types'; // Usar el nuevo tipo para el formulario
 import { TripType, TripStyle, tripTypeTranslations, tripStyleTranslations } from '@/lib/types';
 import { ChevronLeft, ChevronRight, ArrowRight, Rocket, Palette, Users, Sparkles, Image as ImageIconLucide, Loader2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { generateTripCoverImage, type GenerateTripCoverImageInput } from '@/ai/flows/generate-trip-cover-image';
 import { useToast } from "@/hooks/use-toast";
-import Image from 'next/image'; // For preview
+import NextImage from 'next/image'; // Renombrado para evitar conflicto con IconLucide
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-// Extended Zod schema for form data including AI prompt fields
 const tripWizardSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres.").max(100),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha de inicio inválida."),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha de fin inválida."),
-  // Traveler details for AI prompt
   numTravelers: z.number().min(1, "Debe haber al menos 1 viajero.").optional().nullable(),
   numAdults: z.number().min(0, "Número de adultos no puede ser negativo.").optional().nullable(),
   numChildren: z.number().min(0, "Número de niños no puede ser negativo.").optional().nullable(),
-  childrenAges: z.string().optional(), // e.g., "5, 8, 12"
-  // Cover image will be a data URI from AI or empty
+  childrenAges: z.string().optional(),
   coverImageUrl: z.string().optional().or(z.literal('')),
   tripType: z.nativeEnum(TripType),
   tripStyle: z.nativeEnum(TripStyle),
-  collaborators: z.string().optional(),
+  pendingInvites: z.string().optional(), // String para emails separados por coma
 }).refine(data => new Date(data.endDate) >= new Date(data.startDate), {
   message: "La fecha de fin debe ser posterior o igual a la fecha de inicio.",
   path: ["endDate"],
@@ -50,13 +47,12 @@ const tripWizardSchema = z.object({
   path: ["numTravelers"],
 });
 
-type TripWizardFormData = z.infer<typeof tripWizardSchema>;
+type TripWizardFormDataInternal = z.infer<typeof tripWizardSchema>;
 
 interface CreateTripWizardProps {
   isOpen: boolean;
   onClose: () => void;
-  // This callback expects data matching the core Trip structure, excluding AI-specific fields
-  onTripCreated: (tripData: Omit<Trip, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => void;
+  onTripCreated: (tripData: CreateTripWizardData) => void; // Usar el tipo específico para el wizard
 }
 
 const todayDate = new Date().toISOString().split('T')[0];
@@ -69,7 +65,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
   const [isGeneratingCoverImage, setIsGeneratingCoverImage] = useState(false);
   const [generatedCoverImagePreview, setGeneratedCoverImagePreview] = useState<string | null>(null);
 
-  const { control, handleSubmit, formState: { errors, isValid: isFormValid }, trigger, watch, reset, setValue, getValues } = useForm<TripWizardFormData>({
+  const { control, handleSubmit, formState: { errors, isValid: isFormValid }, trigger, watch, reset, setValue, getValues } = useForm<TripWizardFormDataInternal>({
     resolver: zodResolver(tripWizardSchema),
     mode: 'onChange',
     defaultValues: {
@@ -83,7 +79,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
       coverImageUrl: '',
       tripType: TripType.LEISURE,
       tripStyle: TripStyle.FAMILY,
-      collaborators: '',
+      pendingInvites: '',
     }
   });
 
@@ -102,7 +98,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
             coverImageUrl: '',
             tripType: TripType.LEISURE,
             tripStyle: TripStyle.FAMILY,
-            collaborators: '',
+            pendingInvites: '',
         });
         setStep(1);
         setGeneratedCoverImagePreview(null);
@@ -111,13 +107,11 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
   }, [isOpen, reset]);
 
   useEffect(() => {
-    // Sync preview if coverImageUrl is set (e.g., by AI)
     setGeneratedCoverImagePreview(watchedCoverImageUrl || null);
   }, [watchedCoverImageUrl]);
 
 
   const handleGenerateCoverImage = async () => {
-    // Fields needed for prompt: name, startDate, endDate, tripType, tripStyle, numTravelers, numAdults, numChildren, childrenAges
     const currentValues = getValues();
     const { name, startDate, endDate, tripType, tripStyle, numTravelers, numAdults, numChildren, childrenAges } = currentValues;
 
@@ -129,7 +123,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
         });
         return;
     }
-    
+
     const aiInput: GenerateTripCoverImageInput = {
       tripName: name,
       startDate,
@@ -167,9 +161,9 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
 
 
   const nextStep = async () => {
-    let fieldsToValidate: (keyof TripWizardFormData)[] = [];
+    let fieldsToValidate: (keyof TripWizardFormDataInternal)[] = [];
     if (step === 1) fieldsToValidate = ['name', 'startDate', 'endDate', 'numTravelers', 'numAdults', 'numChildren', 'childrenAges'];
-    if (step === 2) fieldsToValidate = ['tripType', 'tripStyle', 'coverImageUrl']; // coverImageUrl is optional here
+    if (step === 2) fieldsToValidate = ['tripType', 'tripStyle', 'coverImageUrl'];
 
     const isValidStep = await trigger(fieldsToValidate);
     if (isValidStep) {
@@ -179,17 +173,20 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
 
   const prevStep = () => setStep(s => Math.max(s - 1, 1));
 
-  const onSubmitHandler = (data: TripWizardFormData) => {
-    // Map TripWizardFormData to the core Trip data structure for onTripCreated
-    const tripCoreData: Omit<Trip, 'id' | 'userId' | 'createdAt' | 'updatedAt'> = {
+  const onSubmitHandler = (data: TripWizardFormDataInternal) => {
+    const parsedPendingInvites = data.pendingInvites ? data.pendingInvites.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const tripCoreData: CreateTripWizardData = {
       name: data.name,
       startDate: data.startDate,
       endDate: data.endDate,
       coverImageUrl: data.coverImageUrl,
       tripType: data.tripType,
       tripStyle: data.tripStyle,
-      collaborators: data.collaborators ? data.collaborators.split(',').map(s => s.trim()).filter(Boolean) : undefined,
-      // familia field is not in TripWizardFormData, it can be derived or handled separately if needed.
+      pendingInvites: parsedPendingInvites, // Array de emails
+      numTravelers: data.numTravelers ?? undefined,
+      numAdults: data.numAdults ?? undefined,
+      numChildren: data.numChildren ?? undefined,
+      childrenAges: data.childrenAges ?? undefined,
     };
     onTripCreated(tripCoreData);
     onClose();
@@ -248,7 +245,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
         return (
           <div className="space-y-6">
             <h3 className="text-lg font-semibold flex items-center"><Palette className="mr-2 h-5 w-5 text-primary" />Paso 2: Portada y Contexto</h3>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <Label className="mb-1 block text-sm font-medium text-foreground">Tipo de Viaje</Label>
@@ -264,7 +261,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
                                     {tripTypeTranslations[type].label}
                                   </SelectItem>
                                 </TooltipTrigger>
-                                <TooltipContent side="right" align="start" className="max-w-xs">
+                                <TooltipContent side="right" align="start" className="max-w-xs z-[9999]">
                                   <p className="text-xs">{tripTypeTranslations[type].example}</p>
                                 </TooltipContent>
                               </Tooltip>
@@ -289,7 +286,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
                                     {tripStyleTranslations[style].label}
                                   </SelectItem>
                                 </TooltipTrigger>
-                                <TooltipContent side="right" align="start" className="max-w-xs">
+                                <TooltipContent side="right" align="start" className="max-w-xs z-[9999]">
                                   <p className="text-xs">{tripStyleTranslations[style].example}</p>
                                 </TooltipContent>
                               </Tooltip>
@@ -311,7 +308,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
               </Button>
               {generatedCoverImagePreview && (
                 <div className="mt-2 border rounded-md p-2 flex justify-center items-center bg-muted/50">
-                  <Image src={generatedCoverImagePreview} alt="Vista previa de portada" width={300} height={200} className="rounded-md object-contain max-h-[200px]" />
+                  <NextImage src={generatedCoverImagePreview} alt="Vista previa de portada" width={300} height={200} className="rounded-md object-contain max-h-[200px]" />
                 </div>
               )}
               {!generatedCoverImagePreview && !isGeneratingCoverImage && (
@@ -334,13 +331,13 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
       case 3: // Colaboradores
         return (
           <div className="space-y-6">
-            <h3 className="text-lg font-semibold flex items-center"><Users className="mr-2 h-5 w-5 text-primary" />Paso 3: Colaboradores (Opcional)</h3>
+            <h3 className="text-lg font-semibold flex items-center"><Users className="mr-2 h-5 w-5 text-primary" />Paso 3: Invitar Colaboradores (Opcional)</h3>
             <div>
-              <Label htmlFor="collaborators" className="mb-1 block text-sm font-medium text-foreground">Invitar por email (separados por coma)</Label>
-              <Controller name="collaborators" control={control} render={({ field }) => <Textarea id="collaborators" placeholder="email1@ejemplo.com, email2@ejemplo.com" {...field} rows={3} />} />
-              {errors.collaborators && <p className="text-sm text-destructive mt-1">{errors.collaborators.message}</p>}
+              <Label htmlFor="pendingInvites" className="mb-1 block text-sm font-medium text-foreground">Invitar por email (separados por coma)</Label>
+              <Controller name="pendingInvites" control={control} render={({ field }) => <Textarea id="pendingInvites" placeholder="email1@ejemplo.com, email2@ejemplo.com" {...field} rows={3} />} />
+              {errors.pendingInvites && <p className="text-sm text-destructive mt-1">{errors.pendingInvites.message}</p>}
+              <p className="text-xs text-muted-foreground mt-1">Los usuarios invitados podrán ver y editar este viaje una vez que acepten la invitación.</p>
             </div>
-             <p className="text-xs text-muted-foreground mt-1">La funcionalidad completa de colaboración se implementará más adelante.</p>
           </div>
         );
       default:
@@ -355,7 +352,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
           <DialogTitle className="text-2xl font-headline text-primary">Crear Nuevo Viaje</DialogTitle>
           <DialogDescription>Planifica tu próxima aventura paso a paso.</DialogDescription>
         </DialogHeader>
-        
+
         <div className="px-6 py-3">
             <Progress value={progressPercentage} className="w-full h-2 mb-4" />
             <p className="text-sm text-muted-foreground text-center">Paso {step} de {totalSteps}</p>
@@ -390,4 +387,3 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
     </Dialog>
   );
 }
-

@@ -3,18 +3,15 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, LogOut, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, LogOut, Trash2, AlertTriangle, UserPlus, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import Image from 'next/image';
+import NextImage from 'next/image'; // Renombrado para evitar conflicto
 import CreateTripWizard from '@/components/trips/CreateTripWizard';
-import type { Trip } from '@/lib/types';
-// TripType and TripStyle are already imported in CreateTripWizard, no need here if not directly used
+import type { Trip, CreateTripWizardData } from '@/lib/types';
 import { format, parseISO, isPast } from 'date-fns';
 import { es } from 'date-fns/locale';
-// v4 as uuidv4 is no longer needed for trip IDs if Firestore generates them, but might be used elsewhere.
-// For trip creation, Firestore will generate the ID.
 import { useAuth } from '@/context/AuthContext';
 import { signOutUser } from '@/firebase/auth';
 import { useRouter } from 'next/navigation';
@@ -31,55 +28,125 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, orderBy, addDoc, serverTimestamp, deleteDoc, doc } from "firebase/firestore";
+import { collection, query, where, getDocs, orderBy, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion, arrayRemove, writeBatch } from "firebase/firestore";
 
 
-const fetchTripsFromFirestore = async (userId: string | undefined): Promise<Trip[]> => {
+const fetchTripsFromFirestore = async (userId: string | undefined, userEmail: string | null | undefined): Promise<Trip[]> => {
   if (!userId) return [];
+  const fetchedTripsMap = new Map<string, Trip>();
+
   try {
-    const tripsCollectionRef = collection(db, "trips");
-    const q = query(tripsCollectionRef, where("userId", "==", userId), orderBy("createdAt", "desc"));
-    const querySnapshot = await getDocs(q);
-    const fetchedTrips: Trip[] = [];
-    querySnapshot.forEach((doc) => {
+    // Trips owned by the user
+    const ownedTripsRef = collection(db, "trips");
+    const qOwned = query(ownedTripsRef, where("ownerUid", "==", userId), orderBy("createdAt", "desc"));
+    const ownedSnapshot = await getDocs(qOwned);
+    ownedSnapshot.forEach((doc) => {
       const data = doc.data();
-      // Ensure all required fields are present and correctly typed
-      const trip: Trip = {
+      fetchedTripsMap.set(doc.id, {
         id: doc.id,
-        userId: data.userId,
+        ownerUid: data.ownerUid,
         name: data.name,
         startDate: data.startDate,
         endDate: data.endDate,
         coverImageUrl: data.coverImageUrl,
         tripType: data.tripType,
         tripStyle: data.tripStyle,
-        familia: data.familia, // Keep if used
-        collaborators: data.collaborators, // Keep if used
-        // Convert Firestore Timestamps to ISO strings
+        editorUids: data.editorUids || [],
+        pendingInvites: data.pendingInvites || [],
+        familia: data.familia,
         createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt || Date.now()).toISOString(),
         updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt || Date.now()).toISOString(),
-      };
-      fetchedTrips.push(trip);
+      } as Trip);
     });
-    return fetchedTrips;
+
+    // Trips where the user is an editor
+    const editorTripsRef = collection(db, "trips");
+    const qEditor = query(editorTripsRef, where("editorUids", "array-contains", userId), orderBy("createdAt", "desc"));
+    const editorSnapshot = await getDocs(qEditor);
+    editorSnapshot.forEach((doc) => {
+      if (!fetchedTripsMap.has(doc.id)) {
+        const data = doc.data();
+        fetchedTripsMap.set(doc.id, {
+          id: doc.id,
+          ownerUid: data.ownerUid,
+          name: data.name,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          coverImageUrl: data.coverImageUrl,
+          tripType: data.tripType,
+          tripStyle: data.tripStyle,
+          editorUids: data.editorUids || [],
+          pendingInvites: data.pendingInvites || [],
+          familia: data.familia,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt || Date.now()).toISOString(),
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt || Date.now()).toISOString(),
+        } as Trip);
+      }
+    });
+
+    // Trips where the user has a pending invitation (and email is available)
+    if (userEmail) {
+      const invitedTripsRef = collection(db, "trips");
+      const qInvited = query(invitedTripsRef, where("pendingInvites", "array-contains", userEmail), orderBy("createdAt", "desc"));
+      const invitedSnapshot = await getDocs(qInvited);
+      invitedSnapshot.forEach((doc) => {
+         if (!fetchedTripsMap.has(doc.id)) {
+          const data = doc.data();
+          // Only add if user is not already owner or editor
+          if (data.ownerUid !== userId && !(data.editorUids || []).includes(userId)) {
+            fetchedTripsMap.set(doc.id, {
+              id: doc.id,
+              ownerUid: data.ownerUid,
+              name: data.name,
+              startDate: data.startDate,
+              endDate: data.endDate,
+              coverImageUrl: data.coverImageUrl,
+              tripType: data.tripType,
+              tripStyle: data.tripStyle,
+              editorUids: data.editorUids || [],
+              pendingInvites: data.pendingInvites || [],
+              familia: data.familia,
+              createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt || Date.now()).toISOString(),
+              updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt || Date.now()).toISOString(),
+            } as Trip);
+          }
+        }
+      });
+    }
+    const allTrips = Array.from(fetchedTripsMap.values());
+    // Sort all combined trips by creation date as a final step
+    allTrips.sort((a, b) => parseISO(b.createdAt.toString()).getTime() - parseISO(a.createdAt.toString()).getTime());
+    return allTrips;
+
   } catch (error) {
     console.error("Error fetching trips from Firestore:", error);
-    return []; // Return empty array on error
+    return [];
   }
 };
 
 
 interface TripCardProps {
   trip: Trip;
+  currentUser: UserProfile | null;
   onRequestDelete: (tripId: string) => void;
+  onAcceptInvitation: (tripId: string) => void;
 }
 
-function TripCard({ trip, onRequestDelete }: TripCardProps) {
+function TripCard({ trip, currentUser, onRequestDelete, onAcceptInvitation }: TripCardProps) {
   const tripIsPast = isPast(parseISO(trip.endDate));
   const router = useRouter();
   const { toast } = useToast();
 
+  const isOwner = currentUser?.uid === trip.ownerUid;
+  const isEditor = trip.editorUids?.includes(currentUser?.uid || "") || false;
+  const isPendingInvite = trip.pendingInvites?.includes(currentUser?.email || "") && !isOwner && !isEditor;
+
   const handleCardClick = () => {
+    if (isPendingInvite) {
+      // Potentially show a modal or a toast asking to accept first
+      toast({ title: "Invitación Pendiente", description: "Por favor, acepta la invitación para acceder a este viaje."});
+      return;
+    }
     if (tripIsPast) {
        toast({ title: "Resumen del Viaje", description: "Funcionalidad de resumen post-viaje próximamente."});
     } else {
@@ -88,23 +155,24 @@ function TripCard({ trip, onRequestDelete }: TripCardProps) {
   };
 
   const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent card click event
+    e.stopPropagation();
     onRequestDelete(trip.id);
   };
 
   return (
-    <Card 
-        className={`relative overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 h-full flex flex-col rounded-xl group ${tripIsPast ? 'opacity-70 hover:opacity-90' : 'cursor-pointer'}`}
-        onClick={!tripIsPast ? handleCardClick : undefined}
+    <Card
+        className={`relative overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 h-full flex flex-col rounded-xl group ${tripIsPast ? 'opacity-70 hover:opacity-90' : ''} ${isPendingInvite ? 'border-accent border-2' : 'cursor-pointer'}`}
+        onClick={handleCardClick}
     >
       {trip.coverImageUrl ? (
         <div className="relative w-full h-48">
-          <Image
+          <NextImage
             src={trip.coverImageUrl}
             alt={`Cover image for ${trip.name}`}
             fill
             style={{ objectFit: 'cover' }}
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            priority={true} // Consider making this conditional if many cards
             data-ai-hint={(trip as any).dataAiHint || "travel destination"}
           />
         </div>
@@ -119,26 +187,39 @@ function TripCard({ trip, onRequestDelete }: TripCardProps) {
           {format(parseISO(trip.startDate), "d MMM yyyy", { locale: es })} - {format(parseISO(trip.endDate), "d MMM yyyy", { locale: es })}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pb-3">
         <div className="flex justify-between items-center">
             <div>
                 <Badge variant="outline" className="mr-2 capitalize text-xs">{trip.tripType.toLowerCase()}</Badge>
                 <Badge variant="secondary" className="capitalize text-xs">{trip.tripStyle.toLowerCase()}</Badge>
             </div>
-            {tripIsPast && (
+            {tripIsPast && !isPendingInvite && (
                  <Badge variant="destructive" className="text-xs">Finalizado</Badge>
+            )}
+            {isPendingInvite && (
+                <Badge variant="outline" className="text-xs border-accent text-accent animate-pulse">Invitación</Badge>
             )}
         </div>
       </CardContent>
-      <Button 
-        variant="destructive" 
-        size="icon" 
-        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 z-10 h-8 w-8"
-        onClick={handleDeleteClick}
-        aria-label="Eliminar viaje"
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      {isPendingInvite && (
+          <CardFooter className="p-3 border-t">
+            <Button onClick={(e) => { e.stopPropagation(); onAcceptInvitation(trip.id); }} className="w-full bg-green-600 hover:bg-green-700 text-white">
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Aceptar Invitación
+            </Button>
+          </CardFooter>
+      )}
+      {isOwner && !isPendingInvite && (
+        <Button
+          variant="destructive"
+          size="icon"
+          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 z-10 h-8 w-8"
+          onClick={handleDeleteClick}
+          aria-label="Eliminar viaje"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      )}
     </Card>
   );
 }
@@ -147,35 +228,37 @@ export default function MyTripsPage() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
-  const { currentUser } = useAuth(); 
+  const { currentUser } = useAuth();
   const router = useRouter();
-  const { toast } = useToast(); 
+  const { toast } = useToast();
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [tripToDeleteId, setTripToDeleteId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadTrips = async () => {
-      if (!currentUser) { 
-        setIsLoading(false);
-        setTrips([]); // Clear trips if no user
-        return;
-      }
-      setIsLoading(true);
-      const fetchedTrips = await fetchTripsFromFirestore(currentUser.uid);
-      setTrips(fetchedTrips);
+  const loadTrips = async () => {
+    if (!currentUser) {
       setIsLoading(false);
-    };
+      setTrips([]);
+      return;
+    }
+    setIsLoading(true);
+    const fetchedTrips = await fetchTripsFromFirestore(currentUser.uid, currentUser.email);
+    setTrips(fetchedTrips);
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
     loadTrips();
-  }, [currentUser]); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser]);
 
 
-  const handleTripCreated = async (newTripData: Omit<Trip, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
+  const handleTripCreated = async (wizardData: CreateTripWizardData) => {
     if (!currentUser) {
       toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión para crear un viaje." });
       return;
     }
-    if (currentUser.subscription?.status === 'free' && trips.length >= (currentUser.subscription.maxTrips || 1) ) {
+    if (currentUser.subscription?.status === 'free' && trips.filter(t => t.ownerUid === currentUser.uid).length >= (currentUser.subscription.maxTrips || 1) ) {
         toast({
             variant: "destructive",
             title: "Límite Alcanzado",
@@ -187,20 +270,26 @@ export default function MyTripsPage() {
     }
 
     const tripToSaveInFirestore = {
-      ...newTripData, // name, startDate, endDate, coverImageUrl, tripType, tripStyle, collaborators
-      userId: currentUser.uid, 
+      name: wizardData.name,
+      startDate: wizardData.startDate,
+      endDate: wizardData.endDate,
+      coverImageUrl: wizardData.coverImageUrl || '',
+      tripType: wizardData.tripType,
+      tripStyle: wizardData.tripStyle,
+      ownerUid: currentUser.uid,
+      editorUids: [],
+      pendingInvites: wizardData.pendingInvites || [],
+      familia: `${wizardData.numAdults || 0} Adultos, ${wizardData.numChildren || 0} Niños`, // Example familia string
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
 
     try {
       const docRef = await addDoc(collection(db, "trips"), tripToSaveInFirestore);
-      // Re-fetch trips to update the list with the actual data from Firestore
-      const updatedTrips = await fetchTripsFromFirestore(currentUser.uid);
-      setTrips(updatedTrips);
+      await loadTrips(); // Re-fetch trips
       setIsWizardOpen(false);
-      router.push(`/trips/${docRef.id}/map`); // MODIFICADO: Redirigir a la página de mapa
-      toast({ title: "¡Viaje Creado!", description: `"${newTripData.name}" se ha guardado. Añade tus destinos en el mapa.`});
+      router.push(`/trips/${docRef.id}/map`);
+      toast({ title: "¡Viaje Creado!", description: `"${wizardData.name}" se ha guardado. Añade tus destinos en el mapa.`});
     } catch (error: any) {
         console.error("Error creating trip in Firestore:", error);
         toast({ variant: "destructive", title: "Error al Crear Viaje", description: `No se pudo guardar el viaje: ${error.message}` });
@@ -211,7 +300,7 @@ export default function MyTripsPage() {
     try {
       await signOutUser();
       toast({ title: 'Sesión Cerrada', description: 'Has cerrado sesión correctamente.' });
-      router.push('/login'); 
+      router.push('/login');
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message || 'No se pudo cerrar sesión.' });
     }
@@ -226,16 +315,33 @@ export default function MyTripsPage() {
     if (!tripToDeleteId || !currentUser) return;
 
     const tripBeingDeleted = trips.find(t => t.id === tripToDeleteId);
-    if (!tripBeingDeleted) return;
+    if (!tripBeingDeleted || tripBeingDeleted.ownerUid !== currentUser.uid) {
+        toast({ variant: "destructive", title: "No Autorizado", description: "Solo el propietario puede eliminar el viaje." });
+        setIsDeleteDialogOpen(false);
+        return;
+    }
 
     try {
-        await deleteDoc(doc(db, "trips", tripToDeleteId));
-        const updatedTrips = trips.filter(trip => trip.id !== tripToDeleteId);
-        setTrips(updatedTrips); // Optimistic update
-        
+        // Before deleting the trip, delete its subcollections if any.
+        // This is important for data cleanup and to avoid orphaned data.
+        const subcollectionsToDelete = ["activities", "cities", "expenses"];
+        const batch = writeBatch(db);
+
+        for (const subcollectionName of subcollectionsToDelete) {
+            const subcollectionRef = collection(db, "trips", tripToDeleteId, subcollectionName);
+            const snapshot = await getDocs(subcollectionRef);
+            snapshot.docs.forEach(docSnap => {
+                batch.delete(docSnap.ref);
+            });
+        }
+        // Delete the main trip document
+        batch.delete(doc(db, "trips", tripToDeleteId));
+        await batch.commit();
+
+        setTrips(prevTrips => prevTrips.filter(trip => trip.id !== tripToDeleteId));
         toast({
           title: "Viaje Eliminado",
-          description: `El viaje "${tripBeingDeleted.name}" ha sido eliminado.`,
+          description: `El viaje "${tripBeingDeleted.name}" y todos sus datos han sido eliminados.`,
         });
     } catch (error: any) {
         console.error("Error deleting trip from Firestore:", error);
@@ -245,6 +351,26 @@ export default function MyTripsPage() {
         setTripToDeleteId(null);
     }
   };
+
+  const handleAcceptInvitation = async (tripId: string) => {
+    if (!currentUser || !currentUser.email) {
+        toast({ variant: "destructive", title: "Error", description: "No se pudo identificar al usuario." });
+        return;
+    }
+    const tripRef = doc(db, "trips", tripId);
+    try {
+        await updateDoc(tripRef, {
+            editorUids: arrayUnion(currentUser.uid),
+            pendingInvites: arrayRemove(currentUser.email)
+        });
+        toast({ title: "Invitación Aceptada", description: "¡Ahora eres colaborador de este viaje!" });
+        await loadTrips(); // Refresh the list of trips
+    } catch (error: any) {
+        console.error("Error accepting invitation:", error);
+        toast({ variant: "destructive", title: "Error al Aceptar", description: `No se pudo aceptar la invitación: ${error.message}` });
+    }
+  };
+
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -281,7 +407,7 @@ export default function MyTripsPage() {
           <div className="flex flex-col items-center justify-center text-center h-[60vh]">
             <h2 className="text-2xl font-semibold text-foreground mb-3">¡Bienvenido/a!</h2>
             <p className="text-muted-foreground mb-6 max-w-md">
-              Parece que aún no has planeado ningún viaje. ¡Empecemos la aventura!
+              Parece que aún no has planeado ningún viaje o no tienes invitaciones pendientes. ¡Empecemos la aventura!
             </p>
             <Button size="lg" onClick={() => setIsWizardOpen(true)} disabled={!currentUser}>
               <Plus className="mr-2 h-5 w-5" />
@@ -291,7 +417,13 @@ export default function MyTripsPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {trips.map((trip) => (
-              <TripCard key={trip.id} trip={trip} onRequestDelete={requestDeleteTrip} />
+              <TripCard
+                key={trip.id}
+                trip={trip}
+                currentUser={currentUser}
+                onRequestDelete={requestDeleteTrip}
+                onAcceptInvitation={handleAcceptInvitation}
+              />
             ))}
           </div>
         )}
@@ -301,12 +433,12 @@ export default function MyTripsPage() {
           size="icon"
           onClick={() => setIsWizardOpen(true)}
           aria-label="Crear Nuevo Viaje"
-          disabled={!currentUser} 
+          disabled={!currentUser}
         >
           <Plus className="h-8 w-8" />
         </Button>
       </main>
-      {currentUser && ( 
+      {currentUser && (
         <CreateTripWizard
             isOpen={isWizardOpen}
             onClose={() => setIsWizardOpen(false)}
@@ -322,7 +454,7 @@ export default function MyTripsPage() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               Esta acción no se puede deshacer. Se eliminará permanentemente el viaje
-              "{trips.find(t => t.id === tripToDeleteId)?.name || 'seleccionado'}".
+              "{trips.find(t => t.id === tripToDeleteId)?.name || 'seleccionado'}" y todos sus datos asociados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -339,7 +471,3 @@ export default function MyTripsPage() {
     </div>
   );
 }
-
-    
-
-    

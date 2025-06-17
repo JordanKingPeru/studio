@@ -21,15 +21,16 @@ async function fetchBaseTripData(tripId: string): Promise<Trip | null> {
   const data = tripSnap.data();
   return {
     id: tripSnap.id,
-    userId: data.userId,
+    ownerUid: data.ownerUid, // Changed from userId
     name: data.name,
     startDate: data.startDate,
     endDate: data.endDate,
     coverImageUrl: data.coverImageUrl,
     tripType: data.tripType,
     tripStyle: data.tripStyle,
+    editorUids: data.editorUids || [],
+    pendingInvites: data.pendingInvites || [],
     familia: data.familia,
-    collaborators: data.collaborators,
     createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt || Date.now()).toISOString(),
     updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt || Date.now()).toISOString(),
   } as Trip;
@@ -50,18 +51,18 @@ export default function TripItineraryPage() {
       const activitiesCollectionRef = collection(db, "trips", tripId, "activities");
       const actQuery = query(activitiesCollectionRef, firestoreOrderBy("date"), firestoreOrderBy("order"), firestoreOrderBy("time"));
       const activitiesSnapshot = await getDocs(actQuery);
-      const fetchedActivities: Activity[] = activitiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as Activity));
+      const fetchedActivities: Activity[] = activitiesSnapshot.docs.map(d => ({ id: d.id, ...d.data(), tripId } as Activity));
       setActivities(fetchedActivities);
 
       const citiesCollectionRef = collection(db, "trips", tripId, "cities");
       const cityQuery = query(citiesCollectionRef, firestoreOrderBy("arrivalDate"));
       const citiesSnapshot = await getDocs(cityQuery);
-      const fetchedCities: City[] = citiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as City));
-      
+      const fetchedCities: City[] = citiesSnapshot.docs.map(d => ({ id: d.id, ...d.data(), tripId } as City));
+
       setTripData(prev => {
-        if (!prev) return null; 
+        if (!prev) return null;
         const paises = Array.from(new Set(fetchedCities.map(city => city.country)));
-        return { ...prev, activities: fetchedActivities, ciudades: fetchedCities, paises };
+        return { ...prev, activities: fetchedActivities, ciudades: fetchedCities, paises, userId: prev.ownerUid };
       });
 
     } catch (error: any) {
@@ -76,21 +77,22 @@ export default function TripItineraryPage() {
         if (!isMounted) return;
         setIsLoading(true);
         try {
-          const baseTripData = await fetchBaseTripData(tripId);
+          const baseTrip = await fetchBaseTripData(tripId);
           if (!isMounted) return;
 
-          if (baseTripData) {
+          if (baseTrip) {
             setTripData({
-              ...baseTripData,
-              activities: [], 
-              ciudades: [],   
-              expenses: [],   
-              paises: [],     
+              ...baseTrip,
+              userId: baseTrip.ownerUid, // Ensure userId is set for TripDetails compatibility
+              activities: [],
+              ciudades: [],
+              expenses: [],
+              paises: [],
             });
-            await fetchActivitiesAndCities(); 
+            await fetchActivitiesAndCities();
           } else {
             toast({ variant: "destructive", title: "Error", description: `No se encontraron datos del viaje con ID: ${tripId}.`});
-            setTripData(null); // Explicitly set to null if base trip not found
+            setTripData(null);
           }
         } catch (e) {
           if (!isMounted) return;
@@ -127,7 +129,7 @@ export default function TripItineraryPage() {
     try {
       await setDoc(activityRef, activityDataForFirestore, { merge: true });
       toast({ title: "Éxito", description: `Actividad "${activity.title}" guardada.` });
-      fetchActivitiesAndCities(); 
+      fetchActivitiesAndCities();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `No se pudo guardar actividad: ${error.message}` });
       throw error;
@@ -153,7 +155,7 @@ export default function TripItineraryPage() {
     });
     try {
       await batch.commit();
-      fetchActivitiesAndCities(); 
+      fetchActivitiesAndCities();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `Error al reordenar: ${error.message}` });
     }
@@ -167,7 +169,7 @@ export default function TripItineraryPage() {
       const activityRef = doc(db, "trips", tripId, "activities", activityId);
       await deleteDoc(activityRef);
       toast({ title: "Eliminada", description: `Actividad "${activityToDelete.title}" eliminada.` });
-      fetchActivitiesAndCities(); 
+      fetchActivitiesAndCities();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `No se pudo eliminar: ${error.message}` });
     }

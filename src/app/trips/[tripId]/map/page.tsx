@@ -22,15 +22,16 @@ async function fetchBaseTripData(tripId: string): Promise<Trip | null> {
   const data = tripSnap.data();
   return {
     id: tripSnap.id,
-    userId: data.userId,
+    ownerUid: data.ownerUid, // Changed from userId
     name: data.name,
     startDate: data.startDate,
     endDate: data.endDate,
     coverImageUrl: data.coverImageUrl,
     tripType: data.tripType,
     tripStyle: data.tripStyle,
+    editorUids: data.editorUids || [],
+    pendingInvites: data.pendingInvites || [],
     familia: data.familia,
-    collaborators: data.collaborators,
     createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt || Date.now()).toISOString(),
     updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt || Date.now()).toISOString(),
   } as Trip;
@@ -50,13 +51,13 @@ export default function TripMapPage() {
       const citiesCollectionRef = collection(db, "trips", tripId, "cities");
       const q = query(citiesCollectionRef, firestoreOrderBy("arrivalDate"));
       const querySnapshot = await getDocs(q);
-      const fetchedCities: City[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as City));
+      const fetchedCities: City[] = querySnapshot.docs.map(d => ({ id: d.id, ...d.data(), tripId } as City));
       setCities(fetchedCities);
 
       setTripData(prev => {
         if (!prev) return null;
         const paises = Array.from(new Set(fetchedCities.map(city => city.country)));
-        return { ...prev, ciudades: fetchedCities, paises, activities: prev.activities || [], expenses: prev.expenses || [] };
+        return { ...prev, ciudades: fetchedCities, paises, activities: prev.activities || [], expenses: prev.expenses || [], userId: prev.ownerUid };
       });
 
     } catch (error: any) {
@@ -71,15 +72,16 @@ export default function TripMapPage() {
         if(!isMounted) return;
         setIsLoading(true);
         try {
-            const baseTripData = await fetchBaseTripData(tripId);
+            const baseTrip = await fetchBaseTripData(tripId);
             if(!isMounted) return;
 
-            if (baseTripData) {
-                setTripData({ 
-                    ...baseTripData,
-                    ciudades: [], paises: [], activities: [], expenses: [], 
+            if (baseTrip) {
+                setTripData({
+                    ...baseTrip,
+                    userId: baseTrip.ownerUid, // Ensure userId is set for TripDetails compatibility
+                    ciudades: [], paises: [], activities: [], expenses: [],
                 });
-                await fetchCitiesAndPopulateTripData(); 
+                await fetchCitiesAndPopulateTripData();
             } else {
                 toast({ variant: "destructive", title: "Error", description: `No se encontraron datos del viaje con ID: ${tripId}.`});
                 setTripData(null);
@@ -106,7 +108,7 @@ export default function TripMapPage() {
 
   const handleSaveCity = async (cityData: CityFormData) => {
     if (!tripId) return;
-    const { lat, lng, ...dataToSave } = cityData; // id is part of cityData if editing
+    const { lat, lng, ...dataToSave } = cityData;
 
     const cityPayload: Omit<City, 'id'> = {
       name: dataToSave.name,
@@ -120,16 +122,16 @@ export default function TripMapPage() {
     };
 
     try {
-      if (cityData.id) { 
+      if (cityData.id) {
         const cityRef = doc(db, "trips", tripId, "cities", cityData.id);
         await setDoc(cityRef, cityPayload, { merge: true });
         toast({ title: "Ciudad Actualizada", description: `"${cityData.name}" actualizada.` });
-      } else { 
+      } else {
         const newCityRef = doc(collection(db, "trips", tripId, "cities"));
-        await setDoc(newCityRef, { ...cityPayload, id: newCityRef.id });
+        await setDoc(newCityRef, { ...cityPayload, id: newCityRef.id }); // Save with generated id
         toast({ title: "Ciudad Añadida", description: `"${cityData.name}" añadida.` });
       }
-      fetchCitiesAndPopulateTripData(); 
+      fetchCitiesAndPopulateTripData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `No se pudo guardar ciudad: ${error.message}` });
       throw error;
@@ -144,7 +146,7 @@ export default function TripMapPage() {
       const cityRef = doc(db, "trips", tripId, "cities", cityIdToDelete);
       await deleteDoc(cityRef);
       toast({ title: "Ciudad Eliminada", description: `"${city.name}" eliminada.` });
-      fetchCitiesAndPopulateTripData(); 
+      fetchCitiesAndPopulateTripData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `No se pudo eliminar "${city.name}": ${error.message}` });
     }
