@@ -10,7 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { TripType, TripStyle } from '@/lib/types'; // Assuming these enums are in types.ts
+import type { TripType, TripStyle } from '@/lib/types'; // Assuming these enums are in types.ts
 
 const GenerateTripCoverImageInputSchema = z.object({
   tripName: z.string().describe('El nombre o destino principal del viaje.'),
@@ -72,12 +72,17 @@ const generateTripCoverImageFlow = ai.defineFlow(
     outputSchema: GenerateTripCoverImageOutputSchema,
   },
   async (input) => {
+    // 1. Resolve the PromptFn with the input to get a GenerateRequest object.
+    // This object will contain the rendered prompt string within its `messages` structure.
+    const populatedGenerateRequest = await imagePromptDefinition(input);
+
+    // 2. Pass this resolved GenerateRequest to ai.generate, ensuring necessary model and config.
     const { media } = await ai.generate({
-      model: 'googleai/gemini-2.0-flash-exp',
-      prompt: imagePromptDefinition, // Usar el PromptFn directamente
-      promptConfig: input, // Datos para el template dentro de imagePromptDefinition
+      ...populatedGenerateRequest, // Spread the request, which includes messages with rendered prompt
+      model: 'googleai/gemini-2.0-flash-exp', // Ensure the correct model for image generation
       config: {
-        responseModalities: ['TEXT', 'IMAGE'],
+        ...(populatedGenerateRequest.config || {}), // Merge with any config from the prompt definition
+        responseModalities: ['TEXT', 'IMAGE'], // Crucial for image generation
         safetySettings: [
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
           { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
