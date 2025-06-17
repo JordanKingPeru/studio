@@ -3,17 +3,18 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, LogOut, Trash2, AlertTriangle } from 'lucide-react'; // Added Trash2, AlertTriangle
+import { Plus, LogOut, Trash2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 import CreateTripWizard from '@/components/trips/CreateTripWizard';
 import type { Trip } from '@/lib/types';
-import { TripType, TripStyle } from '@/lib/types';
+// TripType and TripStyle are already imported in CreateTripWizard, no need here if not directly used
 import { format, parseISO, isPast } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { v4 as uuidv4 } from 'uuid';
+// v4 as uuidv4 is no longer needed for trip IDs if Firestore generates them, but might be used elsewhere.
+// For trip creation, Firestore will generate the ID.
 import { useAuth } from '@/context/AuthContext';
 import { signOutUser } from '@/firebase/auth';
 import { useRouter } from 'next/navigation';
@@ -28,37 +29,45 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"; // Added AlertDialog imports
+} from "@/components/ui/alert-dialog";
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, orderBy, addDoc, serverTimestamp, deleteDoc, doc } from "firebase/firestore";
 
-// Mock API call - adjust for userId filtering
-const fetchTrips = async (userId: string | undefined): Promise<Trip[]> => {
-  if (!userId) return []; // No trips if no user
-  await new Promise(resolve => setTimeout(resolve, 500));
-  if (typeof window !== 'undefined') {
-    const allStoredTrips = localStorage.getItem('familyTrips');
-    if (allStoredTrips) {
-      const parsedTrips: Trip[] = JSON.parse(allStoredTrips);
-      // Filter trips by userId
-      return parsedTrips.filter(trip => trip.userId === userId);
-    }
+
+const fetchTripsFromFirestore = async (userId: string | undefined): Promise<Trip[]> => {
+  if (!userId) return [];
+  try {
+    const tripsCollectionRef = collection(db, "trips");
+    const q = query(tripsCollectionRef, where("userId", "==", userId), orderBy("createdAt", "desc"));
+    const querySnapshot = await getDocs(q);
+    const fetchedTrips: Trip[] = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      // Ensure all required fields are present and correctly typed
+      const trip: Trip = {
+        id: doc.id,
+        userId: data.userId,
+        name: data.name,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        coverImageUrl: data.coverImageUrl,
+        tripType: data.tripType,
+        tripStyle: data.tripStyle,
+        familia: data.familia, // Keep if used
+        collaborators: data.collaborators, // Keep if used
+        // Convert Firestore Timestamps to ISO strings
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt || Date.now()).toISOString(),
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt || Date.now()).toISOString(),
+      };
+      fetchedTrips.push(trip);
+    });
+    return fetchedTrips;
+  } catch (error) {
+    console.error("Error fetching trips from Firestore:", error);
+    return []; // Return empty array on error
   }
-  return []; // Default to empty if nothing in localStorage or no userId
 };
 
-const saveTripsToLocalStorage = (trips: Trip[], userId: string | undefined) => {
-  if (typeof window !== 'undefined' && userId) {
-    const allStoredTripsJSON = localStorage.getItem('familyTrips');
-    let allStoredTrips: Trip[] = [];
-    if (allStoredTripsJSON) {
-        allStoredTrips = JSON.parse(allStoredTripsJSON);
-    }
-    // Remove old trips for this user
-    const otherUserTrips = allStoredTrips.filter(t => t.userId !== userId);
-    // Add new/updated trips for this user
-    const updatedUserTrips = [...otherUserTrips, ...trips];
-    localStorage.setItem('familyTrips', JSON.stringify(updatedUserTrips));
-  }
-};
 
 interface TripCardProps {
   trip: Trip;
@@ -86,7 +95,7 @@ function TripCard({ trip, onRequestDelete }: TripCardProps) {
   return (
     <Card 
         className={`relative overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 h-full flex flex-col rounded-xl group ${tripIsPast ? 'opacity-70 hover:opacity-90' : 'cursor-pointer'}`}
-        onClick={!tripIsPast ? handleCardClick : undefined} // Only allow click if not past, or let button handle it
+        onClick={!tripIsPast ? handleCardClick : undefined}
     >
       {trip.coverImageUrl ? (
         <div className="relative w-full h-48">
@@ -149,10 +158,11 @@ export default function MyTripsPage() {
     const loadTrips = async () => {
       if (!currentUser) { 
         setIsLoading(false);
+        setTrips([]); // Clear trips if no user
         return;
       }
       setIsLoading(true);
-      const fetchedTrips = await fetchTrips(currentUser.uid);
+      const fetchedTrips = await fetchTripsFromFirestore(currentUser.uid);
       setTrips(fetchedTrips);
       setIsLoading(false);
     };
@@ -160,7 +170,7 @@ export default function MyTripsPage() {
   }, [currentUser]); 
 
 
-  const handleTripCreated = (newTripData: Omit<Trip, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
+  const handleTripCreated = async (newTripData: Omit<Trip, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     if (!currentUser) {
       toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión para crear un viaje." });
       return;
@@ -176,18 +186,25 @@ export default function MyTripsPage() {
         return;
     }
 
-    const newTrip: Trip = {
-      ...newTripData,
-      id: uuidv4(),
+    const tripToSaveInFirestore = {
+      ...newTripData, // name, startDate, endDate, coverImageUrl, tripType, tripStyle, collaborators
       userId: currentUser.uid, 
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     };
-    const updatedTrips = [...trips, newTrip];
-    setTrips(updatedTrips);
-    saveTripsToLocalStorage(updatedTrips, currentUser.uid);
-    setIsWizardOpen(false);
-    router.push(`/trips/${newTrip.id}/dashboard`);
+
+    try {
+      const docRef = await addDoc(collection(db, "trips"), tripToSaveInFirestore);
+      // Re-fetch trips to update the list with the actual data from Firestore
+      const updatedTrips = await fetchTripsFromFirestore(currentUser.uid);
+      setTrips(updatedTrips);
+      setIsWizardOpen(false);
+      router.push(`/trips/${docRef.id}/dashboard`);
+      toast({ title: "¡Viaje Creado!", description: `"${newTripData.name}" se ha guardado.`});
+    } catch (error: any) {
+        console.error("Error creating trip in Firestore:", error);
+        toast({ variant: "destructive", title: "Error al Crear Viaje", description: `No se pudo guardar el viaje: ${error.message}` });
+    }
   };
 
   const handleSignOut = async () => {
@@ -205,29 +222,34 @@ export default function MyTripsPage() {
     setIsDeleteDialogOpen(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!tripToDeleteId || !currentUser) return;
 
     const tripBeingDeleted = trips.find(t => t.id === tripToDeleteId);
     if (!tripBeingDeleted) return;
 
-    const updatedTrips = trips.filter(trip => trip.id !== tripToDeleteId);
-    setTrips(updatedTrips);
-    saveTripsToLocalStorage(updatedTrips, currentUser.uid);
-    
-    toast({
-      title: "Viaje Eliminado",
-      description: `El viaje "${tripBeingDeleted.name}" ha sido eliminado.`,
-    });
-
-    setIsDeleteDialogOpen(false);
-    setTripToDeleteId(null);
+    try {
+        await deleteDoc(doc(db, "trips", tripToDeleteId));
+        const updatedTrips = trips.filter(trip => trip.id !== tripToDeleteId);
+        setTrips(updatedTrips); // Optimistic update
+        
+        toast({
+          title: "Viaje Eliminado",
+          description: `El viaje "${tripBeingDeleted.name}" ha sido eliminado.`,
+        });
+    } catch (error: any) {
+        console.error("Error deleting trip from Firestore:", error);
+        toast({ variant: "destructive", title: "Error al Eliminar", description: `No se pudo eliminar el viaje: ${error.message}` });
+    } finally {
+        setIsDeleteDialogOpen(false);
+        setTripToDeleteId(null);
+    }
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between px-4"> {/* Added px-4 */}
+        <div className="container flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-4">
              {currentUser && <UserAvatar user={currentUser} />}
             <h1 className="text-2xl font-bold font-headline text-primary">
@@ -261,7 +283,7 @@ export default function MyTripsPage() {
             <p className="text-muted-foreground mb-6 max-w-md">
               Parece que aún no has planeado ningún viaje. ¡Empecemos la aventura!
             </p>
-            <Button size="lg" onClick={() => setIsWizardOpen(true)}>
+            <Button size="lg" onClick={() => setIsWizardOpen(true)} disabled={!currentUser}>
               <Plus className="mr-2 h-5 w-5" />
               Crear mi Primer Viaje
             </Button>
@@ -317,3 +339,5 @@ export default function MyTripsPage() {
     </div>
   );
 }
+
+    
