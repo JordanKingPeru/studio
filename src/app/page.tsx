@@ -199,8 +199,8 @@ export default function MyTripsPage() {
       const updatedTrips = await fetchTripsFromFirestore(currentUser.uid);
       setTrips(updatedTrips);
       setIsWizardOpen(false);
-      router.push(`/trips/${docRef.id}/dashboard`);
-      toast({ title: "¡Viaje Creado!", description: `"${newTripData.name}" se ha guardado.`});
+      router.push(`/trips/${docRef.id}/map`); // MODIFICADO: Redirigir a la página de mapa
+      toast({ title: "¡Viaje Creado!", description: `"${newTripData.name}" se ha guardado. Añade tus destinos en el mapa.`});
     } catch (error: any) {
         console.error("Error creating trip in Firestore:", error);
         toast({ variant: "destructive", title: "Error al Crear Viaje", description: `No se pudo guardar el viaje: ${error.message}` });
@@ -339,5 +339,7 @@ export default function MyTripsPage() {
     </div>
   );
 }
+
+    
 
     
