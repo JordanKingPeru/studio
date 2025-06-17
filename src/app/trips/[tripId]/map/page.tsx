@@ -4,37 +4,37 @@
 import MapSection from '@/components/map/MapSection';
 import { useParams } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
-import type { TripDetails, City } from '@/lib/types';
+import type { Trip, TripDetails, City } from '@/lib/types';
 import type { CityFormData } from '@/components/map/AddCityDialog';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, query, orderBy as firestoreOrderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy as firestoreOrderBy, getDoc as getFirestoreDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
 
-// Mock function to fetch full trip details
-async function fetchFullTripDataForMap(tripId: string): Promise<TripDetails | null> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  const storedTrips = localStorage.getItem('familyTrips');
-  if (storedTrips) {
-    const trips: TripDetails[] = JSON.parse(storedTrips);
-    const currentTrip = trips.find(t => t.id === tripId);
-     if (currentTrip) {
-      const { sampleTripDetails } = await import('@/lib/constants');
-      return {
-        ...sampleTripDetails,
-        ...currentTrip,
-        id: tripId,
-        activities: (currentTrip.activities || sampleTripDetails.activities).map(a => ({ ...a, tripId })),
-        ciudades: (currentTrip.ciudades || sampleTripDetails.ciudades).map(c => ({ ...c, tripId })),
-        expenses: (currentTrip.expenses || sampleTripDetails.expenses).map(e => ({ ...e, tripId })),
-      };
-    }
+// Function to fetch base trip data from Firestore
+async function fetchBaseTripData(tripId: string): Promise<Trip | null> {
+  const tripRef = doc(db, "trips", tripId);
+  const tripSnap = await getFirestoreDoc(tripRef);
+  if (!tripSnap.exists()) {
+    console.warn(`Base trip data for ID ${tripId} not found.`);
+    return null;
   }
-  const { sampleTripDetails } = await import('@/lib/constants');
-  if (tripId === sampleTripDetails.id) return sampleTripDetails;
-  return null;
+  const data = tripSnap.data();
+  return {
+    id: tripSnap.id,
+    userId: data.userId,
+    name: data.name,
+    startDate: data.startDate,
+    endDate: data.endDate,
+    coverImageUrl: data.coverImageUrl,
+    tripType: data.tripType,
+    tripStyle: data.tripStyle,
+    familia: data.familia,
+    collaborators: data.collaborators,
+    createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt || Date.now()).toISOString(),
+    updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt || Date.now()).toISOString(),
+  } as Trip;
 }
-
 
 export default function TripMapPage() {
   const params = useParams();
@@ -44,9 +44,8 @@ export default function TripMapPage() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchCities = useCallback(async () => {
+  const fetchCitiesAndPopulateTripData = useCallback(async () => {
     if (!tripId) return;
-    // setIsLoading(true); // Managed by initial load or specific action triggers
     try {
       const citiesCollectionRef = collection(db, "trips", tripId, "cities");
       const q = query(citiesCollectionRef, firestoreOrderBy("arrivalDate"));
@@ -54,12 +53,15 @@ export default function TripMapPage() {
       const fetchedCities: City[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as City));
       setCities(fetchedCities);
 
-      setTripData(prev => prev ? ({ ...prev, ciudades: fetchedCities }) : null);
+      setTripData(prev => {
+        if (!prev) return null;
+        const paises = Array.from(new Set(fetchedCities.map(city => city.country)));
+        return { ...prev, ciudades: fetchedCities, paises, activities: prev.activities || [], expenses: prev.expenses || [] };
+      });
 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `No se pudieron cargar ciudades: ${error.message}` });
     }
-    // finally { setIsLoading(false); } // Managed by initial load or specific action triggers
   }, [tripId, toast]);
 
   useEffect(() => {
@@ -69,17 +71,24 @@ export default function TripMapPage() {
         if(!isMounted) return;
         setIsLoading(true);
         try {
-            const initialData = await fetchFullTripDataForMap(tripId);
+            const baseTripData = await fetchBaseTripData(tripId);
             if(!isMounted) return;
-            setTripData(initialData);
-            if (initialData) {
-                setCities(initialData.ciudades || []);
+
+            if (baseTripData) {
+                setTripData({ 
+                    ...baseTripData,
+                    ciudades: [], paises: [], activities: [], expenses: [], 
+                });
+                await fetchCitiesAndPopulateTripData(); 
+            } else {
+                toast({ variant: "destructive", title: "Error", description: `No se encontraron datos del viaje con ID: ${tripId}.`});
+                setTripData(null);
             }
-            await fetchCities(); 
         } catch (e) {
             if(!isMounted) return;
             toast({ variant: "destructive", title: "Error", description: `No se pudieron cargar datos del mapa.`});
             console.error("Error loading initial map data:", e);
+            setTripData(null);
         } finally {
             if(isMounted) {
                 setIsLoading(false);
@@ -87,30 +96,40 @@ export default function TripMapPage() {
         }
       };
       loadInitialData();
+    } else {
+        setIsLoading(false);
+        setTripData(null);
     }
     return () => { isMounted = false; };
-  }, [tripId, fetchCities]);
+  }, [tripId, fetchCitiesAndPopulateTripData, toast]);
 
 
   const handleSaveCity = async (cityData: CityFormData) => {
     if (!tripId) return;
-    const { id, lat, lng, ...dataToSave } = cityData;
-    const cityObjectForFirestore: Omit<City, 'id'> = {
-      ...dataToSave,
+    const { lat, lng, ...dataToSave } = cityData; // id is part of cityData if editing
+
+    const cityPayload: Omit<City, 'id'> = {
+      name: dataToSave.name,
+      country: dataToSave.country,
+      arrivalDate: dataToSave.arrivalDate,
+      departureDate: dataToSave.departureDate,
+      notes: dataToSave.notes,
+      budget: dataToSave.budget,
       tripId: tripId,
       coordinates: { lat, lng },
     };
+
     try {
-      if (id) {
-        const cityRef = doc(db, "trips", tripId, "cities", id);
-        await setDoc(cityRef, cityObjectForFirestore, { merge: true });
+      if (cityData.id) { 
+        const cityRef = doc(db, "trips", tripId, "cities", cityData.id);
+        await setDoc(cityRef, cityPayload, { merge: true });
         toast({ title: "Ciudad Actualizada", description: `"${cityData.name}" actualizada.` });
-      } else {
-        const citiesCollectionRef = collection(db, "trips", tripId, "cities");
-        await addDoc(citiesCollectionRef, cityObjectForFirestore);
+      } else { 
+        const newCityRef = doc(collection(db, "trips", tripId, "cities"));
+        await setDoc(newCityRef, { ...cityPayload, id: newCityRef.id });
         toast({ title: "Ciudad Añadida", description: `"${cityData.name}" añadida.` });
       }
-      fetchCities();
+      fetchCitiesAndPopulateTripData(); 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `No se pudo guardar ciudad: ${error.message}` });
       throw error;
@@ -125,7 +144,7 @@ export default function TripMapPage() {
       const cityRef = doc(db, "trips", tripId, "cities", cityIdToDelete);
       await deleteDoc(cityRef);
       toast({ title: "Ciudad Eliminada", description: `"${city.name}" eliminada.` });
-      fetchCities();
+      fetchCitiesAndPopulateTripData(); 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `No se pudo eliminar "${city.name}": ${error.message}` });
     }
@@ -153,4 +172,3 @@ export default function TripMapPage() {
     </div>
   );
 }
-

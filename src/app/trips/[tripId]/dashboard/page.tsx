@@ -4,44 +4,75 @@
 import DashboardView from '@/components/dashboard/DashboardView';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import type { TripDetails } from '@/lib/types';
+import type { Trip, TripDetails, Activity, City, Expense } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button'; // Added import
-import Link from 'next/link'; // Added import
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, collection, getDocs, query, orderBy as firestoreOrderBy } from 'firebase/firestore';
 
-// Mock function to fetch full trip details including activities, cities etc.
-// In a real app, this would fetch from Firestore or your backend.
-async function fetchFullTripData(tripId: string): Promise<TripDetails | null> {
-  console.log(`Fetching full trip data for tripId: ${tripId}`);
-  await new Promise(resolve => setTimeout(resolve, 700)); // Simulate network delay
+// New function to fetch all trip details from Firestore
+async function fetchFullTripDetailsFromFirestore(tripId: string): Promise<TripDetails | null> {
+  const tripDocRef = doc(db, "trips", tripId);
+  const tripDocSnap = await getDoc(tripDocRef);
 
-  const storedTrips = localStorage.getItem('familyTrips');
-  if (storedTrips) {
-    const trips: TripDetails[] = JSON.parse(storedTrips); // Assume stored trips are TripDetails for now
-    const currentTrip = trips.find(t => t.id === tripId);
-    if (currentTrip) {
-      // Simulate fetching sub-collections if they weren't part of the main trip object
-      // For this mock, we assume activities and cities are already part of the stored trip object
-      // or we can use sampleTripDetails as a base.
-      const { sampleTripDetails } = await import('@/lib/constants'); // Lazy load constants
-      return {
-        ...sampleTripDetails, // Base structure and potentially some default activities/cities
-        ...currentTrip, // Override with specific trip data
-        id: tripId, // Ensure the correct tripId is set
-        // Ensure activities and cities are correctly associated with this tripId
-        activities: (currentTrip.activities || sampleTripDetails.activities).map(a => ({ ...a, tripId })),
-        ciudades: (currentTrip.ciudades || sampleTripDetails.ciudades).map(c => ({ ...c, tripId })),
-        expenses: (currentTrip.expenses || sampleTripDetails.expenses).map(e => ({ ...e, tripId })),
-      };
-    }
+  if (!tripDocSnap.exists()) {
+    console.warn(`Trip document with ID ${tripId} not found in Firestore.`);
+    return null;
   }
-  // Fallback to sample trip details if not found in localStorage for mocking
-  const { sampleTripDetails } = await import('@/lib/constants');
-  if (tripId === sampleTripDetails.id) {
-      return sampleTripDetails;
-  }
-  console.warn(`Trip with id ${tripId} not found in localStorage, returning null or default for sample.`);
-  return null; 
+
+  const tripBaseData = tripDocSnap.data() as Omit<Trip, 'id' | 'createdAt' | 'updatedAt'> & { createdAt: any, updatedAt: any };
+
+  // Fetch sub-collections
+  const activitiesCollectionRef = collection(db, "trips", tripId, "activities");
+  const activitiesQuery = query(activitiesCollectionRef, firestoreOrderBy("date"), firestoreOrderBy("order"), firestoreOrderBy("time"));
+  const activitiesSnapshot = await getDocs(activitiesQuery);
+  const fetchedActivities: Activity[] = activitiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as Activity));
+
+  const citiesCollectionRef = collection(db, "trips", tripId, "cities");
+  const citiesQuery = query(citiesCollectionRef, firestoreOrderBy("arrivalDate"));
+  const citiesSnapshot = await getDocs(citiesQuery);
+  const fetchedCities: City[] = citiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as City));
+  
+  const expensesCollectionRef = collection(db, "trips", tripId, "expenses"); // Manual expenses
+  const expensesQuery = query(expensesCollectionRef, firestoreOrderBy("date", "desc"));
+  const expensesSnapshot = await getDocs(expensesQuery);
+  const fetchedManualExpenses: Expense[] = expensesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as Expense));
+
+  // Derive expenses from activities
+  const derivedExpensesFromActivities: Expense[] = fetchedActivities
+    .filter(activity => typeof activity.cost === 'number' && activity.cost > 0)
+    .map(activity => ({
+      id: `${activity.id}-expense`,
+      tripId: activity.tripId,
+      city: activity.city,
+      date: activity.date,
+      category: activity.category,
+      description: activity.title,
+      amount: Number(activity.cost || 0),
+    }));
+
+  const allExpenses = [...derivedExpensesFromActivities, ...fetchedManualExpenses];
+  const paises = Array.from(new Set(fetchedCities.map(city => city.country)));
+
+  return {
+    id: tripDocSnap.id,
+    userId: tripBaseData.userId,
+    name: tripBaseData.name,
+    startDate: tripBaseData.startDate,
+    endDate: tripBaseData.endDate,
+    coverImageUrl: tripBaseData.coverImageUrl,
+    tripType: tripBaseData.tripType,
+    tripStyle: tripBaseData.tripStyle,
+    familia: tripBaseData.familia,
+    collaborators: tripBaseData.collaborators,
+    createdAt: tripBaseData.createdAt?.toDate ? tripBaseData.createdAt.toDate().toISOString() : new Date(tripBaseData.createdAt || Date.now()).toISOString(),
+    updatedAt: tripBaseData.updatedAt?.toDate ? tripBaseData.updatedAt.toDate().toISOString() : new Date(tripBaseData.updatedAt || Date.now()).toISOString(),
+    ciudades: fetchedCities,
+    paises,
+    activities: fetchedActivities,
+    expenses: allExpenses,
+  };
 }
 
 
@@ -58,14 +89,14 @@ export default function TripDashboardPage() {
         setIsLoading(true);
         setError(null);
         try {
-          const data = await fetchFullTripData(tripId);
+          const data = await fetchFullTripDetailsFromFirestore(tripId);
           if (data) {
             setTripData(data);
           } else {
-            setError(`No se encontraron detalles para el viaje con ID: ${tripId}`);
+            setError(`No se encontraron detalles para el viaje con ID: ${tripId}. Asegúrate de que el viaje exista y tengas acceso.`);
           }
         } catch (e) {
-          console.error("Error fetching trip data for dashboard:", e);
+          console.error("Error fetching trip data for dashboard from Firestore:", e);
           setError(`Error al cargar los datos del viaje. ${(e as Error).message}`);
         } finally {
           setIsLoading(false);
@@ -104,7 +135,7 @@ export default function TripDashboardPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center p-4">
         <h2 className="text-xl font-semibold text-foreground mb-2">Viaje no Encontrado</h2>
-        <p className="text-muted-foreground">No se pudo encontrar la información para este viaje.</p>
+        <p className="text-muted-foreground">No se pudo encontrar la información para este viaje. Verifica el ID o si el viaje fue eliminado.</p>
          <Link href="/" className="mt-4">
           <Button variant="outline">Volver a Mis Viajes</Button>
         </Link>
@@ -112,7 +143,5 @@ export default function TripDashboardPage() {
     );
   }
 
-  // Pass the specific tripId to DashboardView
   return <DashboardView tripId={tripId} initialTripData={tripData} />;
 }
-

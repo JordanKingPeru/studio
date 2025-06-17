@@ -4,35 +4,37 @@
 import ItinerarySection from '@/components/itinerary/ItinerarySection';
 import { useParams } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
-import type { TripDetails, Activity } from '@/lib/types';
+import type { Trip, TripDetails, Activity, City } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, serverTimestamp, query, orderBy as firestoreOrderBy, addDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch, serverTimestamp, query, orderBy as firestoreOrderBy, addDoc, getDoc as getFirestoreDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
 
-// Mock function to fetch full trip details
-async function fetchFullTripDataForItinerary(tripId: string): Promise<TripDetails | null> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  const storedTrips = localStorage.getItem('familyTrips');
-  if (storedTrips) {
-    const trips: TripDetails[] = JSON.parse(storedTrips);
-    const currentTrip = trips.find(t => t.id === tripId);
-     if (currentTrip) {
-      const { sampleTripDetails } = await import('@/lib/constants');
-      return {
-        ...sampleTripDetails,
-        ...currentTrip,
-        id: tripId,
-        activities: (currentTrip.activities || sampleTripDetails.activities).map(a => ({ ...a, tripId })),
-        ciudades: (currentTrip.ciudades || sampleTripDetails.ciudades).map(c => ({ ...c, tripId })),
-        expenses: (currentTrip.expenses || sampleTripDetails.expenses).map(e => ({ ...e, tripId })),
-      };
-    }
+// Function to fetch base trip data from Firestore
+async function fetchBaseTripData(tripId: string): Promise<Trip | null> {
+  const tripRef = doc(db, "trips", tripId);
+  const tripSnap = await getFirestoreDoc(tripRef);
+  if (!tripSnap.exists()) {
+    console.warn(`Base trip data for ID ${tripId} not found.`);
+    return null;
   }
-  const { sampleTripDetails } = await import('@/lib/constants');
-  if (tripId === sampleTripDetails.id) return sampleTripDetails;
-  return null;
+  const data = tripSnap.data();
+  return {
+    id: tripSnap.id,
+    userId: data.userId,
+    name: data.name,
+    startDate: data.startDate,
+    endDate: data.endDate,
+    coverImageUrl: data.coverImageUrl,
+    tripType: data.tripType,
+    tripStyle: data.tripStyle,
+    familia: data.familia,
+    collaborators: data.collaborators,
+    createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt || Date.now()).toISOString(),
+    updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt || Date.now()).toISOString(),
+  } as Trip;
 }
+
 
 export default function TripItineraryPage() {
   const params = useParams();
@@ -42,22 +44,29 @@ export default function TripItineraryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchActivities = useCallback(async () => {
+  const fetchActivitiesAndCities = useCallback(async () => {
     if (!tripId) return;
-    // setIsLoading(true); // Managed by initial load or specific action triggers
     try {
       const activitiesCollectionRef = collection(db, "trips", tripId, "activities");
-      const q = query(activitiesCollectionRef, firestoreOrderBy("date"), firestoreOrderBy("order"), firestoreOrderBy("time"));
-      const querySnapshot = await getDocs(q);
-      const fetchedActivities: Activity[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as Activity));
+      const actQuery = query(activitiesCollectionRef, firestoreOrderBy("date"), firestoreOrderBy("order"), firestoreOrderBy("time"));
+      const activitiesSnapshot = await getDocs(actQuery);
+      const fetchedActivities: Activity[] = activitiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as Activity));
       setActivities(fetchedActivities);
 
-      setTripData(prev => prev ? ({ ...prev, activities: fetchedActivities }) : null);
+      const citiesCollectionRef = collection(db, "trips", tripId, "cities");
+      const cityQuery = query(citiesCollectionRef, firestoreOrderBy("arrivalDate"));
+      const citiesSnapshot = await getDocs(cityQuery);
+      const fetchedCities: City[] = citiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as City));
+      
+      setTripData(prev => {
+        if (!prev) return null; 
+        const paises = Array.from(new Set(fetchedCities.map(city => city.country)));
+        return { ...prev, activities: fetchedActivities, ciudades: fetchedCities, paises };
+      });
 
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: `No se pudieron cargar actividades: ${error.message}` });
+      toast({ variant: "destructive", title: "Error", description: `No se pudieron cargar actividades/ciudades: ${error.message}` });
     }
-    // finally { setIsLoading(false); } // Managed by initial load or specific action triggers
   }, [tripId, toast]);
 
   useEffect(() => {
@@ -67,18 +76,27 @@ export default function TripItineraryPage() {
         if (!isMounted) return;
         setIsLoading(true);
         try {
-          const initialData = await fetchFullTripDataForItinerary(tripId);
+          const baseTripData = await fetchBaseTripData(tripId);
           if (!isMounted) return;
-          setTripData(initialData);
-          if (initialData) {
-            setActivities(initialData.activities || []);
+
+          if (baseTripData) {
+            setTripData({
+              ...baseTripData,
+              activities: [], 
+              ciudades: [],   
+              expenses: [],   
+              paises: [],     
+            });
+            await fetchActivitiesAndCities(); 
+          } else {
+            toast({ variant: "destructive", title: "Error", description: `No se encontraron datos del viaje con ID: ${tripId}.`});
+            setTripData(null); // Explicitly set to null if base trip not found
           }
-          // Fetch live activities after setting initial data
-          await fetchActivities(); 
         } catch (e) {
           if (!isMounted) return;
           toast({ variant: "destructive", title: "Error", description: `No se pudieron cargar datos del itinerario.`});
           console.error("Error loading initial itinerary data:", e);
+          setTripData(null);
         } finally {
           if (isMounted) {
             setIsLoading(false);
@@ -86,9 +104,12 @@ export default function TripItineraryPage() {
         }
       };
       loadInitialData();
+    } else {
+        setIsLoading(false);
+        setTripData(null);
     }
     return () => { isMounted = false; };
-  }, [tripId, fetchActivities]); // fetchActivities is a dependency
+  }, [tripId, fetchActivitiesAndCities, toast]);
 
   const handleAddOrUpdateActivity = async (activity: Activity) => {
     if (!tripId) return;
@@ -106,7 +127,7 @@ export default function TripItineraryPage() {
     try {
       await setDoc(activityRef, activityDataForFirestore, { merge: true });
       toast({ title: "Éxito", description: `Actividad "${activity.title}" guardada.` });
-      fetchActivities();
+      fetchActivitiesAndCities(); 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `No se pudo guardar actividad: ${error.message}` });
       throw error;
@@ -132,7 +153,7 @@ export default function TripItineraryPage() {
     });
     try {
       await batch.commit();
-      fetchActivities();
+      fetchActivitiesAndCities(); 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `Error al reordenar: ${error.message}` });
     }
@@ -146,7 +167,7 @@ export default function TripItineraryPage() {
       const activityRef = doc(db, "trips", tripId, "activities", activityId);
       await deleteDoc(activityRef);
       toast({ title: "Eliminada", description: `Actividad "${activityToDelete.title}" eliminada.` });
-      fetchActivities();
+      fetchActivitiesAndCities(); 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `No se pudo eliminar: ${error.message}` });
     }
@@ -174,4 +195,3 @@ export default function TripItineraryPage() {
     </div>
   );
 }
-

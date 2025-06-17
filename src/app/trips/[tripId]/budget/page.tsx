@@ -4,40 +4,36 @@
 import BudgetSection from '@/components/budget/BudgetSection';
 import { useParams } from 'next/navigation';
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import type { TripDetails, Expense, Activity, City, ExpenseFormData } from '@/lib/types';
+import type { Trip, TripDetails, Expense, Activity, City, ExpenseFormData } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy as firestoreOrderBy, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy as firestoreOrderBy, addDoc, serverTimestamp, doc, setDoc, getDoc as getFirestoreDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
 import AddExpenseModal from '@/components/budget/AddExpenseModal';
 
-// Mock function to fetch full trip details
-async function fetchFullTripDataForBudget(tripId: string): Promise<TripDetails | null> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  const storedTrips = localStorage.getItem('familyTrips');
-  if (storedTrips) {
-    const trips: TripDetails[] = JSON.parse(storedTrips);
-    const currentTrip = trips.find(t => t.id === tripId);
-     if (currentTrip) {
-      const { sampleTripDetails } = await import('@/lib/constants');
-      // Ensure all sub-collections get the correct tripId
-      const activities = (currentTrip.activities || sampleTripDetails.activities).map(a => ({ ...a, tripId }));
-      const ciudades = (currentTrip.ciudades || sampleTripDetails.ciudades).map(c => ({ ...c, tripId }));
-      const expenses = (currentTrip.expenses || sampleTripDetails.expenses).map(e => ({ ...e, tripId }));
-      
-      return {
-        ...sampleTripDetails,
-        ...currentTrip,
-        id: tripId,
-        activities,
-        ciudades,
-        expenses,
-      };
-    }
+// Function to fetch base trip data from Firestore
+async function fetchBaseTripData(tripId: string): Promise<Trip | null> {
+  const tripRef = doc(db, "trips", tripId);
+  const tripSnap = await getFirestoreDoc(tripRef);
+  if (!tripSnap.exists()) {
+    console.warn(`Base trip data for ID ${tripId} not found.`);
+    return null;
   }
-  const { sampleTripDetails } = await import('@/lib/constants');
-  if (tripId === sampleTripDetails.id) return sampleTripDetails;
-  return null;
+  const data = tripSnap.data();
+  return {
+    id: tripSnap.id,
+    userId: data.userId,
+    name: data.name,
+    startDate: data.startDate,
+    endDate: data.endDate,
+    coverImageUrl: data.coverImageUrl,
+    tripType: data.tripType,
+    tripStyle: data.tripStyle,
+    familia: data.familia,
+    collaborators: data.collaborators,
+    createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt || Date.now()).toISOString(),
+    updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt || Date.now()).toISOString(),
+  } as Trip;
 }
 
 export default function TripBudgetPage() {
@@ -53,7 +49,6 @@ export default function TripBudgetPage() {
 
   const fetchTripSubCollections = useCallback(async () => {
     if (!tripId) return;
-    // setIsLoading(true); // Managed by initial load or specific action triggers
     try {
       const activitiesCollectionRef = collection(db, "trips", tripId, "activities");
       const activitiesQuery = query(activitiesCollectionRef, firestoreOrderBy("date"), firestoreOrderBy("order"), firestoreOrderBy("time"));
@@ -73,17 +68,23 @@ export default function TripBudgetPage() {
       const fetchedManualExpenses: Expense[] = expensesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), tripId } as Expense));
       setManualExpenses(fetchedManualExpenses);
 
-      setTripData(prev => prev ? ({
-            ...prev, 
-            activities: fetchedActivities, 
-            ciudades: fetchedCities,
-            // expenses will be derived later using fetchedManualExpenses and fetchedActivities
-        }) : null);
+      setTripData(prev => {
+        if (!prev) return null;
+        const derivedExpenses = fetchedActivities
+            .filter(activity => typeof activity.cost === 'number' && activity.cost > 0)
+            .map(activity => ({
+                id: `${activity.id}-expense`, tripId: activity.tripId, city: activity.city, date: activity.date,
+                category: activity.category, description: activity.title, amount: Number(activity.cost || 0),
+            }));
+        const allExpenses = [...derivedExpenses, ...fetchedManualExpenses];
+        const paises = Array.from(new Set(fetchedCities.map(city => city.country)));
+
+        return { ...prev, activities: fetchedActivities, ciudades: fetchedCities, expenses: allExpenses, paises };
+      });
 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: `No se pudieron cargar datos para presupuesto: ${error.message}` });
-    } 
-    // finally { setIsLoading(false); } // Managed by initial load or specific action triggers
+    }
   }, [tripId, toast]);
 
 
@@ -94,19 +95,24 @@ export default function TripBudgetPage() {
         if (!isMounted) return;
         setIsLoading(true);
         try {
-            const initialData = await fetchFullTripDataForBudget(tripId);
+            const baseTripData = await fetchBaseTripData(tripId);
             if (!isMounted) return;
-            setTripData(initialData);
-            if (initialData) {
-                setActivities(initialData.activities || []);
-                setCities(initialData.ciudades || []);
-                setManualExpenses(initialData.expenses?.filter(e => !e.id.includes('-expense')) || []);
+
+            if (baseTripData) {
+                setTripData({ 
+                    ...baseTripData,
+                    activities: [], ciudades: [], expenses: [], paises: [],
+                });
+                await fetchTripSubCollections();
+            } else {
+                 toast({ variant: "destructive", title: "Error", description: `No se encontraron datos del viaje con ID: ${tripId}.`});
+                 setTripData(null);
             }
-            await fetchTripSubCollections();
         } catch (e) {
             if (!isMounted) return;
             toast({ variant: "destructive", title: "Error", description: `No se pudieron cargar datos del presupuesto.`});
             console.error("Error loading initial budget data:", e);
+            setTripData(null);
         } finally {
             if(isMounted) {
                  setIsLoading(false);
@@ -114,9 +120,12 @@ export default function TripBudgetPage() {
         }
       };
       loadInitialData();
+    } else {
+        setIsLoading(false);
+        setTripData(null);
     }
      return () => { isMounted = false; };
-  }, [tripId, fetchTripSubCollections]);
+  }, [tripId, fetchTripSubCollections, toast]);
 
   const derivedExpensesFromActivities = useMemo((): Expense[] => {
     return activities
@@ -139,15 +148,19 @@ export default function TripBudgetPage() {
   const handleAddExpense = async (expenseData: ExpenseFormData) => {
     if (!tripId) return;
     const newExpenseRef = doc(collection(db, "trips", tripId, "expenses"));
-    const newExpense: Expense = {
-        ...expenseData,
+    const newExpenseToSave: Expense = {
         id: newExpenseRef.id,
         tripId,
+        city: expenseData.city,
+        date: expenseData.date,
+        category: expenseData.category,
+        description: expenseData.description,
+        amount: expenseData.amount,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     };
     try {
-        await setDoc(newExpenseRef, newExpense);
+        await setDoc(newExpenseRef, newExpenseToSave);
         toast({ title: "Gasto Añadido", description: `"${expenseData.description}" añadido correctamente.` });
         fetchTripSubCollections(); 
         setIsExpenseModalOpen(false);
@@ -155,7 +168,6 @@ export default function TripBudgetPage() {
         toast({ variant: "destructive", title: "Error al Añadir Gasto", description: error.message });
     }
   };
-
 
   if (isLoading || !tripData) {
     return (
@@ -184,4 +196,3 @@ export default function TripBudgetPage() {
     </div>
   );
 }
-
