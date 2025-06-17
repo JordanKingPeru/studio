@@ -4,10 +4,10 @@
 import MapSection from '@/components/map/MapSection';
 import { useParams } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
-import type { Trip, TripDetails, City } from '@/lib/types';
+import type { Trip, TripDetails, City, Coordinates } from '@/lib/types';
 import type { CityFormData } from '@/components/map/AddCityDialog';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy as firestoreOrderBy, getDoc as getFirestoreDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy as firestoreOrderBy, getDoc as getFirestoreDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
 
@@ -22,7 +22,7 @@ async function fetchBaseTripData(tripId: string): Promise<Trip | null> {
   const data = tripSnap.data();
   return {
     id: tripSnap.id,
-    ownerUid: data.ownerUid, // Changed from userId
+    ownerUid: data.ownerUid,
     name: data.name,
     startDate: data.startDate,
     endDate: data.endDate,
@@ -78,7 +78,7 @@ export default function TripMapPage() {
             if (baseTrip) {
                 setTripData({
                     ...baseTrip,
-                    userId: baseTrip.ownerUid, // Ensure userId is set for TripDetails compatibility
+                    userId: baseTrip.ownerUid, 
                     ciudades: [], paises: [], activities: [], expenses: [],
                 });
                 await fetchCitiesAndPopulateTripData();
@@ -110,29 +110,38 @@ export default function TripMapPage() {
     if (!tripId) return;
     const { lat, lng, ...dataToSave } = cityData;
 
-    const cityPayload: Omit<City, 'id'> = {
+    const cityPayloadForFirestore: Partial<Omit<City, 'id' | 'createdAt' | 'updatedAt'>> & { coordinates: Coordinates; tripId: string; name: string; country: string; arrivalDate: string; departureDate: string; updatedAt: any; createdAt?: any;} = {
       name: dataToSave.name,
       country: dataToSave.country,
       arrivalDate: dataToSave.arrivalDate,
       departureDate: dataToSave.departureDate,
-      notes: dataToSave.notes,
-      budget: dataToSave.budget,
       tripId: tripId,
       coordinates: { lat, lng },
+      updatedAt: serverTimestamp(),
     };
+
+    if (dataToSave.notes !== undefined && dataToSave.notes !== '') {
+      cityPayloadForFirestore.notes = dataToSave.notes;
+    }
+    if (typeof dataToSave.budget === 'number') {
+      cityPayloadForFirestore.budget = dataToSave.budget;
+    }
+
 
     try {
       if (cityData.id) {
         const cityRef = doc(db, "trips", tripId, "cities", cityData.id);
-        await setDoc(cityRef, cityPayload, { merge: true });
+        await setDoc(cityRef, cityPayloadForFirestore, { merge: true });
         toast({ title: "Ciudad Actualizada", description: `"${cityData.name}" actualizada.` });
       } else {
         const newCityRef = doc(collection(db, "trips", tripId, "cities"));
-        await setDoc(newCityRef, { ...cityPayload, id: newCityRef.id }); // Save with generated id
+        cityPayloadForFirestore.createdAt = serverTimestamp();
+        await setDoc(newCityRef, { ...cityPayloadForFirestore, id: newCityRef.id }); 
         toast({ title: "Ciudad Añadida", description: `"${cityData.name}" añadida.` });
       }
       fetchCitiesAndPopulateTripData();
     } catch (error: any) {
+      console.error("Error saving city to Firestore:", error);
       toast({ variant: "destructive", title: "Error", description: `No se pudo guardar ciudad: ${error.message}` });
       throw error;
     }
