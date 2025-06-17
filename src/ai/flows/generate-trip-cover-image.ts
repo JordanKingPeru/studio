@@ -10,7 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { TripType, TripStyle } from '@/lib/types'; // IMPORTED ENUMS
+import { TripType, TripStyle } from '@/lib/types';
 
 const GenerateTripCoverImageInputSchema = z.object({
   tripName: z.string().describe('El nombre o destino principal del viaje.'),
@@ -37,6 +37,10 @@ export async function generateTripCoverImage(input: GenerateTripCoverImageInput)
 const imagePromptDefinition = ai.definePrompt({
   name: 'generateTripCoverImagePrompt',
   input: {schema: GenerateTripCoverImageInputSchema},
+  // The output schema here is for the conceptual prompt, but for actual image generation,
+  // the flow output is defined by GenerateTripCoverImageOutputSchema.
+  // The model itself will output media, not text conforming to this output schema.
+  output: {schema: GenerateTripCoverImageOutputSchema}, 
   prompt: `Genera una imagen de portada para un viaje. La imagen debe ser MUY MOTIVADORA, ATRACTIVA y LO MÁS REALISTA POSIBLE (estilo fotográfico o ilustración hiperrealista), adecuada como foto principal para un planificador de viajes.
 
 Detalles del Viaje:
@@ -76,12 +80,19 @@ const generateTripCoverImageFlow = ai.defineFlow(
     // This object will contain the rendered prompt string within its `messages` structure.
     const populatedGenerateRequest = await imagePromptDefinition(input);
 
-    // 2. Pass this resolved GenerateRequest to ai.generate, ensuring necessary model and config.
+    // 2. Extract the rendered text prompt.
+    const promptText = populatedGenerateRequest.messages?.[0]?.content?.[0]?.text;
+
+    if (!promptText) {
+      console.error('Rendered prompt text is empty or missing. Request object:', JSON.stringify(populatedGenerateRequest, null, 2), 'Input:', JSON.stringify(input, null, 2));
+      throw new Error('La IA no pudo renderizar el prompt de texto necesario para generar la imagen.');
+    }
+
+    // 3. Pass the extracted text prompt directly to ai.generate for image generation.
     const { media } = await ai.generate({
-      ...populatedGenerateRequest, // Spread the request, which includes messages with rendered prompt
-      model: 'googleai/gemini-2.0-flash-exp', // Ensure the correct model for image generation
+      model: 'googleai/gemini-2.0-flash-exp',
+      prompt: promptText, // Use the rendered text prompt
       config: {
-        ...(populatedGenerateRequest.config || {}), // Merge with any config from the prompt definition
         responseModalities: ['TEXT', 'IMAGE'], // Crucial for image generation
         safetySettings: [
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
@@ -93,7 +104,7 @@ const generateTripCoverImageFlow = ai.defineFlow(
     });
 
     if (!media?.url) {
-      console.error('Image generation failed. Input:', input, 'Response media:', media);
+      console.error('Image generation failed. Input used for prompt:', input, 'Rendered Prompt Text:', promptText, 'Response media:', media);
       throw new Error('La IA no pudo generar una imagen o no devolvió una URL válida. Intenta ajustar los detalles del viaje o reintentar.');
     }
 
