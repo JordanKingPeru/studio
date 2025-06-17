@@ -10,7 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import type { TripType, TripStyle } from '@/lib/types'; // Assuming these enums are in types.ts
+import { TripType, TripStyle } from '@/lib/types'; // IMPORTED ENUMS
 
 const GenerateTripCoverImageInputSchema = z.object({
   tripName: z.string().describe('El nombre o destino principal del viaje.'),
