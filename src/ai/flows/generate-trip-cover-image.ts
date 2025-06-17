@@ -34,8 +34,6 @@ export async function generateTripCoverImage(input: GenerateTripCoverImageInput)
   return generateTripCoverImageFlow(input);
 }
 
-// This definition is kept for schema documentation and potential future use,
-// but the template string is used directly in ai.generate below.
 const imagePromptDefinition = ai.definePrompt({
   name: 'generateTripCoverImagePrompt',
   input: {schema: GenerateTripCoverImageInputSchema},
@@ -67,34 +65,6 @@ Basado en los detalles proporcionados, crea la imagen.
 `,
 });
 
-const handlebarsPromptTemplate = `Genera una imagen de portada para un viaje. La imagen debe ser MUY MOTIVADORA, ATRACTIVA y LO MÁS REALISTA POSIBLE (estilo fotográfico o ilustración hiperrealista), adecuada como foto principal para un planificador de viajes.
-
-Detalles del Viaje:
-- Nombre/Tema del Viaje: {{{tripName}}}
-- Fechas: Desde {{{startDate}}} hasta {{{endDate}}}
-- Tipo de Viaje: {{{tripType}}}
-- Estilo de Viaje: {{{tripStyle}}}
-{{#if numTravelers}}
-- Grupo de Viajeros: {{numTravelers}} personas en total.
-  {{#if numAdults}} - Adultos: {{numAdults}}{{/if}}
-  {{#if numChildren}} - Niños: {{numChildren}}{{#if childrenAges}} (Edades: {{childrenAges}}){{/if}}{{/if}}
-{{/if}}
-
-Consideraciones para la imagen:
-- Escena: Evoca la emoción y el ambiente principal del viaje (ej: aventura en montañas, relajación en playa tropical, exploración cultural en ciudad histórica, diversión familiar en parque temático, elegancia en un viaje de negocios con toques de ocio).
-- Realismo: Busca un estilo fotográfico de alta calidad o una ilustración digital hiperrealista. Evita personajes de dibujos animados o estilos demasiado abstractos.
-- Composición: Atractiva visualmente, con buena iluminación y colores vibrantes pero naturales.
-- Relevancia: Debe ser claramente relevante para el tipo de viaje y destino/tema mencionado.
-- Formato: Horizontal (apaisado), ideal para una imagen de portada.
-- Sin Texto: No incluyas ningún texto superpuesto en la imagen.
-
-Ejemplo de descripción para la IA (si fuera un viaje familiar a la playa en verano): "Una familia sonriente (dos adultos, dos niños pequeños de 4 y 7 años) construyendo un castillo de arena en una playa tropical soleada, con aguas turquesas y palmeras al fondo. Estilo fotográfico realista y alegre."
-Ejemplo para aventura en montañas: "Impresionante vista de un excursionista llegando a la cima de una montaña al amanecer, con un vasto paisaje montañoso extendiéndose abajo. Estilo fotográfico realista y épico."
-
-Basado en los detalles proporcionados, crea la imagen.
-`;
-
-
 const generateTripCoverImageFlow = ai.defineFlow(
   {
     name: 'generateTripCoverImageFlow',
@@ -104,8 +74,8 @@ const generateTripCoverImageFlow = ai.defineFlow(
   async (input) => {
     const { media } = await ai.generate({
       model: 'googleai/gemini-2.0-flash-exp',
-      prompt: handlebarsPromptTemplate,
-      promptConfig: input,
+      prompt: imagePromptDefinition, // Usar el PromptFn directamente
+      promptConfig: input, // Datos para el template dentro de imagePromptDefinition
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
         safetySettings: [
@@ -125,4 +95,3 @@ const generateTripCoverImageFlow = ai.defineFlow(
     return { imageDataUri: media.url };
   }
 );
-
