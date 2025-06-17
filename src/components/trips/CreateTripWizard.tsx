@@ -247,6 +247,31 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
         return (
           <div className="space-y-6">
             <h3 className="text-lg font-semibold flex items-center"><Palette className="mr-2 h-5 w-5 text-primary" />Paso 2: Portada y Contexto</h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <Label className="mb-1 block text-sm font-medium text-foreground">Tipo de Viaje</Label>
+                    <Controller name="tripType" control={control} render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger><SelectValue placeholder="Selecciona tipo" /></SelectTrigger>
+                        <SelectContent>{Object.values(TripType).map(type => (<SelectItem key={type} value={type}>{type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}</SelectItem>))}</SelectContent>
+                        </Select>
+                    )} />
+                    {errors.tripType && <p className="text-sm text-destructive mt-1">{errors.tripType.message}</p>}
+                </div>
+                <div>
+                    <Label className="mb-1 block text-sm font-medium text-foreground">Estilo de Viaje</Label>
+                    <Controller name="tripStyle" control={control} render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger><SelectValue placeholder="Selecciona estilo" /></SelectTrigger>
+                        <SelectContent>{Object.values(TripStyle).map(style => (<SelectItem key={style} value={style}>{style.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}</SelectItem>))}</SelectContent>
+                        </Select>
+                    )} />
+                    {errors.tripStyle && <p className="text-sm text-destructive mt-1">{errors.tripStyle.message}</p>}
+                </div>
+            </div>
+             <p className="text-xs text-muted-foreground">Estos datos también ayudarán a la IA a personalizar sugerencias y la foto de portada.</p>
+
             <div>
               <Label className="mb-1 block text-sm font-medium text-foreground">Foto de Portada</Label>
               <Button type="button" onClick={handleGenerateCoverImage} disabled={isGeneratingCoverImage} className="w-full mb-2">
@@ -273,30 +298,6 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
                <p className="text-xs text-muted-foreground mt-1">La IA usará los detalles del viaje para crear una imagen única.</p>
                {errors.coverImageUrl && <p className="text-sm text-destructive mt-1">{errors.coverImageUrl.message}</p>}
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <Label className="mb-1 block text-sm font-medium text-foreground">Tipo de Viaje</Label>
-                    <Controller name="tripType" control={control} render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Selecciona tipo" /></SelectTrigger>
-                        <SelectContent>{Object.values(TripType).map(type => (<SelectItem key={type} value={type}>{type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}</SelectItem>))}</SelectContent>
-                        </Select>
-                    )} />
-                    {errors.tripType && <p className="text-sm text-destructive mt-1">{errors.tripType.message}</p>}
-                </div>
-                <div>
-                    <Label className="mb-1 block text-sm font-medium text-foreground">Estilo de Viaje</Label>
-                    <Controller name="tripStyle" control={control} render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Selecciona estilo" /></SelectTrigger>
-                        <SelectContent>{Object.values(TripStyle).map(style => (<SelectItem key={style} value={style}>{style.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}</SelectItem>))}</SelectContent>
-                        </Select>
-                    )} />
-                    {errors.tripStyle && <p className="text-sm text-destructive mt-1">{errors.tripStyle.message}</p>}
-                </div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Estos datos también ayudarán a la IA a personalizar sugerencias durante el viaje.</p>
           </div>
         );
       case 3: // Colaboradores
