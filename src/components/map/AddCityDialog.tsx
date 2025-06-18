@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -290,7 +289,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                           </div>
                       </AccordionTrigger>
                       <AccordionContent className="border-t">
-                          <CardContent className="space-y-3 text-xs sm:text-sm py-3 max-h-[40vh] overflow-y-auto">
+                          <CardContent className="space-y-3 text-xs sm:text-sm py-3">
                             <p className="break-words"><strong>Nombre:</strong> {selectedPlaceDetails.displayName}</p>
                             <p className="break-words"><strong>Dirección:</strong> {selectedPlaceDetails.formattedAddress}</p>
                             {selectedPlaceDetails.country && <p><strong>País:</strong> {selectedPlaceDetails.country}</p>}
