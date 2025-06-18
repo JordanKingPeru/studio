@@ -39,19 +39,22 @@ export const tripStyleTranslations: Record<TripStyle, { label: string; example: 
 
 export interface Trip {
   id: string;
-  ownerUid: string; // Cambiado de userId
+  ownerUid: string;
   name: string;
   startDate: string;
   endDate: string;
   coverImageUrl?: string;
   tripType: TripType;
   tripStyle: TripStyle;
-  editorUids?: string[]; // Anteriormente collaborators, ahora para UIDs de editores
-  pendingInvites?: string[]; // Emails de usuarios invitados
-  familia?: string; // Mantener si se usa, o considerar integrarlo en detalles del viaje
-  createdAt: any; // Firestore serverTimestamp se convierte a string en cliente, o es Timestamp
-  updatedAt: any; // Firestore serverTimestamp se convierte a string en cliente, o es Timestamp
+  editorUids?: string[];
+  pendingInvites?: string[];
+  familia?: string;
+  createdAt: any;
+  updatedAt: any;
 }
+
+export type SubscriptionPlanId = "free_tier" | "pro_tier";
+export type SubscriptionStatus = "free" | "active" | "canceled" | "past_due";
 
 export interface UserProfile {
   uid: string;
@@ -59,13 +62,13 @@ export interface UserProfile {
   displayName: string | null;
   photoURL?: string | null;
   emailVerified: boolean;
-  createdAt?: string; // ISO string, from Firestore serverTimestamp
+  createdAt?: string;
   subscription: {
-    status: 'free' | 'pro' | 'cancelled';
-    plan: 'free_tier' | 'pro_tier';
+    planId: SubscriptionPlanId;
+    status: SubscriptionStatus;
     tripsCreated: number;
     maxTrips: number;
-    renewalDate?: string; // ISO string for pro tier
+    renewalDate?: string | null;
   };
 }
 
@@ -131,22 +134,19 @@ export interface Expense {
   tripId: string;
   city: string;
   date: string;
-  category: ExpenseCategory | ActivityCategory; // Puede ser de un tipo de actividad o gasto manual
+  category: ExpenseCategory | ActivityCategory;
   description: string;
   amount: number;
   createdAt?: any;
   updatedAt?: any;
 }
 
-export interface TripDetails extends Omit<Trip, 'ownerUid'> { // ownerUid ya está en Trip
-  userId: string; // Para mantener compatibilidad donde se espera userId, pero es ownerUid
+export interface TripDetails extends Omit<Trip, 'ownerUid'> {
+  userId: string; 
   ciudades: City[];
   paises: string[];
   activities: Activity[];
   expenses: Expense[];
-  // Si 'familia' u otros campos específicos de TripDetails son necesarios, deben estar aquí
-  // y asegurarse que Trip base no los duplique o que se manejen correctamente.
-  // Para este caso, `Trip` ya tiene `familia`, por lo que `TripDetails` lo hereda.
 }
 
 
@@ -181,7 +181,6 @@ export interface ItineraryWeek {
   isDefaultExpanded: boolean;
 }
 
-// Este tipo se usará para el formulario del wizard, que puede ser un subconjunto de Trip
 export interface CreateTripWizardData {
   name: string;
   startDate: string;
@@ -189,7 +188,7 @@ export interface CreateTripWizardData {
   coverImageUrl?: string;
   tripType: TripType;
   tripStyle: TripStyle;
-  pendingInvites?: string[]; // Para los emails de los invitados
+  pendingInvites?: string[];
   numTravelers?: number;
   numAdults?: number;
   numChildren?: number;
@@ -209,3 +208,4 @@ export type ExpenseFormData = {
     tripId: string;
     id?: string;
 };
+

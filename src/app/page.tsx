@@ -7,7 +7,7 @@ import { Plus, LogOut, Trash2, AlertTriangle, UserPlus, CheckCircle } from 'luci
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import NextImage from 'next/image'; // Renombrado para evitar conflicto
+import NextImage from 'next/image';
 import CreateTripWizard from '@/components/trips/CreateTripWizard';
 import type { Trip, CreateTripWizardData, UserProfile } from '@/lib/types';
 import { format, parseISO, isPast } from 'date-fns';
@@ -27,9 +27,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { db, storage } from '@/lib/firebase'; // Import storage
-import { collection, query, where, getDocs, orderBy, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion, arrayRemove, writeBatch } from "firebase/firestore";
-import { ref as storageRef, uploadString, getDownloadURL, deleteObject as deleteStorageObject } from "firebase/storage"; // Import storage functions
+import { db, storage } from '@/lib/firebase';
+import { collection, query, where, getDocs, orderBy, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion, arrayRemove, writeBatch, increment } from "firebase/firestore";
+import { ref as storageRef, uploadString, getDownloadURL, deleteObject as deleteStorageObject } from "firebase/storage";
 import { v4 as uuidv4 } from 'uuid';
 
 
@@ -38,7 +38,6 @@ const fetchTripsFromFirestore = async (userId: string | undefined, userEmail: st
   const fetchedTripsMap = new Map<string, Trip>();
 
   try {
-    // Trips owned by the user
     const ownedTripsRef = collection(db, "trips");
     const qOwned = query(ownedTripsRef, where("ownerUid", "==", userId), orderBy("createdAt", "desc"));
     const ownedSnapshot = await getDocs(qOwned);
@@ -61,7 +60,6 @@ const fetchTripsFromFirestore = async (userId: string | undefined, userEmail: st
       } as Trip);
     });
 
-    // Trips where the user is an editor
     const editorTripsRef = collection(db, "trips");
     const qEditor = query(editorTripsRef, where("editorUids", "array-contains", userId), orderBy("createdAt", "desc"));
     const editorSnapshot = await getDocs(qEditor);
@@ -86,7 +84,6 @@ const fetchTripsFromFirestore = async (userId: string | undefined, userEmail: st
       }
     });
 
-    // Trips where the user has a pending invitation (and email is available)
     if (userEmail) {
       const invitedTripsRef = collection(db, "trips");
       const qInvited = query(invitedTripsRef, where("pendingInvites", "array-contains", userEmail), orderBy("createdAt", "desc"));
@@ -94,7 +91,6 @@ const fetchTripsFromFirestore = async (userId: string | undefined, userEmail: st
       invitedSnapshot.forEach((doc) => {
          if (!fetchedTripsMap.has(doc.id)) {
           const data = doc.data();
-          // Only add if user is not already owner or editor
           if (data.ownerUid !== userId && !(data.editorUids || []).includes(userId)) {
             fetchedTripsMap.set(doc.id, {
               id: doc.id,
@@ -116,7 +112,6 @@ const fetchTripsFromFirestore = async (userId: string | undefined, userEmail: st
       });
     }
     const allTrips = Array.from(fetchedTripsMap.values());
-    // Sort all combined trips by creation date as a final step
     allTrips.sort((a, b) => parseISO(b.createdAt.toString()).getTime() - parseISO(a.createdAt.toString()).getTime());
     return allTrips;
 
@@ -145,14 +140,13 @@ function TripCard({ trip, currentUser, onRequestDelete, onAcceptInvitation }: Tr
 
   const handleCardClick = () => {
     if (isPendingInvite) {
-      // Potentially show a modal or a toast asking to accept first
       toast({ title: "Invitación Pendiente", description: "Por favor, acepta la invitación para acceder a este viaje."});
       return;
     }
     if (tripIsPast) {
        toast({ title: "Resumen del Viaje", description: "Funcionalidad de resumen post-viaje próximamente."});
     } else {
-      router.push(`/trips/${trip.id}/dashboard`);
+      router.push(`/trips/${trip.id}/map`); // Go to map first
     }
   };
 
@@ -174,7 +168,7 @@ function TripCard({ trip, currentUser, onRequestDelete, onAcceptInvitation }: Tr
             fill
             style={{ objectFit: 'cover' }}
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            priority={true} // Consider making this conditional if many cards
+            priority={true}
             data-ai-hint={(trip as any).dataAiHint || "travel destination"}
           />
         </div>
@@ -256,11 +250,14 @@ export default function MyTripsPage() {
 
 
   const handleTripCreated = async (wizardData: CreateTripWizardData) => {
-    if (!currentUser) {
-      toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión para crear un viaje." });
+    if (!currentUser || !currentUser.subscription) {
+      toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión y tener un perfil para crear un viaje." });
       return;
     }
-    if (currentUser.subscription?.status === 'free' && trips.filter(t => t.ownerUid === currentUser.uid).length >= (currentUser.subscription.maxTrips || 1) ) {
+    
+    // Enforce trip limit based on subscription.tripsCreated
+    if (currentUser.subscription.status === 'free' && 
+        currentUser.subscription.tripsCreated >= currentUser.subscription.maxTrips) {
         toast({
             variant: "destructive",
             title: "Límite Alcanzado",
@@ -274,59 +271,63 @@ export default function MyTripsPage() {
     let finalCoverImageUrl = '';
     const base64CoverImage = wizardData.coverImageUrl;
 
-    // Prepare trip data for Firestore (initially without coverImageUrl if it's base64)
     const tripToSaveInFirestore = {
       name: wizardData.name,
       startDate: wizardData.startDate,
       endDate: wizardData.endDate,
-      // coverImageUrl will be added/updated after potential upload
       tripType: wizardData.tripType,
       tripStyle: wizardData.tripStyle,
       ownerUid: currentUser.uid,
       editorUids: [],
       pendingInvites: wizardData.pendingInvites || [],
-      familia: `${wizardData.numAdults || 0} Adultos, ${wizardData.numChildren || 0} Niños`,
+      familia: `${wizardData.numAdults || 0} Adultos, ${wizardData.numChildren || 0} Niños`, // Ensure fallback
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+      // coverImageUrl will be added after potential upload
     };
 
     try {
-      // Create the trip document in Firestore first to get its ID
+      // This part would ideally be replaced by a Cloud Function call
+      // const createTripCallable = httpsCallable(functions, 'createTrip');
+      // const result = await createTripCallable(tripToSaveInFirestore); // Pass data expected by CF
+      // const tripId = result.data.tripId;
+      // For now, direct write:
       const docRef = await addDoc(collection(db, "trips"), tripToSaveInFirestore);
       const tripId = docRef.id;
+
+      // Increment tripsCreated in user's profile (simulating Cloud Function)
+      const userRef = doc(db, "users", currentUser.uid);
+      await updateDoc(userRef, {
+        "subscription.tripsCreated": increment(1)
+      });
+      // Note: AuthContext will pick up this change via its onSnapshot listener for the user profile.
 
       if (base64CoverImage && base64CoverImage.startsWith('data:image')) {
         toast({ title: "Procesando Portada...", description: "Subiendo imagen de portada, por favor espera." });
         try {
-          const imageName = `cover-${uuidv4()}.png`; // Generate unique name
+          const imageName = `cover-${uuidv4()}.png`;
           const imagePath = `trip_covers/${tripId}/${imageName}`;
           const imageStorageRef = storageRef(storage, imagePath);
-          
-          // uploadString expects data_url, base64, or base64url string.
-          // If it's a data_url (e.g., 'data:image/png;base64,iVBORw0KGgo...'), uploadString handles it.
           const uploadResult = await uploadString(imageStorageRef, base64CoverImage, 'data_url');
           finalCoverImageUrl = await getDownloadURL(uploadResult.ref);
-
-          // Update the Firestore document with the new Storage URL
           await updateDoc(docRef, { coverImageUrl: finalCoverImageUrl, updatedAt: serverTimestamp() });
           toast({ title: "Portada Subida", description: "Imagen de portada guardada correctamente." });
         } catch (uploadError: any) {
           console.error("Error uploading cover image to Firebase Storage:", uploadError);
           toast({ variant: "destructive", title: "Error de Portada", description: `No se pudo subir la imagen de portada: ${uploadError.message}. El viaje se creó sin portada.` });
-          // Trip is already created, coverImageUrl will remain empty or as initially set (if any)
         }
-      } else if (base64CoverImage) { // It's a non-base64 URL, use it directly
+      } else if (base64CoverImage) {
         finalCoverImageUrl = base64CoverImage;
          await updateDoc(docRef, { coverImageUrl: finalCoverImageUrl, updatedAt: serverTimestamp() });
       }
       
-
-      await loadTrips(); // Re-fetch trips
+      await loadTrips();
       setIsWizardOpen(false);
-      router.push(`/trips/${tripId}/map`); // Navigate to map page
+      router.push(`/trips/${tripId}/map`);
       toast({ title: "¡Viaje Creado!", description: `"${wizardData.name}" se ha guardado. ${finalCoverImageUrl ? 'Portada añadida. ' : ''}Añade tus destinos en el mapa.`});
     } catch (error: any) {
-        console.error("Error creating trip in Firestore:", error);
+        // If using a callable function, error might be an HttpsError with code/message
+        console.error("Error creating trip:", error);
         toast({ variant: "destructive", title: "Error al Crear Viaje", description: `No se pudo guardar el viaje: ${error.message}` });
     }
   };
@@ -358,8 +359,6 @@ export default function MyTripsPage() {
 
     try {
         const batch = writeBatch(db);
-
-        // Delete subcollections
         const subcollectionsToDelete = ["activities", "cities", "expenses"];
         for (const subcollectionName of subcollectionsToDelete) {
             const subcollectionRef = collection(db, "trips", tripToDeleteId, subcollectionName);
@@ -367,21 +366,25 @@ export default function MyTripsPage() {
             snapshot.docs.forEach(docSnap => batch.delete(docSnap.ref));
         }
         
-        // Delete cover image from Storage if it exists
         if (tripBeingDeleted.coverImageUrl && tripBeingDeleted.coverImageUrl.includes('firebasestorage.googleapis.com')) {
             try {
                 const imageStorageRefToDelete = storageRef(storage, tripBeingDeleted.coverImageUrl);
                 await deleteStorageObject(imageStorageRefToDelete);
             } catch (storageError: any) {
-                 // Log error but don't block trip deletion if image deletion fails
                 console.error("Error deleting cover image from Storage:", storageError);
                 toast({variant: "destructive", title: "Aviso", description: "No se pudo eliminar la imagen de portada del almacenamiento, pero el viaje será eliminado."});
             }
         }
 
-        // Delete the main trip document
         batch.delete(doc(db, "trips", tripToDeleteId));
         await batch.commit();
+        
+        // Decrement tripsCreated for the owner (simulating Cloud Function)
+        const userRef = doc(db, "users", currentUser.uid);
+        await updateDoc(userRef, {
+          "subscription.tripsCreated": increment(-1)
+        });
+        // Note: AuthContext will pick this up.
 
         setTrips(prevTrips => prevTrips.filter(trip => trip.id !== tripToDeleteId));
         toast({
@@ -409,13 +412,15 @@ export default function MyTripsPage() {
             pendingInvites: arrayRemove(currentUser.email)
         });
         toast({ title: "Invitación Aceptada", description: "¡Ahora eres colaborador de este viaje!" });
-        await loadTrips(); // Refresh the list of trips
+        await loadTrips(); 
     } catch (error: any) {
         console.error("Error accepting invitation:", error);
         toast({ variant: "destructive", title: "Error al Aceptar", description: `No se pudo aceptar la invitación: ${error.message}` });
     }
   };
 
+  const canCreateTrip = currentUser?.subscription && 
+                        currentUser.subscription.tripsCreated < currentUser.subscription.maxTrips;
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -454,7 +459,22 @@ export default function MyTripsPage() {
             <p className="text-muted-foreground mb-6 max-w-md">
               Parece que aún no has planeado ningún viaje o no tienes invitaciones pendientes. ¡Empecemos la aventura!
             </p>
-            <Button size="lg" onClick={() => setIsWizardOpen(true)} disabled={!currentUser}>
+            <Button 
+              size="lg" 
+              onClick={() => {
+                if (currentUser && !canCreateTrip) {
+                   toast({
+                    variant: "destructive",
+                    title: "Límite Alcanzado",
+                    description: "Has alcanzado el límite de viajes para el plan gratuito. ¡Actualiza a Pro para crear más!",
+                    action: (<Button onClick={() => router.push('/subscription')}>Ver Planes</Button>)
+                   });
+                } else {
+                  setIsWizardOpen(true);
+                }
+              }} 
+              disabled={!currentUser}
+            >
               <Plus className="mr-2 h-5 w-5" />
               Crear mi Primer Viaje
             </Button>
@@ -476,9 +496,21 @@ export default function MyTripsPage() {
         <Button
           className="fixed bottom-6 right-6 h-16 w-16 rounded-full shadow-xl z-50"
           size="icon"
-          onClick={() => setIsWizardOpen(true)}
+          onClick={() => {
+             if (currentUser && !canCreateTrip) {
+                toast({
+                    variant: "destructive",
+                    title: "Límite Alcanzado",
+                    description: "Has alcanzado el límite de viajes para el plan gratuito. ¡Actualiza a Pro para crear más!",
+                    action: (<Button onClick={() => router.push('/subscription')}>Ver Planes</Button>)
+                });
+              } else {
+                setIsWizardOpen(true);
+              }
+          }}
           aria-label="Crear Nuevo Viaje"
           disabled={!currentUser}
+          title={currentUser && !canCreateTrip ? "Límite de viajes alcanzado" : "Crear Nuevo Viaje"}
         >
           <Plus className="h-8 w-8" />
         </Button>
@@ -500,6 +532,7 @@ export default function MyTripsPage() {
             <AlertDialogDescription>
               Esta acción no se puede deshacer. Se eliminará permanentemente el viaje
               "{trips.find(t => t.id === tripToDeleteId)?.name || 'seleccionado'}", todos sus datos asociados y su imagen de portada.
+              Esto también reducirá tu contador de viajes creados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -516,3 +549,4 @@ export default function MyTripsPage() {
     </div>
   );
 }
+
