@@ -229,7 +229,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         }
         onOpenChange(open);
     }}>
-      <DialogContent className="sm:max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] p-4 sm:p-6">
+      <DialogContent className="sm:max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] p-4 sm:p-6 overflow-hidden">
         <DialogHeader className="flex-shrink-0 pb-2">
           <DialogTitle className="font-headline text-2xl text-primary flex items-center">
             <FormIcon size={22} className="mr-2" />{dialogTitleText}
