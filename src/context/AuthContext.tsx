@@ -27,6 +27,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const unsubscribeProfile = onSnapshot(userRef, (docSnap: DocumentSnapshot) => {
           if (docSnap.exists()) {
             const profileData = docSnap.data();
+            const sub = profileData.subscription || {}; // Ensure sub is an object
             setCurrentUser({
               uid: firebaseUser.uid,
               email: firebaseUser.email,
@@ -34,12 +35,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               photoURL: firebaseUser.photoURL || profileData.photoURL,
               emailVerified: firebaseUser.emailVerified,
               createdAt: profileData.createdAt?.toDate?.().toISOString() || new Date().toISOString(),
-              subscription: profileData.subscription || { 
-                planId: 'free_tier' as SubscriptionPlanId,
-                status: 'free' as SubscriptionStatus,
-                tripsCreated: 0,
-                maxTrips: 1, // Default for free tier
-                renewalDate: null,
+              subscription: {
+                planId: sub.planId || 'free_tier' as SubscriptionPlanId,
+                status: sub.status || 'free' as SubscriptionStatus,
+                tripsCreated: typeof sub.tripsCreated === 'number' ? sub.tripsCreated : 0,
+                maxTrips: typeof sub.maxTrips === 'number' ? sub.maxTrips : 1,
+                renewalDate: sub.renewalDate || null,
               },
             });
           } else {

@@ -255,7 +255,11 @@ export default function MyTripsPage() {
       return;
     }
     
-    if (currentUser.subscription.tripsCreated >= currentUser.subscription.maxTrips) {
+    // Ensure maxTrips is a number, default to 1 if not
+    const maxTrips = typeof currentUser.subscription.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1;
+    const tripsCreated = typeof currentUser.subscription.tripsCreated === 'number' ? currentUser.subscription.tripsCreated : 0;
+
+    if (tripsCreated >= maxTrips) {
         toast({
             variant: "destructive",
             title: "Límite Alcanzado",
@@ -311,8 +315,8 @@ export default function MyTripsPage() {
           subscription: {
               planId: currentUser.subscription.planId,
               status: currentUser.subscription.status,
-              tripsCreated: currentUser.subscription.tripsCreated || 0,
-              maxTrips: currentUser.subscription.maxTrips,
+              tripsCreated: typeof currentUser.subscription.tripsCreated === 'number' ? currentUser.subscription.tripsCreated : 0,
+              maxTrips: typeof currentUser.subscription.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1,
               ...(currentUser.subscription.renewalDate && { renewalDate: currentUser.subscription.renewalDate })
           }
       }, { merge: true });
@@ -371,7 +375,6 @@ export default function MyTripsPage() {
                 await deleteStorageObject(imageStorageRefToDelete);
             } catch (storageError: any) {
                 console.error("Error deleting cover image from Storage:", storageError);
-                // Non-critical, log and continue with Firestore deletion
                 toast({variant: "destructive", title: "Aviso", description: "No se pudo eliminar la imagen de portada del almacenamiento, pero el viaje será eliminado."});
             }
         }
@@ -385,15 +388,18 @@ export default function MyTripsPage() {
             subscription: {
                 planId: currentUser.subscription.planId,
                 status: currentUser.subscription.status,
-                tripsCreated: currentUser.subscription.tripsCreated || 0,
-                maxTrips: currentUser.subscription.maxTrips,
+                tripsCreated: typeof currentUser.subscription.tripsCreated === 'number' ? currentUser.subscription.tripsCreated : 0,
+                maxTrips: typeof currentUser.subscription.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1,
                 ...(currentUser.subscription.renewalDate && { renewalDate: currentUser.subscription.renewalDate })
             }
         }, { merge: true });
-        // Now decrement
-        await updateDoc(userRef, {
-          "subscription.tripsCreated": increment(-1)
-        });
+        // Now decrement, ensuring it doesn't go below 0
+        if (currentUser.subscription && (currentUser.subscription.tripsCreated || 0) > 0) {
+          await updateDoc(userRef, {
+            "subscription.tripsCreated": increment(-1)
+          });
+        }
+
 
         setTrips(prevTrips => prevTrips.filter(trip => trip.id !== tripToDeleteId));
         toast({
@@ -429,7 +435,8 @@ export default function MyTripsPage() {
   };
 
   const canCreateTrip = currentUser?.subscription && 
-                        currentUser.subscription.tripsCreated < currentUser.subscription.maxTrips;
+                        (typeof currentUser.subscription.tripsCreated === 'number' ? currentUser.subscription.tripsCreated : 0) < 
+                        (typeof currentUser.subscription.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1);
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
