@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Plus, LogOut, Trash2, AlertTriangle, UserPlus, CheckCircle, BadgeInfo } from 'lucide-react'; // Added BadgeInfo
+import { Plus, LogOut, Trash2, AlertTriangle, UserPlus, CheckCircle, BadgeInfo } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -146,7 +146,7 @@ function TripCard({ trip, currentUser, onRequestDelete, onAcceptInvitation }: Tr
     if (tripIsPast) {
        toast({ title: "Resumen del Viaje", description: "Funcionalidad de resumen post-viaje próximamente."});
     } else {
-      router.push(`/trips/${trip.id}/map`); 
+      router.push(`/trips/${trip.id}/map`);
     }
   };
 
@@ -248,6 +248,20 @@ export default function MyTripsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
+  const ownedTripsCount = useMemo(() => {
+    if (!currentUser || !trips || trips.length === 0) return 0;
+    return trips.filter(trip => trip.ownerUid === currentUser.uid).length;
+  }, [trips, currentUser]);
+
+  const maxTripsForCurrentUser = useMemo(() => {
+    return typeof currentUser?.subscription?.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1;
+  }, [currentUser?.subscription?.maxTrips]);
+
+  const isTripLimitReached = useMemo(() => {
+    if (!currentUser) return true; // Cannot create trips if not logged in
+    return ownedTripsCount >= maxTripsForCurrentUser;
+  }, [currentUser, ownedTripsCount, maxTripsForCurrentUser]);
+
 
   const handleTripCreated = async (wizardData: CreateTripWizardData) => {
     if (!currentUser || !currentUser.subscription) {
@@ -255,21 +269,18 @@ export default function MyTripsPage() {
       return;
     }
     
-    const maxTrips = typeof currentUser.subscription.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1;
-    const tripsCreated = typeof currentUser.subscription.tripsCreated === 'number' ? currentUser.subscription.tripsCreated : 0;
-
-    if (tripsCreated >= maxTrips) {
+    if (isTripLimitReached) {
         toast({
             variant: "destructive",
             title: "Límite Alcanzado",
-            description: "Has alcanzado el límite de viajes para el plan gratuito. ¡Actualiza a Pro para crear más!",
+            description: `Has alcanzado el límite de ${maxTripsForCurrentUser} viajes para el plan gratuito. ¡Actualiza a Pro para crear más!`,
             action: (<Button onClick={() => router.push('/subscription')}>Ver Planes</Button>)
         });
         setIsWizardOpen(false);
         return;
     }
 
-    let finalCoverImageUrl = wizardData.coverImageUrl || ''; 
+    let finalCoverImageUrl = wizardData.coverImageUrl || '';
     const base64CoverImage = wizardData.coverImageUrl && wizardData.coverImageUrl.startsWith('data:image') ? wizardData.coverImageUrl : null;
 
     const tripToSaveInFirestore = {
@@ -284,7 +295,7 @@ export default function MyTripsPage() {
       familia: `${wizardData.numAdults || 0} Adultos, ${wizardData.numChildren || 0} Niños`,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      coverImageUrl: base64CoverImage ? '' : finalCoverImageUrl, 
+      coverImageUrl: base64CoverImage ? '' : finalCoverImageUrl,
     };
 
     try {
@@ -304,12 +315,13 @@ export default function MyTripsPage() {
         } catch (uploadError: any) {
           console.error("Error uploading cover image to Firebase Storage:", uploadError);
           toast({ variant: "destructive", title: "Error de Portada", description: `No se pudo subir la imagen de portada: ${uploadError.message}. El viaje se creó sin portada.` });
-          finalCoverImageUrl = ''; 
+          finalCoverImageUrl = '';
         }
       }
       
       const userRef = doc(db, "users", currentUser.uid);
-      await setDoc(userRef, { 
+      // Ensure subscription structure exists before incrementing
+      await setDoc(userRef, {
           subscription: {
               planId: currentUser.subscription.planId || 'free_tier',
               status: currentUser.subscription.status || 'free',
@@ -318,11 +330,12 @@ export default function MyTripsPage() {
               ...(currentUser.subscription.renewalDate && { renewalDate: currentUser.subscription.renewalDate })
           }
       }, { merge: true });
+
       await updateDoc(userRef, {
         "subscription.tripsCreated": increment(1)
       });
       
-      await loadTrips();
+      await loadTrips(); // This will refresh the trips list and ownedTripsCount
       setIsWizardOpen(false);
       router.push(`/trips/${tripId}/map`);
       toast({ title: "¡Viaje Creado!", description: `"${wizardData.name}" se ha guardado. ${finalCoverImageUrl ? 'Portada añadida. ' : ''}Añade tus destinos en el mapa.`});
@@ -380,7 +393,8 @@ export default function MyTripsPage() {
         await batch.commit();
         
         const userRef = doc(db, "users", currentUser.uid);
-        await setDoc(userRef, { 
+        // Ensure subscription structure exists before decrementing
+        await setDoc(userRef, {
             subscription: {
                 planId: currentUser.subscription.planId || 'free_tier',
                 status: currentUser.subscription.status || 'free',
@@ -390,13 +404,15 @@ export default function MyTripsPage() {
             }
         }, { merge: true });
 
-        if (currentUser.subscription && (currentUser.subscription.tripsCreated || 0) > 0) {
+        // Decrement tripsCreated only if it's greater than 0
+        const currentTripsCreatedInDb = typeof currentUser.subscription.tripsCreated === 'number' ? currentUser.subscription.tripsCreated : 0;
+        if (currentTripsCreatedInDb > 0) {
           await updateDoc(userRef, {
             "subscription.tripsCreated": increment(-1)
           });
         }
 
-        setTrips(prevTrips => prevTrips.filter(trip => trip.id !== tripToDeleteId));
+        setTrips(prevTrips => prevTrips.filter(trip => trip.id !== tripToDeleteId)); // This will update ownedTripsCount via useMemo
         toast({
           title: "Viaje Eliminado",
           description: `El viaje "${tripBeingDeleted.name}" y todos sus datos han sido eliminados.`,
@@ -428,10 +444,6 @@ export default function MyTripsPage() {
         toast({ variant: "destructive", title: "Error al Aceptar", description: `No se pudo aceptar la invitación: ${error.message}` });
     }
   };
-
-  const canCreateTrip = currentUser?.subscription && 
-                        (typeof currentUser.subscription.tripsCreated === 'number' ? currentUser.subscription.tripsCreated : 0) < 
-                        (typeof currentUser.subscription.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1);
   
   const getPlanDisplayName = (planId: SubscriptionPlanId | undefined) => {
     if (planId === 'free_tier') return 'Plan Gratuito';
@@ -479,11 +491,11 @@ export default function MyTripsPage() {
             <Button 
               size="lg" 
               onClick={() => {
-                if (currentUser && !canCreateTrip) {
+                if (currentUser && isTripLimitReached) {
                    toast({
                     variant: "destructive",
                     title: "Límite Alcanzado",
-                    description: "Has alcanzado el límite de viajes para el plan gratuito. ¡Actualiza a Pro para crear más!",
+                    description: `Has alcanzado el límite de ${maxTripsForCurrentUser} viajes para el plan gratuito. ¡Actualiza a Pro para crear más!`,
                     action: (<Button onClick={() => router.push('/subscription')}>Ver Planes</Button>)
                    });
                 } else if (currentUser) {
@@ -492,7 +504,8 @@ export default function MyTripsPage() {
                   toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión para crear un viaje."});
                 }
               }} 
-              disabled={!currentUser}
+              disabled={!currentUser || (currentUser && isTripLimitReached && trips.length > 0)} // Disable if limit reached and already has trips, otherwise allow first trip creation attempt
+              title={currentUser && isTripLimitReached ? `Límite de ${maxTripsForCurrentUser} viajes alcanzado` : "Crear Nuevo Viaje"}
             >
               <Plus className="mr-2 h-5 w-5" />
               Crear mi Primer Viaje
@@ -516,11 +529,11 @@ export default function MyTripsPage() {
           className="fixed bottom-6 right-6 h-16 w-16 rounded-full shadow-xl z-50"
           size="icon"
           onClick={() => {
-             if (currentUser && !canCreateTrip) {
+             if (currentUser && isTripLimitReached) {
                 toast({
                     variant: "destructive",
                     title: "Límite Alcanzado",
-                    description: "Has alcanzado el límite de viajes para el plan gratuito. ¡Actualiza a Pro para crear más!",
+                    description: `Has alcanzado el límite de ${maxTripsForCurrentUser} viajes para el plan gratuito. ¡Actualiza a Pro para crear más!`,
                     action: (<Button onClick={() => router.push('/subscription')}>Ver Planes</Button>)
                 });
               } else if (currentUser) {
@@ -530,20 +543,21 @@ export default function MyTripsPage() {
               }
           }}
           aria-label="Crear Nuevo Viaje"
-          disabled={!currentUser}
-          title={currentUser && !canCreateTrip ? "Límite de viajes alcanzado" : "Crear Nuevo Viaje"}
+          disabled={!currentUser || (currentUser && isTripLimitReached)}
+          title={currentUser && isTripLimitReached ? `Límite de ${maxTripsForCurrentUser} viajes alcanzado` : "Crear Nuevo Viaje"}
         >
           <Plus className="h-8 w-8" />
         </Button>
 
         {currentUser && currentUser.subscription && (
-          <div 
+          <div
             className="fixed bottom-6 left-6 bg-secondary text-secondary-foreground px-4 py-2 rounded-full text-xs shadow-lg z-50 flex items-center gap-2"
-            title={`Plan actual: ${getPlanDisplayName(currentUser.subscription.planId)}. Viajes creados: ${currentUser.subscription.tripsCreated || 0}/${currentUser.subscription.maxTrips || 1}`}
+            title={`Plan actual: ${getPlanDisplayName(currentUser.subscription.planId)}. Viajes creados: ${ownedTripsCount}/${maxTripsForCurrentUser}`}
           >
             <BadgeInfo size={16} />
             <span>{getPlanDisplayName(currentUser.subscription.planId)}</span>
-            <span>({currentUser.subscription.tripsCreated || 0}/{currentUser.subscription.maxTrips || 1} viajes)</span>
+            {/* Display count based on actual owned trips visible on the page */}
+            <span>({ownedTripsCount}/{maxTripsForCurrentUser} viajes)</span>
           </div>
         )}
       </main>
@@ -564,7 +578,7 @@ export default function MyTripsPage() {
             <AlertDialogDescription>
               Esta acción no se puede deshacer. Se eliminará permanentemente el viaje
               "{trips.find(t => t.id === tripToDeleteId)?.name || 'seleccionado'}", todos sus datos asociados y su imagen de portada.
-              Esto también reducirá tu contador de viajes creados.
+              Esto también reducirá tu contador de viajes creados en la base de datos (si la función de backend está activa).
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
