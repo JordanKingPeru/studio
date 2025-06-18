@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/AuthContext';
 import type { Trip, UserProfile } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, onSnapshot, DocumentSnapshot } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, onSnapshot, type DocumentSnapshot } from 'firebase/firestore';
 import { ShieldCheck, Users, MailQuestion, UserPlus, XCircle, Loader2, Send } from 'lucide-react';
 import Image from 'next/image';
 
@@ -53,64 +53,48 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
   const [newInviteEmail, setNewInviteEmail] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const fetchTripAndCollaborators = useCallback(async () => {
-    if (!tripId) return;
-    setIsLoading(true);
-
-    const tripRef = doc(db, "trips", tripId);
-    const tripSnap = await getDoc(tripRef);
-
-    if (tripSnap.exists()) {
-      const tripData = { id: tripSnap.id, ...tripSnap.data() } as Trip;
-      setTrip(tripData);
-
-      if (tripData.ownerUid) {
-        fetchUserProfile(tripData.ownerUid).then(setOwnerProfile);
-      }
-
-      if (tripData.editorUids && tripData.editorUids.length > 0) {
-        Promise.all(tripData.editorUids.map(fetchUserProfile))
-          .then(profiles => setEditorProfiles(profiles.filter(p => p !== null) as CollaboratorInfo[]));
-      } else {
-        setEditorProfiles([]);
-      }
+  const fetchAndSetCollaboratorProfiles = useCallback(async (currentTripData: Trip) => {
+    if (currentTripData.ownerUid) {
+      fetchUserProfile(currentTripData.ownerUid).then(setOwnerProfile);
     } else {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo cargar la información del viaje." });
-      setTrip(null);
+      setOwnerProfile(null);
     }
-    setIsLoading(false);
-  }, [tripId, toast]);
+
+    if (currentTripData.editorUids && currentTripData.editorUids.length > 0) {
+      Promise.all(currentTripData.editorUids.map(uid => fetchUserProfile(uid)))
+        .then(profiles => setEditorProfiles(profiles.filter(p => p !== null) as CollaboratorInfo[]));
+    } else {
+      setEditorProfiles([]);
+    }
+  }, []);
+
 
   useEffect(() => {
-    fetchTripAndCollaborators();
-    
-    // Listen for real-time updates on the trip document
+    if (!tripId) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
     const tripRef = doc(db, "trips", tripId);
     const unsubscribe = onSnapshot(tripRef, (docSnap: DocumentSnapshot) => {
       if (docSnap.exists()) {
-        const updatedTripData = { id: docSnap.id, ...docSnap.data() } as Trip;
-        setTrip(updatedTripData);
-        // Re-fetch profiles if editorUids changed, for simplicity, or diff them.
-        // For now, a full re-evaluation based on new tripData is simpler.
-        if (updatedTripData.ownerUid && (!ownerProfile || ownerProfile.uid !== updatedTripData.ownerUid)) {
-            fetchUserProfile(updatedTripData.ownerUid).then(setOwnerProfile);
-        }
-        if (updatedTripData.editorUids) {
-            if (JSON.stringify(updatedTripData.editorUids) !== JSON.stringify(editorProfiles.map(e => e.uid))) {
-                 Promise.all(updatedTripData.editorUids.map(fetchUserProfile))
-                    .then(profiles => setEditorProfiles(profiles.filter(p => p !== null) as CollaboratorInfo[]));
-            }
-        } else {
-            setEditorProfiles([]);
-        }
-
+        const tripData = { id: docSnap.id, ...docSnap.data() } as Trip;
+        setTrip(tripData);
+        fetchAndSetCollaboratorProfiles(tripData);
       } else {
-        setTrip(null); // Trip was deleted
+        toast({ variant: "destructive", title: "Error", description: "No se pudo cargar la información del viaje." });
+        setTrip(null);
       }
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error listening to trip document:", error);
+      toast({ variant: "destructive", title: "Error de Carga", description: "No se pudo obtener datos del viaje en tiempo real." });
+      setIsLoading(false);
     });
 
-    return () => unsubscribe(); // Cleanup listener
-  }, [tripId, fetchTripAndCollaborators]); // fetchTripAndCollaborators is stable due to useCallback
+    return () => unsubscribe();
+  }, [tripId, toast, fetchAndSetCollaboratorProfiles]);
+
 
   const isCurrentUserOwner = currentUser?.uid === trip?.ownerUid;
 
@@ -140,7 +124,6 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
       return;
     }
 
-
     setIsUpdating(true);
     const tripRef = doc(db, "trips", trip.id);
     try {
@@ -149,7 +132,6 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
       });
       toast({ title: "Invitación Enviada", description: `Se ha invitado a ${newInviteEmail.trim()}.` });
       setNewInviteEmail('');
-      // Real-time listener will update the trip state
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error al Invitar", description: error.message });
     } finally {
@@ -166,7 +148,6 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
         editorUids: arrayRemove(editorUidToRemove)
       });
       toast({ title: "Editor Eliminado", description: "El colaborador ha sido eliminado." });
-      // Real-time listener updates state
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error al Eliminar", description: error.message });
     } finally {
@@ -183,7 +164,6 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
         pendingInvites: arrayRemove(emailToRevoke)
       });
       toast({ title: "Invitación Revocada", description: `Se ha revocado la invitación para ${emailToRevoke}.` });
-      // Real-time listener updates state
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error al Revocar", description: error.message });
     } finally {
@@ -199,7 +179,6 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
     }
     return name.substring(0, 2).toUpperCase();
   };
-
 
   if (isLoading) {
     return (
@@ -226,13 +205,12 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">No se pudo cargar la información del viaje.</p>
+          <p className="text-muted-foreground">No se pudo cargar la información del viaje o el viaje no existe.</p>
         </CardContent>
       </Card>
     );
   }
   
-
   return (
     <Card className="rounded-xl shadow-lg">
       <CardHeader>
@@ -242,7 +220,6 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
         <CardDescription>Visualiza y gestiona quién tiene acceso a este viaje.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Owner Section */}
         <div>
           <h4 className="text-md font-semibold text-secondary-foreground mb-2 flex items-center">
             <ShieldCheck size={18} className="mr-2 text-green-500" /> Propietario
@@ -251,7 +228,7 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
             <div className="flex items-center space-x-3 p-3 bg-muted/30 rounded-md">
               <Avatar className="h-9 w-9">
                 {ownerProfile.photoURL ? (
-                  <AvatarImage asChild src={ownerProfile.photoURL} alt={ownerProfile.displayName || 'Avatar'}>
+                   <AvatarImage asChild src={ownerProfile.photoURL} alt={ownerProfile.displayName || 'Avatar'}>
                     <Image src={ownerProfile.photoURL} alt={ownerProfile.displayName || 'Avatar'} width={36} height={36} className="rounded-full object-cover"/>
                   </AvatarImage>
                 ): null}
@@ -267,7 +244,6 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
 
         <Separator />
 
-        {/* Editors Section */}
         <div>
           <h4 className="text-md font-semibold text-secondary-foreground mb-2 flex items-center">
             <Users size={18} className="mr-2 text-blue-500" /> Editores ({editorProfiles.length})
@@ -280,7 +256,7 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
                      <Avatar className="h-9 w-9">
                         {editor.photoURL ? (
                         <AvatarImage asChild src={editor.photoURL} alt={editor.displayName || 'Avatar'}>
-                            <Image src={editor.photoURL} alt={editor.displayName || 'Avatar'} width={36} height={36} className="rounded-full object-cover"/>
+                           <Image src={editor.photoURL} alt={editor.displayName || 'Avatar'} width={36} height={36} className="rounded-full object-cover"/>
                         </AvatarImage>
                         ): null}
                         <AvatarFallback>{getInitials(editor.displayName)}</AvatarFallback>
@@ -293,7 +269,7 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
                   {isCurrentUserOwner && currentUser?.uid !== editor.uid && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" disabled={isUpdating}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/80 hover:bg-destructive/10" disabled={isUpdating}>
                           <XCircle size={16} />
                         </Button>
                       </AlertDialogTrigger>
@@ -322,7 +298,6 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
 
         <Separator />
 
-        {/* Pending Invites Section */}
         <div>
           <h4 className="text-md font-semibold text-secondary-foreground mb-2 flex items-center">
             <MailQuestion size={18} className="mr-2 text-orange-500" /> Invitaciones Pendientes ({(trip.pendingInvites || []).length})
@@ -331,11 +306,11 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
             <ul className="space-y-2">
               {(trip.pendingInvites || []).map(email => (
                 <li key={email} className="flex items-center justify-between p-3 bg-muted/30 rounded-md">
-                  <p className="text-sm text-foreground">{email}</p>
+                  <p className="text-sm text-foreground truncate max-w-[calc(100%-3rem)]" title={email}>{email}</p>
                   {isCurrentUserOwner && (
                      <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" disabled={isUpdating}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/80 hover:bg-destructive/10" disabled={isUpdating}>
                           <XCircle size={16} />
                         </Button>
                       </AlertDialogTrigger>
@@ -390,3 +365,5 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
     </Card>
   );
 }
+
+    

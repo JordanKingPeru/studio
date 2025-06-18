@@ -3,7 +3,7 @@
 
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Lightbulb, ListChecks, FileText, MoreHorizontal, CheckSquare, Briefcase, Plane, Trash2, Users } from 'lucide-react'; // Added Users
+import { Lightbulb, ListChecks, FileText, Users, Trash2 } from 'lucide-react'; // Added Users
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -204,3 +204,5 @@ export default function TripMorePage() {
     </div>
   );
 }
+
+    
