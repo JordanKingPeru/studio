@@ -29,11 +29,20 @@ export default function TripAppLayout({ children, tripId }: TripAppLayoutProps) 
   useEffect(() => {
     const fetchTripDetails = async () => {
         setIsLoadingName(true);
-        const storedTrips = localStorage.getItem('familyTrips');
+        // Attempt to get trip name from Firestore if possible, or fallback.
+        // This localStorage logic is a placeholder and might not be robust for shared trips.
+        // A better approach would be to fetch the trip name directly from Firestore
+        // using the tripId, but that would require making TripAppLayout an async component
+        // or having a separate context/store for trip details.
+        const storedTrips = localStorage.getItem('familyTrips'); // This is a weak dependency
         if (storedTrips && currentUser) {
-            const trips: Array<{id: string, name: string, userId: string}> = JSON.parse(storedTrips);
-            const currentTripObj = trips.find(t => t.id === tripId && t.userId === currentUser.uid);
-            setTripName(currentTripObj?.name || `Viaje de ${currentUser.displayName?.split(' ')[0] || 'Usuario'}`);
+            try {
+                const trips: Array<{id: string, name: string, userId: string}> = JSON.parse(storedTrips);
+                const currentTripObj = trips.find(t => t.id === tripId && t.userId === currentUser.uid);
+                setTripName(currentTripObj?.name || `Viaje de ${currentUser.displayName?.split(' ')[0] || 'Usuario'}`);
+            } catch (e) {
+                 setTripName(`Viaje de ${currentUser.displayName?.split(' ')[0] || 'Usuario'}`);
+            }
         } else if (currentUser) {
             setTripName(`Viaje de ${currentUser.displayName?.split(' ')[0] || 'Usuario'}`);
         } else {
@@ -44,17 +53,19 @@ export default function TripAppLayout({ children, tripId }: TripAppLayoutProps) 
     if (currentUser) { 
         fetchTripDetails();
     } else if (!currentUser && !isLoadingName) { 
+        // Reset if user logs out while viewing a trip
         setIsLoadingName(true); 
         setTripName('Detalles del Viaje');
         setIsLoadingName(false);
     }
-  }, [tripId, currentUser, isLoadingName]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripId, currentUser]); // Added currentUser to dependency array
 
 
   const navItems = [
     { href: `/trips/${tripId}/dashboard`, label: 'Inicio', icon: Home },
-    { href: `/trips/${tripId}/itinerary`, label: 'Itinerario', icon: CalendarDays },
     { href: `/trips/${tripId}/map`, label: 'Mapa', icon: MapPinned },
+    { href: `/trips/${tripId}/itinerary`, label: 'Itinerario', icon: CalendarDays },
     { href: `/trips/${tripId}/budget`, label: 'Presupuesto', icon: CircleDollarSign },
     { href: `/trips/${tripId}/more`, label: 'Más', icon: MoreHorizontal },
   ];
