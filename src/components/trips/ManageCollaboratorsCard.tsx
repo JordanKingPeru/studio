@@ -35,8 +35,7 @@ async function fetchUserProfile(uid: string): Promise<UserProfile | null> {
       email: data.email,
       displayName: data.displayName || "Usuario sin nombre",
       photoURL: data.photoURL,
-      emailVerified: data.emailVerified, // Keep if needed
-      // subscription not directly needed here
+      emailVerified: data.emailVerified, 
       subscription: data.subscription || { status: 'free', plan: 'free_tier', tripsCreated: 0, maxTrips: 1 },
     } as UserProfile;
   }
@@ -49,32 +48,58 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
   const [trip, setTrip] = useState<Trip | null>(null);
   const [ownerProfile, setOwnerProfile] = useState<CollaboratorInfo | null>(null);
   const [editorProfiles, setEditorProfiles] = useState<CollaboratorInfo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // For initial trip data load
+  const [hasAttemptedProfilesFetch, setHasAttemptedProfilesFetch] = useState(false); // New state
   const [newInviteEmail, setNewInviteEmail] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
 
   const fetchAndSetCollaboratorProfiles = useCallback(async (currentTripData: Trip) => {
-    if (currentTripData.ownerUid) {
-      fetchUserProfile(currentTripData.ownerUid).then(setOwnerProfile);
-    } else {
-      setOwnerProfile(null);
-    }
+    setOwnerProfile(null);
+    setEditorProfiles([]);
+    setHasAttemptedProfilesFetch(false); // Reset before fetching
 
-    if (currentTripData.editorUids && currentTripData.editorUids.length > 0) {
-      Promise.all(currentTripData.editorUids.map(uid => fetchUserProfile(uid)))
-        .then(profiles => setEditorProfiles(profiles.filter(p => p !== null) as CollaboratorInfo[]));
-    } else {
+    const ownerPromise = currentTripData.ownerUid ? fetchUserProfile(currentTripData.ownerUid) : Promise.resolve(null);
+    const editorPromises = (currentTripData.editorUids || [])
+        .map(uid => fetchUserProfile(uid).catch(e => {
+            console.error(`Error fetching profile for editor UID ${uid}:`, e);
+            return null; // Return null if an individual editor fetch fails
+        }));
+
+    try {
+      const [ownerResult, ...editorsResults] = await Promise.allSettled([ownerPromise, ...editorPromises]);
+
+      if (ownerResult.status === 'fulfilled') {
+        setOwnerProfile(ownerResult.value);
+      } else {
+        console.error("Error fetching owner profile:", ownerResult.reason);
+        setOwnerProfile(null);
+      }
+      
+      const successfulEditorProfiles = editorsResults
+        .filter(result => result.status === 'fulfilled' && result.value !== null)
+        .map(result => (result as PromiseFulfilledResult<UserProfile | null>).value as CollaboratorInfo);
+      setEditorProfiles(successfulEditorProfiles);
+
+    } catch (error) { // This catch might be redundant if Promise.allSettled is used fully
+      console.error("Unexpected error in Promise.allSettled block for collaborator profiles:", error);
+      toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar algunos perfiles de colaboradores." });
+      setOwnerProfile(null);
       setEditorProfiles([]);
+    } finally {
+      setHasAttemptedProfilesFetch(true);
     }
-  }, []);
+  }, [toast]);
 
 
   useEffect(() => {
     if (!tripId) {
       setIsLoading(false);
+      setHasAttemptedProfilesFetch(true); // No tripId, so fetch attempt is "complete" (as failed)
       return;
     }
     setIsLoading(true);
+    setHasAttemptedProfilesFetch(false); // Reset when tripId changes
+
     const tripRef = doc(db, "trips", tripId);
     const unsubscribe = onSnapshot(tripRef, (docSnap: DocumentSnapshot) => {
       if (docSnap.exists()) {
@@ -84,12 +109,16 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
       } else {
         toast({ variant: "destructive", title: "Error", description: "No se pudo cargar la información del viaje." });
         setTrip(null);
+        setOwnerProfile(null);
+        setEditorProfiles([]);
+        setHasAttemptedProfilesFetch(true); // Trip not found, fetch attempt "complete"
       }
-      setIsLoading(false);
+      setIsLoading(false); // Trip data loading is complete
     }, (error) => {
       console.error("Error listening to trip document:", error);
       toast({ variant: "destructive", title: "Error de Carga", description: "No se pudo obtener datos del viaje en tiempo real." });
       setIsLoading(false);
+      setHasAttemptedProfilesFetch(true); // Error loading trip, fetch attempt "complete"
     });
 
     return () => unsubscribe();
@@ -180,7 +209,7 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
     return name.substring(0, 2).toUpperCase();
   };
 
-  if (isLoading) {
+  if (isLoading) { // Main loader for the card while trip data is being fetched
     return (
       <Card className="rounded-xl shadow-lg">
         <CardHeader>
@@ -224,7 +253,10 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
           <h4 className="text-md font-semibold text-secondary-foreground mb-2 flex items-center">
             <ShieldCheck size={18} className="mr-2 text-green-500" /> Propietario
           </h4>
-          {ownerProfile ? (
+          {!hasAttemptedProfilesFetch && !ownerProfile && (
+             <p className="text-sm text-muted-foreground">Cargando propietario...</p>
+          )}
+          {hasAttemptedProfilesFetch && ownerProfile && (
             <div className="flex items-center space-x-3 p-3 bg-muted/30 rounded-md">
               <Avatar className="h-9 w-9">
                 {ownerProfile.photoURL ? (
@@ -239,7 +271,10 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
                 <p className="text-xs text-muted-foreground">{ownerProfile.email}</p>
               </div>
             </div>
-          ) : <p className="text-sm text-muted-foreground">Cargando propietario...</p>}
+          )}
+          {hasAttemptedProfilesFetch && !ownerProfile && (
+            <p className="text-sm text-muted-foreground">Información del propietario no disponible.</p>
+          )}
         </div>
 
         <Separator />
@@ -248,7 +283,10 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
           <h4 className="text-md font-semibold text-secondary-foreground mb-2 flex items-center">
             <Users size={18} className="mr-2 text-blue-500" /> Editores ({editorProfiles.length})
           </h4>
-          {editorProfiles.length > 0 ? (
+          {!hasAttemptedProfilesFetch && editorProfiles.length === 0 && (
+            <p className="text-sm text-muted-foreground">Cargando editores...</p>
+          )}
+          {hasAttemptedProfilesFetch && editorProfiles.length > 0 && (
             <ul className="space-y-2">
               {editorProfiles.map(editor => (
                 <li key={editor.uid} className="flex items-center justify-between p-3 bg-muted/30 rounded-md">
@@ -291,7 +329,8 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
                 </li>
               ))}
             </ul>
-          ) : (
+          )}
+           {hasAttemptedProfilesFetch && editorProfiles.length === 0 && (
             <p className="text-sm text-muted-foreground">No hay otros editores en este viaje.</p>
           )}
         </div>
@@ -365,5 +404,3 @@ export default function ManageCollaboratorsCard({ tripId }: ManageCollaboratorsC
     </Card>
   );
 }
-
-    
