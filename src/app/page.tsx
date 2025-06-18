@@ -28,7 +28,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { db, storage } from '@/lib/firebase';
-import { collection, query, where, getDocs, orderBy, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion, arrayRemove, writeBatch, increment } from "firebase/firestore";
+import { collection, query, where, getDocs, orderBy, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion, arrayRemove, writeBatch, increment, setDoc } from "firebase/firestore";
 import { ref as storageRef, uploadString, getDownloadURL, deleteObject as deleteStorageObject } from "firebase/storage";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -146,7 +146,7 @@ function TripCard({ trip, currentUser, onRequestDelete, onAcceptInvitation }: Tr
     if (tripIsPast) {
        toast({ title: "Resumen del Viaje", description: "Funcionalidad de resumen post-viaje próximamente."});
     } else {
-      router.push(`/trips/${trip.id}/map`); // Go to map first
+      router.push(`/trips/${trip.id}/map`); 
     }
   };
 
@@ -255,9 +255,7 @@ export default function MyTripsPage() {
       return;
     }
     
-    // Enforce trip limit based on subscription.tripsCreated
-    if (currentUser.subscription.status === 'free' && 
-        currentUser.subscription.tripsCreated >= currentUser.subscription.maxTrips) {
+    if (currentUser.subscription.tripsCreated >= currentUser.subscription.maxTrips) {
         toast({
             variant: "destructive",
             title: "Límite Alcanzado",
@@ -268,8 +266,8 @@ export default function MyTripsPage() {
         return;
     }
 
-    let finalCoverImageUrl = '';
-    const base64CoverImage = wizardData.coverImageUrl;
+    let finalCoverImageUrl = wizardData.coverImageUrl || ''; // Initialize with placeholder or AI generated URL (can be base64)
+    const base64CoverImage = wizardData.coverImageUrl && wizardData.coverImageUrl.startsWith('data:image') ? wizardData.coverImageUrl : null;
 
     const tripToSaveInFirestore = {
       name: wizardData.name,
@@ -280,29 +278,17 @@ export default function MyTripsPage() {
       ownerUid: currentUser.uid,
       editorUids: [],
       pendingInvites: wizardData.pendingInvites || [],
-      familia: `${wizardData.numAdults || 0} Adultos, ${wizardData.numChildren || 0} Niños`, // Ensure fallback
+      familia: `${wizardData.numAdults || 0} Adultos, ${wizardData.numChildren || 0} Niños`,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      // coverImageUrl will be added after potential upload
+      coverImageUrl: base64CoverImage ? '' : finalCoverImageUrl, // Temporary if base64, final if already URL
     };
 
     try {
-      // This part would ideally be replaced by a Cloud Function call
-      // const createTripCallable = httpsCallable(functions, 'createTrip');
-      // const result = await createTripCallable(tripToSaveInFirestore); // Pass data expected by CF
-      // const tripId = result.data.tripId;
-      // For now, direct write:
       const docRef = await addDoc(collection(db, "trips"), tripToSaveInFirestore);
       const tripId = docRef.id;
 
-      // Increment tripsCreated in user's profile (simulating Cloud Function)
-      const userRef = doc(db, "users", currentUser.uid);
-      await updateDoc(userRef, {
-        "subscription.tripsCreated": increment(1)
-      });
-      // Note: AuthContext will pick up this change via its onSnapshot listener for the user profile.
-
-      if (base64CoverImage && base64CoverImage.startsWith('data:image')) {
+      if (base64CoverImage) {
         toast({ title: "Procesando Portada...", description: "Subiendo imagen de portada, por favor espera." });
         try {
           const imageName = `cover-${uuidv4()}.png`;
@@ -315,18 +301,31 @@ export default function MyTripsPage() {
         } catch (uploadError: any) {
           console.error("Error uploading cover image to Firebase Storage:", uploadError);
           toast({ variant: "destructive", title: "Error de Portada", description: `No se pudo subir la imagen de portada: ${uploadError.message}. El viaje se creó sin portada.` });
+          finalCoverImageUrl = ''; // Reset on error
         }
-      } else if (base64CoverImage) {
-        finalCoverImageUrl = base64CoverImage;
-         await updateDoc(docRef, { coverImageUrl: finalCoverImageUrl, updatedAt: serverTimestamp() });
       }
+      
+      const userRef = doc(db, "users", currentUser.uid);
+      // Ensure document and subscription field exist before incrementing
+      await setDoc(userRef, { 
+          subscription: {
+              planId: currentUser.subscription.planId,
+              status: currentUser.subscription.status,
+              tripsCreated: currentUser.subscription.tripsCreated || 0,
+              maxTrips: currentUser.subscription.maxTrips,
+              ...(currentUser.subscription.renewalDate && { renewalDate: currentUser.subscription.renewalDate })
+          }
+      }, { merge: true });
+      // Now increment
+      await updateDoc(userRef, {
+        "subscription.tripsCreated": increment(1)
+      });
       
       await loadTrips();
       setIsWizardOpen(false);
       router.push(`/trips/${tripId}/map`);
       toast({ title: "¡Viaje Creado!", description: `"${wizardData.name}" se ha guardado. ${finalCoverImageUrl ? 'Portada añadida. ' : ''}Añade tus destinos en el mapa.`});
     } catch (error: any) {
-        // If using a callable function, error might be an HttpsError with code/message
         console.error("Error creating trip:", error);
         toast({ variant: "destructive", title: "Error al Crear Viaje", description: `No se pudo guardar el viaje: ${error.message}` });
     }
@@ -372,6 +371,7 @@ export default function MyTripsPage() {
                 await deleteStorageObject(imageStorageRefToDelete);
             } catch (storageError: any) {
                 console.error("Error deleting cover image from Storage:", storageError);
+                // Non-critical, log and continue with Firestore deletion
                 toast({variant: "destructive", title: "Aviso", description: "No se pudo eliminar la imagen de portada del almacenamiento, pero el viaje será eliminado."});
             }
         }
@@ -379,12 +379,21 @@ export default function MyTripsPage() {
         batch.delete(doc(db, "trips", tripToDeleteId));
         await batch.commit();
         
-        // Decrement tripsCreated for the owner (simulating Cloud Function)
         const userRef = doc(db, "users", currentUser.uid);
+        // Ensure document and subscription field exist before decrementing
+        await setDoc(userRef, { 
+            subscription: {
+                planId: currentUser.subscription.planId,
+                status: currentUser.subscription.status,
+                tripsCreated: currentUser.subscription.tripsCreated || 0,
+                maxTrips: currentUser.subscription.maxTrips,
+                ...(currentUser.subscription.renewalDate && { renewalDate: currentUser.subscription.renewalDate })
+            }
+        }, { merge: true });
+        // Now decrement
         await updateDoc(userRef, {
           "subscription.tripsCreated": increment(-1)
         });
-        // Note: AuthContext will pick this up.
 
         setTrips(prevTrips => prevTrips.filter(trip => trip.id !== tripToDeleteId));
         toast({
@@ -469,8 +478,10 @@ export default function MyTripsPage() {
                     description: "Has alcanzado el límite de viajes para el plan gratuito. ¡Actualiza a Pro para crear más!",
                     action: (<Button onClick={() => router.push('/subscription')}>Ver Planes</Button>)
                    });
-                } else {
+                } else if (currentUser) {
                   setIsWizardOpen(true);
+                } else {
+                  toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión para crear un viaje."});
                 }
               }} 
               disabled={!currentUser}
@@ -504,8 +515,10 @@ export default function MyTripsPage() {
                     description: "Has alcanzado el límite de viajes para el plan gratuito. ¡Actualiza a Pro para crear más!",
                     action: (<Button onClick={() => router.push('/subscription')}>Ver Planes</Button>)
                 });
-              } else {
+              } else if (currentUser) {
                 setIsWizardOpen(true);
+              } else {
+                toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión para crear un viaje."});
               }
           }}
           aria-label="Crear Nuevo Viaje"
@@ -549,4 +562,3 @@ export default function MyTripsPage() {
     </div>
   );
 }
-
