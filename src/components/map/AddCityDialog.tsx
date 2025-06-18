@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -31,7 +32,7 @@ import { Separator } from '@/components/ui/separator';
 import Image from 'next/image';
 import { Map, AdvancedMarker, InfoWindow, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Globe, MapPin as MapPinIconLucide, CalendarIcon, StickyNote, Search, Loader2, PlusCircle, Edit3, Camera, Info, List } from 'lucide-react';
+import { Globe, MapPin as MapPinIconLucide, CalendarIcon, StickyNote, Search, Loader2, PlusCircle, Edit3, Camera, Info, List, LocateFixed, Earth } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import type { City } from '@/lib/types'; // Use City type directly
 
@@ -289,16 +290,19 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                           </div>
                       </AccordionTrigger>
                       <AccordionContent className="border-t">
-                          <CardContent className="space-y-3 text-xs sm:text-sm py-3">
-                            <p className="break-words"><strong>Nombre:</strong> {selectedPlaceDetails.displayName}</p>
-                            <p className="break-words"><strong>Dirección:</strong> {selectedPlaceDetails.formattedAddress}</p>
-                            {selectedPlaceDetails.country && <p><strong>País:</strong> {selectedPlaceDetails.country}</p>}
-                            {selectedPlaceDetails.latitude !== undefined && <p><strong>Lat:</strong> {selectedPlaceDetails.latitude.toFixed(6)}</p>}
-                            {selectedPlaceDetails.longitude !== undefined && <p><strong>Lng:</strong> {selectedPlaceDetails.longitude.toFixed(6)}</p>}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs sm:text-sm py-3 px-4">
+                            <div className="space-y-2">
+                                <p className="flex items-start"><Earth className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground shrink-0" /><strong className="mr-1.5">País:</strong> <span className="break-words">{selectedPlaceDetails.country || 'N/A'}</span></p>
+                                <p className="flex items-start"><MapPinIconLucide className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground shrink-0" /><strong className="mr-1.5">Lugar:</strong> <span className="break-words">{selectedPlaceDetails.formattedAddress || selectedPlaceDetails.displayName || 'N/A'}</span></p>
+                            </div>
+                            <div className="space-y-2">
+                                <p className="flex items-start"><LocateFixed className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground shrink-0" /><strong className="mr-1.5">Lat:</strong> {selectedPlaceDetails.latitude !== undefined ? selectedPlaceDetails.latitude.toFixed(6) : 'N/A'}</p>
+                                <p className="flex items-start"><LocateFixed className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground shrink-0" /><strong className="mr-1.5">Lng:</strong> {selectedPlaceDetails.longitude !== undefined ? selectedPlaceDetails.longitude.toFixed(6) : 'N/A'}</p>
+                            </div>
                             {selectedPlaceDetails.photos && selectedPlaceDetails.photos.length > 0 && (
-                              <div className="pt-1">
-                                <Label className="font-semibold flex items-center text-xs sm:text-sm"><Camera className="mr-2 h-4 w-4" />Fotos:</Label>
-                                <div className="mt-2 flex flex-wrap gap-2">
+                              <div className="sm:col-span-2 pt-1">
+                                <Label className="font-semibold flex items-center text-xs sm:text-sm mb-1"><Camera className="mr-2 h-4 w-4" />Fotos:</Label>
+                                <div className="flex flex-wrap gap-2">
                                     {selectedPlaceDetails.photos.slice(0, 5).map((photo, idx) => (
                                         <Image key={idx} src={photo.getURI({ maxWidthPx: 100, maxHeightPx: 100 })} alt={`Foto ${idx + 1}`} width={80} height={80} className="rounded-md object-cover" data-ai-hint="city photo"/>
                                     ))}
@@ -306,8 +310,8 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                               </div>
                             )}
                             {selectedPlaceDetails.latitude !== undefined && selectedPlaceDetails.longitude !== undefined && (
-                              <div className="pt-1">
-                                <Label className="font-semibold flex items-center text-xs sm:text-sm"><Globe className="mr-2 h-4 w-4" />Mapa:</Label>
+                              <div className="sm:col-span-2 pt-1">
+                                <Label className="font-semibold flex items-center text-xs sm:text-sm mb-1"><Globe className="mr-2 h-4 w-4" />Mapa:</Label>
                                 <div className="mt-1 h-[180px] sm:h-[200px] w-full rounded-md overflow-hidden border">
                                     <Map mapId={`dialog-map-${selectedPlaceDetails.id || Date.now()}`} center={{ lat: selectedPlaceDetails.latitude, lng: selectedPlaceDetails.longitude }} zoom={12} gestureHandling={'greedy'} disableDefaultUI={true} clickableIcons={false} zoomControl={true} className="h-full w-full">
                                         <AdvancedMarker position={{ lat: selectedPlaceDetails.latitude, lng: selectedPlaceDetails.longitude }} />
@@ -315,7 +319,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                                 </div>
                               </div>
                             )}
-                          </CardContent>
+                          </div>
                       </AccordionContent>
                     </Card>
                   </AccordionItem>
