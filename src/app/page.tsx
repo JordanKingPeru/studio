@@ -3,13 +3,13 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, LogOut, Trash2, AlertTriangle, UserPlus, CheckCircle } from 'lucide-react';
+import { Plus, LogOut, Trash2, AlertTriangle, UserPlus, CheckCircle, BadgeInfo } from 'lucide-react'; // Added BadgeInfo
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import NextImage from 'next/image';
 import CreateTripWizard from '@/components/trips/CreateTripWizard';
-import type { Trip, CreateTripWizardData, UserProfile } from '@/lib/types';
+import type { Trip, CreateTripWizardData, UserProfile, SubscriptionPlanId } from '@/lib/types';
 import { format, parseISO, isPast } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
@@ -255,7 +255,6 @@ export default function MyTripsPage() {
       return;
     }
     
-    // Ensure maxTrips is a number, default to 1 if not
     const maxTrips = typeof currentUser.subscription.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1;
     const tripsCreated = typeof currentUser.subscription.tripsCreated === 'number' ? currentUser.subscription.tripsCreated : 0;
 
@@ -270,7 +269,7 @@ export default function MyTripsPage() {
         return;
     }
 
-    let finalCoverImageUrl = wizardData.coverImageUrl || ''; // Initialize with placeholder or AI generated URL (can be base64)
+    let finalCoverImageUrl = wizardData.coverImageUrl || ''; 
     const base64CoverImage = wizardData.coverImageUrl && wizardData.coverImageUrl.startsWith('data:image') ? wizardData.coverImageUrl : null;
 
     const tripToSaveInFirestore = {
@@ -285,7 +284,7 @@ export default function MyTripsPage() {
       familia: `${wizardData.numAdults || 0} Adultos, ${wizardData.numChildren || 0} Niños`,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      coverImageUrl: base64CoverImage ? '' : finalCoverImageUrl, // Temporary if base64, final if already URL
+      coverImageUrl: base64CoverImage ? '' : finalCoverImageUrl, 
     };
 
     try {
@@ -305,22 +304,20 @@ export default function MyTripsPage() {
         } catch (uploadError: any) {
           console.error("Error uploading cover image to Firebase Storage:", uploadError);
           toast({ variant: "destructive", title: "Error de Portada", description: `No se pudo subir la imagen de portada: ${uploadError.message}. El viaje se creó sin portada.` });
-          finalCoverImageUrl = ''; // Reset on error
+          finalCoverImageUrl = ''; 
         }
       }
       
       const userRef = doc(db, "users", currentUser.uid);
-      // Ensure document and subscription field exist before incrementing
       await setDoc(userRef, { 
           subscription: {
-              planId: currentUser.subscription.planId,
-              status: currentUser.subscription.status,
+              planId: currentUser.subscription.planId || 'free_tier',
+              status: currentUser.subscription.status || 'free',
               tripsCreated: typeof currentUser.subscription.tripsCreated === 'number' ? currentUser.subscription.tripsCreated : 0,
               maxTrips: typeof currentUser.subscription.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1,
               ...(currentUser.subscription.renewalDate && { renewalDate: currentUser.subscription.renewalDate })
           }
       }, { merge: true });
-      // Now increment
       await updateDoc(userRef, {
         "subscription.tripsCreated": increment(1)
       });
@@ -383,23 +380,21 @@ export default function MyTripsPage() {
         await batch.commit();
         
         const userRef = doc(db, "users", currentUser.uid);
-        // Ensure document and subscription field exist before decrementing
         await setDoc(userRef, { 
             subscription: {
-                planId: currentUser.subscription.planId,
-                status: currentUser.subscription.status,
+                planId: currentUser.subscription.planId || 'free_tier',
+                status: currentUser.subscription.status || 'free',
                 tripsCreated: typeof currentUser.subscription.tripsCreated === 'number' ? currentUser.subscription.tripsCreated : 0,
                 maxTrips: typeof currentUser.subscription.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1,
                 ...(currentUser.subscription.renewalDate && { renewalDate: currentUser.subscription.renewalDate })
             }
         }, { merge: true });
-        // Now decrement, ensuring it doesn't go below 0
+
         if (currentUser.subscription && (currentUser.subscription.tripsCreated || 0) > 0) {
           await updateDoc(userRef, {
             "subscription.tripsCreated": increment(-1)
           });
         }
-
 
         setTrips(prevTrips => prevTrips.filter(trip => trip.id !== tripToDeleteId));
         toast({
@@ -437,6 +432,12 @@ export default function MyTripsPage() {
   const canCreateTrip = currentUser?.subscription && 
                         (typeof currentUser.subscription.tripsCreated === 'number' ? currentUser.subscription.tripsCreated : 0) < 
                         (typeof currentUser.subscription.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1);
+  
+  const getPlanDisplayName = (planId: SubscriptionPlanId | undefined) => {
+    if (planId === 'free_tier') return 'Plan Gratuito';
+    if (planId === 'pro_tier') return 'Plan Pro';
+    return 'Plan Desconocido';
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -534,6 +535,17 @@ export default function MyTripsPage() {
         >
           <Plus className="h-8 w-8" />
         </Button>
+
+        {currentUser && currentUser.subscription && (
+          <div 
+            className="fixed bottom-6 left-6 bg-secondary text-secondary-foreground px-4 py-2 rounded-full text-xs shadow-lg z-50 flex items-center gap-2"
+            title={`Plan actual: ${getPlanDisplayName(currentUser.subscription.planId)}. Viajes creados: ${currentUser.subscription.tripsCreated || 0}/${currentUser.subscription.maxTrips || 1}`}
+          >
+            <BadgeInfo size={16} />
+            <span>{getPlanDisplayName(currentUser.subscription.planId)}</span>
+            <span>({currentUser.subscription.tripsCreated || 0}/{currentUser.subscription.maxTrips || 1} viajes)</span>
+          </div>
+        )}
       </main>
       {currentUser && (
         <CreateTripWizard
@@ -569,3 +581,4 @@ export default function MyTripsPage() {
     </div>
   );
 }
+
