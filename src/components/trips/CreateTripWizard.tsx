@@ -220,17 +220,86 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="numTravelers" className="mb-1 block text-sm font-medium text-foreground">Total Viajeros</Label>
-                <Controller name="numTravelers" control={control} render={({ field }) => <Input id="numTravelers" type="number" placeholder="1" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || null)} />} />
+                <Controller
+                  name="numTravelers"
+                  control={control}
+                  render={({ field: { onChange, onBlur, value, name, ref } }) => (
+                    <Input
+                      id="numTravelers"
+                      type="number"
+                      placeholder="1"
+                      ref={ref}
+                      name={name}
+                      value={value ?? ''}
+                      onChange={e => {
+                        const rawValue = e.target.value;
+                        if (rawValue === '') {
+                          onChange(null);
+                        } else {
+                          const num = parseInt(rawValue, 10);
+                          onChange(isNaN(num) ? null : num);
+                        }
+                      }}
+                      onBlur={onBlur}
+                    />
+                  )}
+                />
                 {errors.numTravelers && <p className="text-sm text-destructive mt-1">{errors.numTravelers.message}</p>}
               </div>
               <div>
                 <Label htmlFor="numAdults" className="mb-1 block text-sm font-medium text-foreground">Adultos</Label>
-                <Controller name="numAdults" control={control} render={({ field }) => <Input id="numAdults" type="number" placeholder="1" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || null)} />} />
+                 <Controller
+                  name="numAdults"
+                  control={control}
+                  render={({ field: { onChange, onBlur, value, name, ref } }) => (
+                    <Input
+                      id="numAdults"
+                      type="number"
+                      placeholder="1"
+                      ref={ref}
+                      name={name}
+                      value={value ?? ''}
+                      onChange={e => {
+                        const rawValue = e.target.value;
+                        if (rawValue === '') {
+                          onChange(null);
+                        } else {
+                          const num = parseInt(rawValue, 10);
+                          onChange(isNaN(num) ? null : num);
+                        }
+                      }}
+                      onBlur={onBlur}
+                    />
+                  )}
+                />
                 {errors.numAdults && <p className="text-sm text-destructive mt-1">{errors.numAdults.message}</p>}
               </div>
               <div>
                 <Label htmlFor="numChildren" className="mb-1 block text-sm font-medium text-foreground">Niños</Label>
-                <Controller name="numChildren" control={control} render={({ field }) => <Input id="numChildren" type="number" placeholder="0" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || null)} />} />
+                <Controller
+                  name="numChildren"
+                  control={control}
+                  render={({ field: { onChange, onBlur, value, name, ref } }) => (
+                    <Input
+                      id="numChildren"
+                      type="number"
+                      placeholder="0"
+                      ref={ref}
+                      name={name}
+                      value={value ?? ''}
+                      onChange={e => {
+                        const rawValue = e.target.value;
+                        if (rawValue === '') {
+                          onChange(null);
+                        } else {
+                          const num = parseInt(rawValue, 10);
+                          onChange(isNaN(num) ? null : num);
+                        }
+                      }}
+                      onBlur={onBlur}
+                    />
+                  )}
+                />
                 {errors.numChildren && <p className="text-sm text-destructive mt-1">{errors.numChildren.message}</p>}
               </div>
             </div>
