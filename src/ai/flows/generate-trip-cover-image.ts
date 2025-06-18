@@ -76,12 +76,12 @@ const generateTripCoverImageFlow = ai.defineFlow(
     outputSchema: GenerateTripCoverImageOutputSchema,
   },
   async (input) => {
-    // 1. Resolve the PromptFn with the input to get a GenerateRequest object.
-    // This object will contain the rendered prompt string within its `messages` structure.
+    // 1. Resolve the PromptFn with the input to get a GenerateResponse object.
+    // This object will contain the rendered prompt string within its `request.messages` structure.
     const populatedGenerateRequest = await imagePromptDefinition(input);
 
-    // 2. Extract the rendered text prompt.
-    const promptText = populatedGenerateRequest.messages?.[0]?.content?.[0]?.text;
+    // 2. Extract the rendered text prompt from the original request messages.
+    const promptText = populatedGenerateRequest.request?.messages?.[0]?.content?.[0]?.text;
 
     if (!promptText) {
       console.error('Rendered prompt text is empty or missing. Request object:', JSON.stringify(populatedGenerateRequest, null, 2), 'Input:', JSON.stringify(input, null, 2));
