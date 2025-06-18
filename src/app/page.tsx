@@ -230,6 +230,8 @@ export default function MyTripsPage() {
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [tripToDeleteId, setTripToDeleteId] = useState<string | null>(null);
+  const [isLimitReachedDialogOpen, setIsLimitReachedDialogOpen] = useState(false);
+
 
   const loadTrips = async () => {
     if (!currentUser) {
@@ -258,7 +260,7 @@ export default function MyTripsPage() {
   }, [currentUser?.subscription?.maxTrips]);
 
   const isTripLimitReached = useMemo(() => {
-    if (!currentUser) return true; // Cannot create trips if not logged in
+    if (!currentUser) return true; 
     return ownedTripsCount >= maxTripsForCurrentUser;
   }, [currentUser, ownedTripsCount, maxTripsForCurrentUser]);
 
@@ -269,12 +271,15 @@ export default function MyTripsPage() {
       return;
     }
     
-    if (isTripLimitReached) {
+    // Re-check limit before actual creation as a safeguard
+    const currentOwnedCount = trips.filter(trip => trip.ownerUid === currentUser.uid).length;
+    const currentMaxTrips = typeof currentUser.subscription.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1;
+
+    if (currentOwnedCount >= currentMaxTrips) {
         toast({
             variant: "destructive",
             title: "Límite Alcanzado",
-            description: `Has alcanzado el límite de ${maxTripsForCurrentUser} viajes para el plan gratuito. ¡Actualiza a Pro para crear más!`,
-            action: (<Button onClick={() => router.push('/subscription')}>Ver Planes</Button>)
+            description: `Has alcanzado el límite de ${currentMaxTrips} viajes para tu plan. No se pudo crear el viaje.`,
         });
         setIsWizardOpen(false);
         return;
@@ -320,7 +325,6 @@ export default function MyTripsPage() {
       }
       
       const userRef = doc(db, "users", currentUser.uid);
-      // Ensure subscription structure exists before incrementing
       await setDoc(userRef, {
           subscription: {
               planId: currentUser.subscription.planId || 'free_tier',
@@ -335,7 +339,7 @@ export default function MyTripsPage() {
         "subscription.tripsCreated": increment(1)
       });
       
-      await loadTrips(); // This will refresh the trips list and ownedTripsCount
+      await loadTrips(); 
       setIsWizardOpen(false);
       router.push(`/trips/${tripId}/map`);
       toast({ title: "¡Viaje Creado!", description: `"${wizardData.name}" se ha guardado. ${finalCoverImageUrl ? 'Portada añadida. ' : ''}Añade tus destinos en el mapa.`});
@@ -393,26 +397,26 @@ export default function MyTripsPage() {
         await batch.commit();
         
         const userRef = doc(db, "users", currentUser.uid);
-        // Ensure subscription structure exists before decrementing
+        const userSub = currentUser.subscription || { planId: 'free_tier', status: 'free', tripsCreated: 0, maxTrips: 1 };
+
         await setDoc(userRef, {
             subscription: {
-                planId: currentUser.subscription.planId || 'free_tier',
-                status: currentUser.subscription.status || 'free',
-                tripsCreated: typeof currentUser.subscription.tripsCreated === 'number' ? currentUser.subscription.tripsCreated : 0,
-                maxTrips: typeof currentUser.subscription.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1,
-                ...(currentUser.subscription.renewalDate && { renewalDate: currentUser.subscription.renewalDate })
+                planId: userSub.planId,
+                status: userSub.status,
+                tripsCreated: typeof userSub.tripsCreated === 'number' ? userSub.tripsCreated : 0,
+                maxTrips: typeof userSub.maxTrips === 'number' ? userSub.maxTrips : 1,
+                ...(userSub.renewalDate && { renewalDate: userSub.renewalDate })
             }
         }, { merge: true });
 
-        // Decrement tripsCreated only if it's greater than 0
-        const currentTripsCreatedInDb = typeof currentUser.subscription.tripsCreated === 'number' ? currentUser.subscription.tripsCreated : 0;
+        const currentTripsCreatedInDb = typeof userSub.tripsCreated === 'number' ? userSub.tripsCreated : 0;
         if (currentTripsCreatedInDb > 0) {
           await updateDoc(userRef, {
             "subscription.tripsCreated": increment(-1)
           });
         }
 
-        setTrips(prevTrips => prevTrips.filter(trip => trip.id !== tripToDeleteId)); // This will update ownedTripsCount via useMemo
+        setTrips(prevTrips => prevTrips.filter(trip => trip.id !== tripToDeleteId)); 
         toast({
           title: "Viaje Eliminado",
           description: `El viaje "${tripBeingDeleted.name}" y todos sus datos han sido eliminados.`,
@@ -491,20 +495,17 @@ export default function MyTripsPage() {
             <Button 
               size="lg" 
               onClick={() => {
-                if (currentUser && isTripLimitReached) {
-                   toast({
-                    variant: "destructive",
-                    title: "Límite Alcanzado",
-                    description: `Has alcanzado el límite de ${maxTripsForCurrentUser} viajes para el plan gratuito. ¡Actualiza a Pro para crear más!`,
-                    action: (<Button onClick={() => router.push('/subscription')}>Ver Planes</Button>)
-                   });
-                } else if (currentUser) {
-                  setIsWizardOpen(true);
+                if (!currentUser) {
+                   toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión para crear un viaje."});
+                   return;
+                }
+                if (isTripLimitReached) {
+                   setIsLimitReachedDialogOpen(true);
                 } else {
-                  toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión para crear un viaje."});
+                  setIsWizardOpen(true);
                 }
               }} 
-              disabled={!currentUser || (currentUser && isTripLimitReached && trips.length > 0)} // Disable if limit reached and already has trips, otherwise allow first trip creation attempt
+              disabled={!currentUser}
               title={currentUser && isTripLimitReached ? `Límite de ${maxTripsForCurrentUser} viajes alcanzado` : "Crear Nuevo Viaje"}
             >
               <Plus className="mr-2 h-5 w-5" />
@@ -529,21 +530,18 @@ export default function MyTripsPage() {
           className="fixed bottom-6 right-6 h-16 w-16 rounded-full shadow-xl z-50"
           size="icon"
           onClick={() => {
-             if (currentUser && isTripLimitReached) {
-                toast({
-                    variant: "destructive",
-                    title: "Límite Alcanzado",
-                    description: `Has alcanzado el límite de ${maxTripsForCurrentUser} viajes para el plan gratuito. ¡Actualiza a Pro para crear más!`,
-                    action: (<Button onClick={() => router.push('/subscription')}>Ver Planes</Button>)
-                });
-              } else if (currentUser) {
-                setIsWizardOpen(true);
-              } else {
+             if (!currentUser) {
                 toast({ variant: "destructive", title: "Error", description: "Debes iniciar sesión para crear un viaje."});
+                return;
+             }
+             if (isTripLimitReached) {
+                setIsLimitReachedDialogOpen(true);
+              } else {
+                setIsWizardOpen(true);
               }
           }}
           aria-label="Crear Nuevo Viaje"
-          disabled={!currentUser || (currentUser && isTripLimitReached)}
+          disabled={!currentUser}
           title={currentUser && isTripLimitReached ? `Límite de ${maxTripsForCurrentUser} viajes alcanzado` : "Crear Nuevo Viaje"}
         >
           <Plus className="h-8 w-8" />
@@ -556,7 +554,6 @@ export default function MyTripsPage() {
           >
             <BadgeInfo size={16} />
             <span>{getPlanDisplayName(currentUser.subscription.planId)}</span>
-            {/* Display count based on actual owned trips visible on the page */}
             <span>({ownedTripsCount}/{maxTripsForCurrentUser} viajes)</span>
           </div>
         )}
@@ -592,7 +589,27 @@ export default function MyTripsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={isLimitReachedDialogOpen} onOpenChange={setIsLimitReachedDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Límite de Viajes Alcanzado</AlertDialogTitle>
+            <AlertDialogDescription>
+              Has alcanzado el límite de {maxTripsForCurrentUser} {maxTripsForCurrentUser === 1 ? 'viaje' : 'viajes'} para tu plan actual.
+              Para crear más viajes y acceder a funciones avanzadas, por favor considera mejorar tu plan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsLimitReachedDialogOpen(false)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              router.push('/subscription');
+              setIsLimitReachedDialogOpen(false);
+            }}>
+              Mejorar Plan
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
