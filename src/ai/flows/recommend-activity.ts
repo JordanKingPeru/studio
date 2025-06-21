@@ -18,6 +18,7 @@ const RecommendActivityInputSchema = z.object({
   category: z.string().optional().describe('The desired category for the activity (e.g., "Comida", "Cultural").'),
   interests: z.string().optional().describe('The interests of the travelers.'),
   tripDetails: z.string().describe('Details of the trip, including dates and travelers.'),
+  existingActivities: z.string().optional().describe('A list of activities already planned for this day, to avoid duplicates.'),
 });
 export type RecommendActivityInput = z.infer<typeof RecommendActivityInputSchema>;
 
@@ -37,7 +38,7 @@ const recommendActivityPrompt = ai.definePrompt({
   name: 'recommendActivityPrompt',
   input: {schema: RecommendActivityInputSchema},
   output: {schema: RecommendActivityOutputSchema},
-  prompt: `You are a concise travel assistant. Recommend a single, compelling activity.
+  prompt: `You are a concise travel assistant. Recommend a single, compelling activity that is NOT already planned.
 The entire response MUST be in Spanish. The reason MUST be very short (10-15 words max).
 
 Trip Context: {{{tripDetails}}}
@@ -46,6 +47,11 @@ City: {{{city}}}
 Desired Category: {{{category}}}
 {{/if}}
 Interests: {{{interests}}}
+
+{{#if existingActivities}}
+IMPORTANT: The following activities are already planned for this day. DO NOT recommend any of these or very similar ones:
+- {{{existingActivities}}}
+{{/if}}
 
 Your recommendation MUST belong to the desired category if provided.
 Provide the activity name, a very short reason, a suggested time (HH:MM format), and the activity category.

@@ -18,7 +18,7 @@ import type { City, Activity, ActivityCategory } from '@/lib/types';
 import { activityCategories } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { format, parseISO, isWithinInterval } from 'date-fns';
+import { format, parseISO, isWithinInterval, addHours } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Label } from '@/components/ui/label';
 
@@ -38,9 +38,10 @@ interface AISuggestionButtonProps {
   onAddActivity: (activity: Activity) => Promise<void>;
   tripId: string;
   forDate: string; // The specific date for the suggestion
+  allActivities: Activity[];
 }
 
-export default function AISuggestionButton({ cities, tripFamilia, tripDates, onAddActivity, tripId, forDate }: AISuggestionButtonProps) {
+export default function AISuggestionButton({ cities, tripFamilia, tripDates, onAddActivity, tripId, forDate, allActivities }: AISuggestionButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<RecommendActivityOutput | null>(null);
@@ -48,7 +49,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
   const { toast } = useToast();
 
   const [suggestedDate, setSuggestedDate] = useState('');
-  const [suggestedTime, setSuggestedTime] = useState('12:00');
+  const [suggestedTime, setSuggestedTime] = useState('10:00');
   
   const currentTripCities = useMemo(() => cities.filter(c => c.tripId === tripId), [cities, tripId]);
   
@@ -81,6 +82,21 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
         const initialCityName = cityForDate?.name || '';
         const detailsText = `Viaje para ${tripFamilia} a ${initialCityName}.`;
         
+        const activitiesForDate = allActivities.filter(act => act.date === forDate);
+        let nextAvailableTime = '10:00';
+        if (activitiesForDate.length > 0) {
+            const sortedActivities = [...activitiesForDate].sort((a, b) => a.time.localeCompare(b.time));
+            const lastActivityTime = sortedActivities[sortedActivities.length - 1].time;
+            try {
+                const [hours, minutes] = lastActivityTime.split(':').map(Number);
+                const lastActivityDate = new Date();
+                lastActivityDate.setHours(hours + 1, minutes);
+                nextAvailableTime = format(lastActivityDate, 'HH:mm');
+            } catch (e) {
+                console.error("Error parsing last activity time, defaulting.", e);
+            }
+        }
+
         form.reset({
             city: initialCityName,
             category: '',
@@ -91,22 +107,32 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
         setError(null);
         
         setSuggestedDate(forDate);
-        setSuggestedTime("12:00");
+        setSuggestedTime(nextAvailableTime);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, forDate, currentTripCities, tripFamilia, form.reset]);
+  }, [isOpen, forDate, currentTripCities, tripFamilia, form.reset, allActivities]);
 
 
   const handleGenerateSuggestion: SubmitHandler<SuggestionFormData> = async (data) => {
     setIsLoading(true);
     setError(null);
     setSuggestion(null);
+
+    const existingActivitiesForDay = allActivities
+        .filter(act => act.date === forDate)
+        .map(act => act.title)
+        .join(', ');
+
     try {
-      const result = await recommendActivity(data); 
+      const inputForAI: RecommendActivityInput = {
+          ...data,
+          existingActivities: existingActivitiesForDay,
+      };
+      const result = await recommendActivity(inputForAI); 
       setSuggestion(result);
-      
-      setSuggestedDate(forDate);
-      setSuggestedTime(result.suggestedTime || '12:00');
+      // The suggestedTime state is already calculated and set in the useEffect hook.
+      // We will keep that value as the primary suggestion for the time input.
+      // If the AI provides a time, it's in result.suggestedTime, but we prioritize the calculated one.
 
     } catch (err) {
       setError("No se pudo generar la sugerencia. Inténtalo de nuevo.");

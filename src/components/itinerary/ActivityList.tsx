@@ -438,6 +438,7 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
                                           onAddActivity={onAddOrUpdateActivity}
                                           tripId={tripId}
                                           forDate={day.date}
+                                          allActivities={activities}
                                       />
                                     </div>
                                   </div>
