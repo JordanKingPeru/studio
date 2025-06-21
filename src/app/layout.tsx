@@ -8,8 +8,8 @@ import { AuthProvider } from '@/context/AuthContext'; // NUEVA IMPORTACIÓN
 import ProtectedRoute from '@/components/auth/ProtectedRoute'; // NUEVA IMPORTACIÓN
 
 export const metadata: Metadata = {
-  title: 'Family Trip Planner',
-  description: 'Plan and manage your family vacation with ease.',
+  title: 'OriGo - Intelligent Trip Planner',
+  description: 'Plan and manage your trips with ease using OriGo.',
 };
 
 export default function RootLayout({

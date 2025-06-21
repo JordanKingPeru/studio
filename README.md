@@ -1,232 +1,232 @@
 
-# Family Trip Planner - Documentación del Proyecto
+# **OriGo** - Intelligent Trip Planner
 
-## 1. Introducción
+## 1. Introduction
 
-**Family Trip Planner** es una aplicación de planificación de viajes inteligente y colaborativa diseñada para ayudar a familias y grupos a organizar sus aventuras sin esfuerzo. Desde la planificación de destinos en un mapa hasta el detalle de las actividades diarias y el seguimiento de los presupuestos, esta aplicación aprovecha las tecnologías web modernas y la IA generativa para crear una experiencia de planificación fluida, inmersiva y atractiva.
-
----
-
-## 2. Tabla de Contenidos
-
-- [Características Principales y Funcionalidades](#3-características-principales-y-funcionalidades)
-- [Stack Tecnológico](#4-stack-tecnológico)
-- [Paleta de Colores](#5-paleta-de-colores)
-- [Estructura del Proyecto](#6-estructura-del-proyecto)
-- [Guía de Inicio Rápido (Local)](#7-guía-de-inicio-rápido-local)
-- [Configuración de Firebase](#8-configuración-de-firebase)
-- [Configuración de Genkit (IA)](#9-configuración-de-genkit-ia)
+**OriGo** is an intelligent and collaborative travel planning application designed to help families and groups organize their adventures effortlessly. From planning destinations on a map to detailing daily activities and tracking budgets, this application leverages modern web technologies and generative AI to create a seamless, immersive, and engaging planning experience.
 
 ---
 
-## 3. Características Principales y Funcionalidades
+## 2. Table of Contents
 
-### Planificación Inteligente y Centralizada
-
--   🚀 **Creación de Viajes Guiada**: Inicia cada nueva aventura con un asistente intuitivo que te guía paso a paso. Define el nombre, las fechas, el número de viajeros y el contexto de tu viaje (tipo y estilo), sentando las bases para una planificación personalizada desde el primer momento.
--   🗂️ **Dashboard de Viajes Unificado**: Tu centro de mando personal. Visualiza todos tus viajes —los que creaste, a los que te invitaron y los que están pendientes de aceptación— en una única interfaz elegante. Cada viaje se presenta como una tarjeta interactiva, mostrando su portada, nombre y fechas, facilitando el acceso inmediato a tus planes.
--   🔐 **Autenticación Segura y Sencilla**: Un portal de acceso robusto y fácil de usar. Ofrecemos registro e inicio de sesión con email/contraseña, así como una integración fluida con **Google Sign-In** para un acceso rápido y seguro, protegiendo tus planes y datos personales con los estándares de Firebase Authentication.
--   👑 **Sistema de Suscripciones (Base)**: La aplicación está construida sobre una arquitectura que soporta diferentes niveles de usuario. El plan gratuito inicial tiene un límite de viajes, sentando las bases para futuros **planes Pro** con características ilimitadas y funcionalidades avanzadas, creando un modelo de negocio escalable.
-
-### Visualización y Organización Inmersiva
-
--   🌍 **Mapa Interactivo Inteligente**: Transforma tu lista de destinos en un lienzo visual y dinámico. Con la potencia de **Google Maps Platform**, puedes buscar y añadir ciudades con autocompletado, visualizar tu ruta completa con marcadores y líneas conectadas, y obtener una perspectiva geográfica de tu aventura. Edita, elimina y gestiona tus paradas directamente sobre el mapa para una planificación fluida y contextual.
--   📋 **Itinerario Dinámico con Arrastrar y Soltar**: El corazón de tu viaje. Organiza las actividades de cada día en una interfaz de arrastrar y soltar (drag-and-drop) que permite reordenar planes sobre la marcha. Cada actividad (comida, vuelo, tour, etc.) se gestiona con detalles como hora, notas, coste y adjuntos, haciendo que la planificación sea tan flexible como tu viaje.
--   📊 **Seguimiento de Presupuesto Visual**: Mantén tus finanzas bajo control sin esfuerzo. Registra gastos manuales o importa automáticamente los costes de las actividades del itinerario. Visualiza tus gastos con **gráficos interactivos** que desglosan el consumo por ciudad y muestran la tendencia de gasto acumulado, permitiéndote tomar decisiones informadas en tiempo real.
--   ✅ **Checklists y Herramientas Adicionales**: Asegúrate de que no se te olvide nada. Utiliza checklists personalizables para organizar tu equipaje y tareas pendientes. La sección "Más" también alberga la gestión de colaboradores y es el espacio para futuras herramientas como la gestión de documentos y resúmenes post-viaje.
-
-### Asistencia con Inteligencia Artificial Generativa
-
--   🎨 **Generación de Portadas con IA**: Dale vida a tus viajes antes de empezar. Nuestra IA generativa, impulsada por **Google AI (Genkit)**, crea imágenes de portada únicas y motivadoras basadas en los detalles de tu viaje (destino, estilo, fechas). Cada plan tendrá una identidad visual inspiradora y fotorrealista.
--   💡 **Recomendación Inteligente de Actividades**: ¿No sabes qué hacer en tu destino? Deja que nuestra IA te ayude. Basándose en la ciudad, tus intereses y el contexto del viaje, el sistema te sugiere actividades relevantes y emocionantes. Con un solo clic, puedes añadir estas sugerencias directamente a tu itinerario.
-
-### Colaboración y Experiencia de Usuario Superior
-
--   🧑‍🤝‍🧑 **Planificación en Tiempo Real y Colaborativa**: Viajar en grupo nunca fue tan fácil. Invita a amigos y familiares a tu viaje por email. Los colaboradores pueden ver y editar el itinerario, el presupuesto y otros detalles en tiempo real gracias a la sincronización con **Firestore**, asegurando que todos estén siempre en la misma página.
--   📱 **Diseño Totalmente Responsivo**: Una experiencia impecable en cualquier dispositivo. La interfaz ha sido cuidadosamente diseñada para ser tan funcional y estética en un ordenador de escritorio como en una tableta o un smartphone, permitiéndote planificar desde casa o sobre la marcha.
--   🌗 **Temas Claro y Oscuro**: Personaliza tu entorno de planificación. Cambia entre un tema claro, limpio y enfocado, y un tema oscuro, elegante y cómodo para la vista, que se adapta a tus preferencias y al entorno de luz.
+- [Core Features](#3-core-features)
+- [Tech Stack](#4-tech-stack)
+- [Color Palette: "Sunrise Over the Path"](#5-color-palette-sunrise-over-the-path)
+- [Project Structure](#6-project-structure)
+- [Quick Start Guide (Local)](#7-quick-start-guide-local)
+- [Firebase Setup](#8-firebase-setup)
+- [Genkit (AI) Setup](#9-genkit-ai-setup)
 
 ---
 
-## 4. Stack Tecnológico
+## 3. Core Features
+
+### Intelligent & Centralized Planning
+
+-   🚀 **Guided Trip Creation**: Kickstart each new adventure with an intuitive, step-by-step wizard. Define your trip's name, dates, number of travelers, and context (type and style), setting the stage for personalized planning from the very first moment.
+-   🗂️ **Unified Trip Dashboard**: Your personal command center. View all your trips—those you've created, been invited to, and those pending acceptance—in a single, elegant interface. Each trip is presented as an interactive card, showing its cover image, name, and dates, providing immediate access to your plans.
+-   🔐 **Simple & Secure Authentication**: A robust and user-friendly access portal. We offer email/password registration and login, as well as seamless integration with **Google Sign-In** for quick and secure access, protecting your plans and personal data with Firebase Authentication standards.
+-   👑 **Subscription System (Base)**: The application is built on an architecture that supports different user tiers. The initial free plan has a trip limit, laying the groundwork for future **Pro plans** with unlimited features and advanced functionalities, creating a scalable business model.
+
+### Immersive Visualization & Organization
+
+-   🌍 **Intelligent Interactive Map**: Transform your destination list into a visual and dynamic canvas. Powered by the **Google Maps Platform**, you can search and add cities with autocompletion, visualize your complete route with markers and connecting lines, and gain a geographical perspective of your adventure. Edit, delete, and manage your stops directly on the map for fluid and contextual planning.
+-   📋 **Dynamic Drag-and-Drop Itinerary**: The heart of your trip. Organize each day's activities in a drag-and-drop interface that allows you to reorder plans on the fly. Each activity (meal, flight, tour, etc.) is managed with details like time, notes, cost, and attachments, making planning as flexible as your journey.
+-   📊 **Visual Budget Tracking**: Keep your finances in check effortlessly. Record manual expenses or automatically import costs from itinerary activities. Visualize your spending with **interactive charts** that break down consumption by city and show the cumulative spending trend, allowing you to make informed decisions in real-time.
+-   ✅ **Checklists & Additional Tools**: Make sure you don't forget anything. Use customizable checklists to organize your luggage and to-do items. The "More" section also houses collaborator management and is the space for future tools like document management and post-trip summaries.
+
+### Generative AI Assistance
+
+-   🎨 **AI-Powered Cover Image Generation**: Bring your trips to life before you even begin. Our generative AI, powered by **Google AI (Genkit)**, creates unique and inspiring cover images based on your trip details (destination, style, dates). Each plan will have an inspiring and photorealistic visual identity.
+-   💡 **Intelligent Activity Recommendations**: Don't know what to do at your destination? Let our AI help. Based on the city, your interests, and the trip context, the system suggests relevant and exciting activities. With a single click, you can add these suggestions directly to your itinerary.
+
+### Collaboration & Superior User Experience
+
+-   🧑‍🤝‍🧑 **Real-Time & Collaborative Planning**: Group travel has never been easier. Invite friends and family to your trip via email. Collaborators can view and edit the itinerary, budget, and other details in real-time thanks to synchronization with **Firestore**, ensuring everyone is always on the same page.
+-   📱 **Fully Responsive Design**: A flawless experience on any device. The interface has been carefully designed to be as functional and aesthetic on a desktop computer as it is on a tablet or smartphone, allowing you to plan from home or on the go.
+-   🌗 **Light & Dark Themes**: Customize your planning environment. Switch between a clean, focused light theme and an elegant, eye-friendly dark theme that adapts to your preferences and lighting conditions.
+
+---
+
+## 4. Tech Stack
 
 -   **Framework**: Next.js 15 (App Router, Server Components)
--   **Lenguaje**: TypeScript
--   **Librería de UI**: ShadCN UI
--   **Estilos**: Tailwind CSS
--   **Iconos**: Lucide React
--   **Gráficos**: Recharts
--   **Gestión de Estado**: React Context API, React Hook Form
--   **Servicios de Backend**: Firebase (Authentication, Firestore, Storage)
--   **IA Generativa**: Google AI (a través de Genkit v1.x)
--   **Mapas**: Google Maps Platform (`@vis.gl/react-google-maps`)
+-   **Language**: TypeScript
+-   **UI Library**: ShadCN UI
+-   **Styling**: Tailwind CSS
+-   **Icons**: Lucide React
+-   **Charts**: Recharts
+-   **State Management**: React Context API, React Hook Form
+-   **Backend Services**: Firebase (Authentication, Firestore, Storage)
+-   **Generative AI**: Google AI (via Genkit v1.x)
+-   **Maps**: Google Maps Platform (`@vis.gl/react-google-maps`)
 
 ---
 
-## 5. Paleta de Colores
+## 5. Color Palette: "Sunrise Over the Path"
 
-La UI utiliza un sistema de temas claro y oscuro definido con variables CSS HSL en `src/app/globals.css`.
+The UI uses a light and dark theme system defined with HSL CSS variables in `src/app/globals.css`.
 
-### Tema Claro (Light)
+### Light Theme
 
-| Elemento            | Color Hex   | HSL                               | Descripción                    |
-| ------------------- | ----------- | --------------------------------- | ------------------------------ |
-| **Background**      | `#F5F5F5`   | `0 0% 96.1%`                      | Gris Claro                     |
-| **Foreground**      | `#0A0A0B`   | `240 10% 3.9%`                    | Texto principal (Azul/Gris oscuro) |
-| **Primary**         | `#64B5F6`   | `207 88% 68%`                     | Azul Suave (Principal)         |
-| **Accent**          | `#FFB74D`   | `34 100% 65%`                     | Naranja Cálido (Acento)        |
-| **Card**            | `#FFFFFF`   | `0 0% 100%`                       | Fondo de Tarjetas (Blanco)     |
-| **Secondary**       | `#D9ECFB`   | `207 80% 90%`                     | Azul claro suave               |
-| **Destructive**     | `#EF4444`   | `0 84.2% 60.2%`                   | Rojo para acciones destructivas|
-| **Border**          | `#E5E5E5`   | `0 0% 89.8%`                      | Gris para bordes               |
+| Element | Color Hex | HSL | Description |
+| :--- | :--- | :--- | :--- |
+| **Background** | `#F8F9FA` | `210 33.3% 97.3%` | Off-White |
+| **Foreground** | `#212529` | `210 10.5% 14.5%` | Dark Gray (Text) |
+| **Primary** | `#FF6B6B` | `0 100% 70.8%` | Coral Red |
+| **Accent** | `#197D7A` | `178 65.5% 29.2%` | Teal Green |
+| **Card** | `#FFFFFF` | `0 0% 100%` | White |
+| **Secondary** | `#FFE5E5` | `0 100% 95.1%` | Light Coral |
+| **Destructive** | `#E53E3E` | `0 72.2% 56.7%` | Red |
+| **Border** | `#DEE2E6` | `210 14.3% 90.2%` | Light Gray |
 
-### Tema Oscuro (Dark)
+### Dark Theme
 
-| Elemento            | Color Hex   | HSL                               | Descripción                    |
-| ------------------- | ----------- | --------------------------------- | ------------------------------ |
-| **Background**      | `#1A202C`   | `216 28% 14%`                     | Gris azulado oscuro            |
-| **Foreground**      | `#F7FAFC`   | `210 25% 97%`                     | Texto principal (Blanco hueso) |
-| **Primary**         | `#63B3ED`   | `207 82% 66%`                     | Azul Suave (Principal)         |
-| **Accent**          | `#FCA52F`   | `34 95% 60%`                      | Naranja Cálido (Acento)        |
-| **Card**            | `#2D3748`   | `215 21% 23%`                     | Fondo de Tarjetas (Gris azulado)|
-| **Secondary**       | `#3A4150`   | `220 15% 25%`                     | Gris oscuro                    |
-| **Destructive**     | `#E53E3E`   | `0 72.2% 50.6%`                   | Rojo para acciones destructivas|
-| **Border**          | `#3D4757`   | `215 21% 28%`                     | Gris oscuro para bordes        |
+| Element | Color Hex | HSL | Description |
+| :--- | :--- | :--- | :--- |
+| **Background** | `#121826` | `223 39.4% 11.4%`| Dark Blue-Gray |
+| **Foreground** | `#E5E7EB` | `220 13.6% 91%`  | Light Gray (Text)|
+| **Primary** | `#FFA0A0` | `0 100% 81.4%`    | Light Coral |
+| **Accent** | `#20A39E` | `178 66.8% 38.2%`  | Bright Teal |
+| **Card** | `#1F2937` | `215 27.9% 16.9%` | Off-Black |
+| **Secondary** | `#374151` | `215 19.3% 26.7%` | Gray |
+| **Destructive** | `#F87171` | `0 90.2% 70.8%`    | Light Red |
+| **Border** | `#374151` | `215 19.3% 26.7%` | Gray |
 
 ---
 
-## 6. Estructura del Proyecto
+## 6. Project Structure
 
-El proyecto sigue la estructura recomendada por Next.js con el App Router.
+The project follows the structure recommended by Next.js with the App Router.
 
 ```
 /
 ├── src/
-│   ├── app/                    # Rutas de la aplicación
-│   │   ├── (auth)/             # Grupo de rutas para autenticación (login, signup)
-│   │   ├── trips/[tripId]/     # Rutas dinámicas para cada viaje
+│   ├── app/                    # Application routes
+│   │   ├── (auth)/             # Route group for authentication (login, signup)
+│   │   ├── trips/[tripId]/     # Dynamic routes for each trip
 │   │   │   ├── dashboard/
 │   │   │   ├── map/
 │   │   │   └── ...
-│   │   ├── page.tsx            # Dashboard principal "Mis Viajes"
-│   │   └── layout.tsx          # Layout principal
+│   │   ├── page.tsx            # Main "My Trips" dashboard
+│   │   └── layout.tsx          # Main layout
 │   │
-│   ├── components/             # Componentes de React reutilizables
-│   │   ├── ai/                 # Componentes de UI relacionados con IA
-│   │   ├── auth/               # Componentes de UI para autenticación
-│   │   ├── budget/             # Componentes para la sección de presupuesto
-│   │   ├── dashboard/          # Componentes para el dashboard del viaje
-│   │   ├── itinerary/          # Componentes para la sección de itinerario
-│   │   ├── map/                # Componentes para la sección del mapa
-│   │   ├── trips/              # Componentes para la creación y gestión de viajes
-│   │   ├── ui/                 # Componentes base de ShadCN (Button, Card, etc.)
-│   │   └── layout/             # Componentes de layout (Header, Footer, Sidebar)
+│   ├── components/             # Reusable React components
+│   │   ├── ai/                 # AI-related UI components
+│   │   ├── auth/               # UI components for authentication
+│   │   ├── budget/             # Components for the budget section
+│   │   ├── dashboard/          # Components for the trip dashboard
+│   │   ├── itinerary/          # Components for the itinerary section
+│   │   ├── map/                # Components for the map section
+│   │   ├── trips/              # Components for trip creation and management
+│   │   ├── ui/                 # Base components from ShadCN (Button, Card, etc.)
+│   │   └── layout/             # Layout components (Header, Footer, Sidebar)
 │   │
-│   ├── ai/                     # Lógica de IA del lado del servidor (Genkit)
-│   │   ├── flows/              # Flujos de Genkit para interactuar con modelos de IA
-│   │   └── genkit.ts           # Configuración e inicialización de Genkit
+│   ├── ai/                     # Server-side AI logic (Genkit)
+│   │   ├── flows/              # Genkit flows for interacting with AI models
+│   │   └── genkit.ts           # Genkit configuration and initialization
 │   │
-│   ├── context/                # Contextos de React para gestión de estado global
-│   │   └── AuthContext.tsx     # Gestiona el estado de autenticación del usuario
+│   ├── context/                # React contexts for global state management
+│   │   └── AuthContext.tsx     # Manages the user's authentication state
 │   │
-│   ├── firebase/               # Funciones de utilidad para interactuar con Firebase
-│   │   └── auth.ts             # Funciones de autenticación (signup, signin, etc.)
+│   ├── firebase/               # Utility functions for interacting with Firebase
+│   │   └── auth.ts             # Authentication functions (signup, signin, etc.)
 │   │
-│   └── lib/                    # Librerías, utilidades y tipos
-│       ├── firebase.ts         # Inicialización de Firebase
-│       ├── types.ts            # Definiciones de tipos de TypeScript
-│       └── utils.ts            # Funciones de utilidad (ej. cn para clases)
+│   └── lib/                    # Libraries, utilities, and types
+│       ├── firebase.ts         # Firebase initialization
+│       ├── types.ts            # TypeScript type definitions
+│       └── utils.ts            # Utility functions (e.g., cn for classes)
 │
-├── public/                     # Archivos estáticos
-└── tailwind.config.ts          # Configuración de Tailwind CSS
+├── public/                     # Static files
+└── tailwind.config.ts          # Tailwind CSS configuration
 ```
 
 ---
 
-## 7. Guía de Inicio Rápido (Local)
+## 7. Quick Start Guide (Local)
 
-### Prerrequisitos
+### Prerequisites
 
--   Node.js (v18 o superior)
--   `pnpm`, `npm` o `yarn`
--   Una cuenta de Firebase
--   Un proyecto en Google Cloud Platform con las APIs de Google Maps y Google AI habilitadas
+-   Node.js (v18 or higher)
+-   `pnpm`, `npm`, or `yarn`
+-   A Firebase account
+-   A Google Cloud Platform project with Google Maps and Google AI APIs enabled
 
-### Instalación
+### Installation
 
-1.  **Clonar el repositorio**:
+1.  **Clone the repository**:
     ```bash
-    git clone <URL_DEL_REPOSITORIO>
-    cd <NOMBRE_DEL_DIRECTORIO>
+    git clone <REPOSITORY_URL>
+    cd <DIRECTORY_NAME>
     ```
 
-2.  **Instalar dependencias**:
+2.  **Install dependencies**:
     ```bash
     pnpm install
-    # o npm install / yarn install
+    # or npm install / yarn install
     ```
 
-### Variables de Entorno
+### Environment Variables
 
-1.  Crea un archivo `.env.local` en la raíz del proyecto.
-2.  Copia el contenido del archivo `.env.example` en tu nuevo archivo `.env.local`.
-3.  Rellena las variables con tus propias claves de Firebase y Google Cloud.
+1.  Create a `.env.local` file in the root of the project.
+2.  Copy the contents of the `.env.example` file into your new `.env.local` file.
+3.  Fill in the variables with your own keys from Firebase and Google Cloud.
 
 ```ini
 # .env.local
 
-# Configuración de Firebase
-# Obtenlas de tu proyecto en Firebase -> Configuración del Proyecto -> General
-NEXT_PUBLIC_FIREBASE_API_KEY=TU_API_KEY
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=TU_AUTH_DOMAIN
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=TU_PROJECT_ID
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=TU_STORAGE_BUCKET
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=TU_MESSAGING_SENDER_ID
-NEXT_PUBLIC_FIREBASE_APP_ID=TU_APP_ID
+# Firebase Configuration
+# Get these from your Firebase project -> Project Settings -> General
+NEXT_PUBLIC_FIREBASE_API_KEY=YOUR_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=YOUR_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=YOUR_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=YOUR_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=YOUR_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID=YOUR_APP_ID
 
-# API Key de Google Maps
-# Obtenla de tu proyecto en Google Cloud Platform -> APIs y Servicios -> Credenciales
-# Asegúrate de que "Maps JavaScript API" y "Places API" estén habilitadas.
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=TU_GOOGLE_MAPS_API_KEY
+# Google Maps API Key
+# Get this from your Google Cloud Platform project -> APIs & Services -> Credentials
+# Ensure "Maps JavaScript API" and "Places API" are enabled.
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY
 
-# API Key de Genkit (Google AI)
-# Obtenla de Google AI Studio -> Get API Key
-# Es usada por los flujos de Genkit en el lado del servidor.
-GOOGLE_AI_API_KEY=TU_GOOGLE_AI_API_KEY
+# Genkit API Key (Google AI)
+# Get this from Google AI Studio -> Get API Key
+# Used by Genkit flows on the server side.
+GOOGLE_AI_API_KEY=YOUR_GOOGLE_AI_API_KEY
 ```
 
-### Ejecutar la Aplicación
+### Running the Application
 
-1.  **Iniciar la aplicación Next.js**:
+1.  **Start the Next.js application**:
     ```bash
     pnpm dev
     ```
-    La aplicación estará disponible en `http://localhost:9002`.
+    The application will be available at `http://localhost:9002`.
 
-2.  **Iniciar el servidor de desarrollo de Genkit** (en una terminal separada):
+2.  **Start the Genkit development server** (in a separate terminal):
     ```bash
     pnpm genkit:dev
     ```
-    Esto inicia el servidor que maneja las peticiones a la IA.
+    This starts the server that handles AI requests.
 
 ---
 
-## 8. Configuración de Firebase
+## 8. Firebase Setup
 
-1.  **Crear Proyecto**: Ve a la [Consola de Firebase](https://console.firebase.google.com/) y crea un nuevo proyecto.
-2.  **Crear Aplicación Web**: Dentro de tu proyecto, añade una nueva aplicación web para obtener las claves de configuración (`firebaseConfig`).
+1.  **Create Project**: Go to the [Firebase Console](https://console.firebase.google.com/) and create a new project.
+2.  **Create Web App**: Inside your project, add a new web application to get the configuration keys (`firebaseConfig`).
 3.  **Authentication**:
-    -   Ve a la sección `Authentication` -> `Sign-in method`.
-    -   Habilita los proveedores de **Email/Contraseña** y **Google**.
+    -   Go to the `Authentication` -> `Sign-in method` section.
+    -   Enable the **Email/Password** and **Google** providers.
 4.  **Firestore**:
-    -   Ve a la sección `Firestore Database` y crea una nueva base de datos en modo de producción.
-    -   **Modelo de Datos**:
-        -   `users/{uid}`: Almacena el perfil del usuario y la información de su suscripción.
-        -   `trips/{tripId}`: Documento principal del viaje. Contiene subcolecciones para datos anidados.
+    -   Go to the `Firestore Database` section and create a new database in production mode.
+    -   **Data Model**:
+        -   `users/{uid}`: Stores the user's profile and subscription information.
+        -   `trips/{tripId}`: Main document for the trip. Contains subcollections for nested data.
             -   `trips/{tripId}/activities/{activityId}`
             -   `trips/{tripId}/cities/{cityId}`
             -   `trips/{tripId}/expenses/{expenseId}`
-    -   **Reglas de Seguridad**: Reemplaza las reglas por defecto por unas más seguras. Un buen punto de partida es:
+    -   **Security Rules**: Replace the default rules with more secure ones. A good starting point is:
         ```json
         rules_version = '2';
         service cloud.firestore {
@@ -235,30 +235,30 @@ GOOGLE_AI_API_KEY=TU_GOOGLE_AI_API_KEY
               allow read, write: if request.auth != null && request.auth.uid == userId;
             }
             match /trips/{tripId} {
-              // El propietario puede hacer todo
+              // The owner can do everything
               allow read, write: if request.auth != null && resource.data.ownerUid == request.auth.uid;
-              // Los editores pueden leer y escribir (pero no eliminar el viaje)
+              // Editors can read and write (but not delete the trip)
               allow read, update: if request.auth != null && request.auth.uid in resource.data.editorUids;
             }
             match /trips/{tripId}/{subcollection}/{docId} {
-                // Permite a propietarios y editores gestionar subcolecciones
+                // Allows owners and editors to manage subcollections
                 allow read, write: if request.auth != null && (get(/databases/$(database)/documents/trips/$(tripId)).data.ownerUid == request.auth.uid || request.auth.uid in get(/databases/$(database)/documents/trips/$(tripId)).data.editorUids);
             }
           }
         }
         ```
 5.  **Storage**:
-    -   Ve a `Storage` y crea un nuevo bucket.
-    -   **Reglas de Seguridad**:
+    -   Go to `Storage` and create a new bucket.
+    -   **Security Rules**:
         ```
         rules_version = '2';
         service firebase.storage {
           match /b/{bucket}/o {
-            // Solo usuarios autenticados pueden escribir en sus propias carpetas de viaje
+            // Only authenticated users can write to their own trip folders
             match /trip_covers/{tripId}/{allPaths=**} {
               allow write: if request.auth != null;
             }
-            // Cualquiera puede leer imágenes si conoce la URL (comportamiento por defecto)
+            // Anyone can read images if they know the URL (default behavior)
             allow read;
           }
         }
@@ -266,8 +266,8 @@ GOOGLE_AI_API_KEY=TU_GOOGLE_AI_API_KEY
 
 ---
 
-## 9. Configuración de Genkit (IA)
+## 9. Genkit (AI) Setup
 
--   El código de la IA se encuentra en `src/ai/`.
--   La variable `GOOGLE_AI_API_KEY` en tu `.env.local` es necesaria para que los flujos funcionen.
--   Para inspeccionar los flujos de Genkit, con el servidor de desarrollo (`genkit:dev`) en marcha, ve a `http://localhost:4000`.
+-   The AI code is located in `src/ai/`.
+-   The `GOOGLE_AI_API_KEY` variable in your `.env.local` is required for the flows to work.
+-   To inspect the Genkit flows, with the development server (`genkit:dev`) running, go to `http://localhost:4000`.

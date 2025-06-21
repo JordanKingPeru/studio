@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { Briefcase, Chrome } from 'lucide-react'; // Assuming Chrome icon for Google
+import { Compass, Chrome } from 'lucide-react';
 import Link from 'next/link';
 
 interface AuthFormCardProps {
@@ -33,7 +33,7 @@ export default function AuthFormCard({
       <Card className="w-full max-w-md shadow-2xl rounded-xl">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4">
-            <Briefcase className="h-12 w-12 text-primary" />
+            <Compass className="h-12 w-12 text-primary" />
           </div>
           <CardTitle className="text-2xl font-headline">{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
@@ -71,7 +71,7 @@ export default function AuthFormCard({
         )}
       </Card>
       <p className="mt-6 text-center text-xs text-muted-foreground">
-        &copy; {new Date().getFullYear()} Family Trip Planner. Todos los derechos reservados.
+        &copy; {new Date().getFullYear()} OriGo. Todos los derechos reservados.
       </p>
     </div>
   );

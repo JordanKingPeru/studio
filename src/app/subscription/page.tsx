@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { CheckCircle, XCircle, Star, ShieldCheck, Rocket, Users } from 'lucide-react'; // Added Users icon
+import { CheckCircle, XCircle, Star, ShieldCheck, Rocket, Users } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,7 +47,7 @@ export default function SubscriptionPage() {
             Elige tu Plan Perfecto
           </h1>
           <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-            Desbloquea todo el potencial de Family Trip Planner y viaja sin límites.
+            Desbloquea todo el potencial de OriGo y viaja sin límites.
           </p>
         </header>
 
@@ -139,7 +139,7 @@ export default function SubscriptionPage() {
               Los planes de pago estarán disponibles muy pronto. Estamos trabajando para ofrecerte la mejor experiencia.
               Te notificaremos en cuanto puedas actualizar tu plan.
               <br /><br />
-              ¡Gracias por ser parte de Family Trip Planner!
+              ¡Gracias por ser parte de OriGo!
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -150,4 +150,3 @@ export default function SubscriptionPage() {
     </div>
   );
 }
-

@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, CalendarDays, MapPinned, CircleDollarSign, MoreHorizontal, Briefcase, LogOut } from 'lucide-react';
+import { Home, CalendarDays, MapPinned, CircleDollarSign, MoreHorizontal, Compass, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -87,7 +87,7 @@ export default function TripAppLayout({ children, tripId }: TripAppLayoutProps) 
         <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex h-16 items-center justify-between px-4">
             <Button variant="ghost" size="sm" onClick={() => routerNav.push('/')} className="flex items-center text-primary font-semibold p-1">
-                <Briefcase className="h-5 w-5 mr-1.5" />
+                <Compass className="h-5 w-5 mr-1.5" />
                 <span className="text-sm">Mis Viajes</span>
             </Button>
             {isLoadingName || !currentUser ? (
@@ -129,8 +129,8 @@ export default function TripAppLayout({ children, tripId }: TripAppLayoutProps) 
       <aside className="fixed top-0 left-0 z-40 w-64 h-screen border-r bg-background transition-transform sm:translate-x-0">
         <div className="h-full px-3 py-4 overflow-y-auto flex flex-col">
           <Link href="/" className="flex items-center pl-2.5 mb-5 text-primary font-semibold">
-            <Briefcase className="h-7 w-7 mr-2" />
-            <span className="self-center text-xl font-headline whitespace-nowrap">Family Planner</span>
+            <Compass className="h-7 w-7 mr-2" />
+            <span className="self-center text-xl font-headline whitespace-nowrap">OriGo</span>
           </Link>
           <div className="px-2.5 mb-3">
             {isLoadingName || !currentUser ? (
@@ -149,7 +149,7 @@ export default function TripAppLayout({ children, tripId }: TripAppLayoutProps) 
                     variant={isActive ? "secondary" : "ghost"}
                     className={cn(
                       "w-full justify-start",
-                      isActive ? "text-primary-foreground bg-primary hover:bg-primary/90" : "text-foreground hover:bg-muted"
+                      isActive ? "text-primary font-semibold" : "text-foreground hover:bg-muted"
                     )}
                   >
                     <Link href={item.href} aria-current={isActive ? "page" : undefined}>

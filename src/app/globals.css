@@ -4,110 +4,90 @@
 
 @layer base {
   :root {
-    --background: 0 0% 96.1%; /* #F5F5F5 Light Gray */
-    --foreground: 240 10% 3.9%; /* Dark Blue/Gray for text */
-
-    --card: 0 0% 100%; /* White */
-    --card-foreground: 240 10% 3.9%;
-
+    /* -- Neutrals & Base -- */
+    --background: 210 33.3% 97.3%;  /* #F8F9FA */
+    --foreground: 210 10.5% 14.5%;  /* #212529 */
+    --card: 0 0% 100%;               /* #FFFFFF */
+    --card-foreground: 210 10.5% 14.5%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+    --popover-foreground: 210 10.5% 14.5%;
+    --border: 210 14.3% 90.2%;       /* #DEE2E6 */
+    --input: 210 14.3% 90.2%;
 
-    --primary: 207 88% 68%; /* #64B5F6 Soft Blue */
-    --primary-foreground: 207 100% 97%; /* Very light blue/white for contrast */
+    /* -- Brand & Accent Colors -- */
+    --primary: 0 100% 70.8%;         /* #FF6B6B */
+    --primary-foreground: 0 0% 100%; /* #FFFFFF */
+    --ring: 0 100% 70.8%;
+    
+    --secondary: 0 100% 95.1%;       /* #FFE5E5 */
+    --secondary-foreground: 0 59% 55%; /* #C95151 */
 
-    --secondary: 207 80% 90%; /* Lighter soft blue */
-    --secondary-foreground: 207 88% 30%; /* Darker blue */
+    --accent: 178 65.5% 29.2%;       /* #197D7A */
+    --accent-foreground: 0 0% 100%;  /* #FFFFFF */
+    
+    /* -- Functional Colors -- */
+    --destructive: 0 72.2% 56.7%;   /* #E53E3E */
+    --destructive-foreground: 0 0% 100%; /* #FFFFFF */
+    
+    --muted: 210 20% 94%;
+    --muted-foreground: 210 10% 45%;
 
-    --muted: 0 0% 90%; /* Slightly darker gray than background for muted elements */
-    --muted-foreground: 0 0% 45%; /* Gray text for muted */
+    --radius: 0.5rem;
 
-    --accent: 34 100% 65%; /* #FFB74D Warm Orange */
-    --accent-foreground: 34 100% 10%; /* Dark Brown/Black for contrast on accent */
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 0 0% 89.8%; /* Lighter gray for borders */
-    --input: 0 0% 89.8%;
-    --ring: 207 88% 68%; /* Primary blue for focus rings */
-
-    --radius: 0.5rem; /* Default ShadCN radius, can be overridden by specific components with rounded-2xl etc. */
-
-    /* Sidebar specific colors - adjust if sidebar is used with this theme */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 207 88% 68%; /* Match app primary */
-    --sidebar-primary-foreground: 207 100% 97%; /* Match app primary-foreground */
-    --sidebar-accent: 34 100% 65%; /* Match app accent */
-    --sidebar-accent-foreground: 34 100% 10%; /* Match app accent-foreground */
-    --sidebar-border: 0 0% 89.8%;
-    --sidebar-ring: 207 88% 68%;
-
-     /* Chart colors */
-    --chart-1: 207 88% 68%; /* Primary */
-    --chart-2: 34 100% 65%; /* Accent */
-    --chart-3: 120 60% 60%; /* A contrasting green */
-    --chart-4: 280 70% 70%; /* A contrasting purple */
-    --chart-5: 0 80% 70%; /* A contrasting red/pink */
+    /* Chart colors */
+    --chart-1: 0 100% 70.8%;    /* Primary */
+    --chart-2: 178 65.5% 29.2%; /* Accent */
+    --chart-3: 45 90% 65%;      /* A warm yellow */
+    --chart-4: 210 80% 60%;      /* A contrasting blue */
+    --chart-5: 300 70% 70%;      /* A contrasting purple */
 
     /* Custom Progress Bar Indicator Colors */
-    --progress-indicator-warning: 34 100% 65%; /* Warm Orange - Accent */
-    --progress-indicator-danger: 0 84.2% 60.2%; /* Destructive Red */
+    --progress-indicator-warning: 45 90% 65%;  /* Yellow */
+    --progress-indicator-danger: 0 72.2% 56.7%; /* Destructive Red */
   }
-
+ 
   .dark {
-    --background: 216 28% 14%; /* #1A202C */
-    --foreground: 210 25% 97%; /* #F7FAFC */
+    /* -- Neutrals & Base -- */
+    --background: 223 39.4% 11.4%;  /* #121826 */
+    --foreground: 220 13.6% 91%;    /* #E5E7EB */
+    --card: 215 27.9% 16.9%;         /* #1F2937 */
+    --card-foreground: 220 13.6% 91%;
+    --popover: 215 27.9% 16.9%;
+    --popover-foreground: 220 13.6% 91%;
+    --border: 215 19.3% 26.7%;       /* #374151 */
+    --input: 215 19.3% 26.7%;
 
-    --card: 215 21% 23%; /* #2D3748 */
-    --card-foreground: 210 25% 97%;
+    /* -- Brand & Accent Colors -- */
+    --primary: 0 100% 81.4%;         /* #FFA0A0 */
+    --primary-foreground: 0 100% 17.1%; /* #570000 */
+    --ring: 0 100% 81.4%;
+    
+    --secondary: 215 19.3% 26.7%;    /* #374151 */
+    --secondary-foreground: 220 13.6% 91%; /* #E5E7EB */
 
-    --popover: 215 21% 23%; /* #2D3748 */
-    --popover-foreground: 210 25% 97%;
+    --accent: 178 66.8% 38.2%;       /* #20A39E */
+    --accent-foreground: 0 0% 100%;  /* #FFFFFF */
 
-    --primary: 207 82% 66%; /* #63B3ED */
-    --primary-foreground: 210 25% 97%; /* Adjusted for new primary */
+    /* -- Functional Colors -- */
+    --destructive: 0 90.2% 70.8%;    /* #F87171 */
+    --destructive-foreground: 0 83% 18%; /* #550707 */
+    
+    --muted: 215 27.9% 16.9%;
+    --muted-foreground: 215 15% 65%;
 
-    --secondary: 220 15% 25%; /* Kept existing dark secondary */
-    --secondary-foreground: 0 0% 95%;
-
-    --muted: 215 21% 23%; /* #2D3748 */
-    --muted-foreground: 213 19% 72%; /* #A0AEC0 */
-
-    --accent: 34 95% 60%; /* Kept existing dark accent (Warm Orange) */
-    --accent-foreground: 34 100% 10%; 
-
-    --destructive: 0 72.2% 50.6%; /* Kept existing dark destructive */
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 215 21% 28%; /* Derived from #2D3748 */
-    --input: 215 21% 28%; /* Derived from #2D3748 */
-    --ring: 207 82% 66%; /* #63B3ED */
-
-    /* Sidebar specific colors - dark theme */
-    --sidebar-background: 216 28% 14%;
-    --sidebar-foreground: 210 25% 97%;
-    --sidebar-primary: 207 82% 66%;
-    --sidebar-primary-foreground: 210 25% 97%;
-    --sidebar-accent: 34 95% 60%; 
-    --sidebar-accent-foreground: 34 100% 10%;
-    --sidebar-border: 215 21% 28%;
-    --sidebar-ring: 207 82% 66%;
-
-    /* Chart colors - dark theme (kept existing for now) */
-    --chart-1: 207 80% 65%; 
-    --chart-2: 34 95% 60%; 
-    --chart-3: 120 50% 55%;
-    --chart-4: 280 60% 65%;
-    --chart-5: 0 70% 65%;
-
-    /* Custom Progress Bar Indicator Colors - Dark Theme */
-    --progress-indicator-warning: 34 95% 60%; /* Warm Orange - Accent (Dark) */
-    --progress-indicator-danger: 0 72.2% 50.6%; /* Destructive Red (Dark) */
+    /* Chart colors */
+    --chart-1: 0 100% 81.4%;
+    --chart-2: 178 66.8% 38.2%;
+    --chart-3: 45 80% 70%;
+    --chart-4: 210 70% 65%;
+    --chart-5: 300 60% 75%;
+    
+    /* Custom Progress Bar Indicator Colors */
+    --progress-indicator-warning: 45 80% 70%;
+    --progress-indicator-danger: 0 90.2% 70.8%;
   }
 }
-
+ 
 @layer base {
   * {
     @apply border-border;
