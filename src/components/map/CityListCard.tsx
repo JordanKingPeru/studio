@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { City } from '@/lib/types';
@@ -21,13 +20,13 @@ export default function CityListCard({ city, onEdit, onDelete }: CityListCardPro
   return (
     <Card className="mb-4 shadow-lg rounded-xl overflow-hidden hover:shadow-xl transition-shadow">
       <CardHeader className="pb-3 pt-4 bg-muted/40">
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-start gap-2">
           <div className="flex-grow min-w-0">
-            <CardTitle className="text-xl font-headline text-primary flex items-center">
-              <MapPin size={20} className="mr-2 shrink-0" />
-              <span className="truncate" title={`${city.name}, ${city.country}`}>{city.name}, {city.country}</span>
+            <CardTitle className="text-xl font-headline text-primary flex items-start">
+              <MapPin size={20} className="mr-2 shrink-0 mt-1" />
+              <span className="break-words" title={`${city.name}, ${city.country}`}>{city.name}, {city.country}</span>
             </CardTitle>
-            <CardDescription className="flex items-center text-sm mt-1">
+            <CardDescription className="flex items-center text-sm mt-1 ml-1">
               <CalendarDays size={14} className="mr-1.5" />
               {formattedArrival} - {formattedDeparture}
             </CardDescription>
