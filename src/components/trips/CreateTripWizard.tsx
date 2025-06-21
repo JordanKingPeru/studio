@@ -7,13 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { CreateTripWizardData } from '@/lib/types';
 import { TripType, TripStyle, tripTypeTranslations, tripStyleTranslations } from '@/lib/types';
-import { ChevronLeft, ChevronRight, ArrowRight, Rocket, Palette, Users, Sparkles, Image as ImageIconLucide, Loader2, Minus, Plus, User, UserRound, Baby, Info, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowRight, Rocket, Palette, Users, Sparkles, Image as ImageIconLucide, Loader2, Minus, Plus, User, UserRound, Baby, Info, Calendar as CalendarIcon, Trash2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { generateTripCoverImage, type GenerateTripCoverImageInput } from '@/ai/flows/generate-trip-cover-image';
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +26,8 @@ import { Calendar } from '@/components/ui/calendar';
 import type { DateRange } from 'react-day-picker';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
+
 
 // --- New DateRangePicker Component ---
 interface DateRangePickerProps extends React.ComponentProps<'div'> {
@@ -89,6 +90,9 @@ const childAgeSchema = z.object({
   age: z.number().min(2, "La edad debe ser entre 2 y 11.").max(11, "La edad debe ser entre 2 y 11."),
 });
 
+const emailInviteSchema = z.object({
+  email: z.string().email({ message: "Email inválido. Por favor, introduce una dirección correcta." }),
+});
 
 const tripWizardSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres.").max(100),
@@ -103,7 +107,7 @@ const tripWizardSchema = z.object({
   coverImageUrl: z.string().optional().or(z.literal('')),
   tripType: z.nativeEnum(TripType),
   tripStyle: z.nativeEnum(TripStyle),
-  pendingInvites: z.string().optional(), // String para emails separados por coma
+  pendingInvites: z.array(emailInviteSchema).optional(),
 }).refine(data => new Date(data.endDate) >= new Date(data.startDate), {
   message: "La fecha de fin debe ser posterior o igual a la fecha de inicio.",
   path: ["endDate"],
@@ -155,15 +159,20 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
       coverImageUrl: '',
       tripType: TripType.LEISURE,
       tripStyle: TripStyle.FAMILY,
-      pendingInvites: '',
+      pendingInvites: [],
     }
   });
   
   const { control, handleSubmit, formState: { errors, isValid: isFormValid }, trigger, watch, reset, setValue, getValues } = form;
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields: childAgeFields, append: appendChildAge, remove: removeChildAge } = useFieldArray({
     control,
     name: "childAgesArray",
+  });
+
+  const { fields: inviteFields, append: appendInvite, remove: removeInvite } = useFieldArray({
+    control,
+    name: "pendingInvites",
   });
 
   const watchedCoverImageUrl = watch('coverImageUrl');
@@ -175,19 +184,19 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
   const endDateValue = watch('endDate');
 
   useEffect(() => {
-    const currentCount = fields.length;
+    const currentCount = childAgeFields.length;
     const targetCount = numChildren;
 
     if (currentCount < targetCount) {
       for (let i = currentCount; i < targetCount; i++) {
-        append({ age: 2 }); // Default age to 2 years for new child
+        appendChildAge({ age: 2 }); // Default age to 2 years for new child
       }
     } else if (currentCount > targetCount) {
       for (let i = currentCount; i > targetCount; i--) {
-        remove(i - 1);
+        removeChildAge(i - 1);
       }
     }
-  }, [numChildren, fields.length, append, remove]);
+  }, [numChildren, childAgeFields.length, appendChildAge, removeChildAge]);
 
 
   const dateRangeForPicker: DateRange | undefined = useMemo(() => {
@@ -223,7 +232,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
             coverImageUrl: '',
             tripType: TripType.LEISURE,
             tripStyle: TripStyle.FAMILY,
-            pendingInvites: '',
+            pendingInvites: [],
         });
         setStep(1);
         setGeneratedCoverImagePreview(null);
@@ -301,7 +310,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
   const prevStep = () => setStep(s => Math.max(s - 1, 1));
 
   const onSubmitHandler = (data: TripWizardFormDataInternal) => {
-    const parsedPendingInvites = data.pendingInvites ? data.pendingInvites.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const parsedPendingInvites = data.pendingInvites?.map(invite => invite.email).filter(Boolean) || [];
     const agesString = data.childAgesArray?.map(item => item.age).join(', ') ?? '';
 
     const tripCoreData: CreateTripWizardData = {
@@ -413,9 +422,9 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
                                 </div>
                            </div>
                            
-                            {fields.length > 0 && <Separator />}
+                            {childAgeFields.length > 0 && <Separator />}
                             <div className="space-y-3 pl-4">
-                              {fields.map((field, index) => (
+                              {childAgeFields.map((field, index) => (
                                 <div key={field.id} className="flex items-center justify-between">
                                   <Label htmlFor={`child-age-${index}`} className="text-sm text-muted-foreground">{`Edad del niño ${index + 1}`}</Label>
                                   <Controller
@@ -570,10 +579,46 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
           <div className="space-y-6">
             <h3 className="text-lg font-semibold flex items-center"><Users className="mr-2 h-5 w-5 text-primary" />Paso 3: Invitar Colaboradores (Opcional)</h3>
             <div>
-              <Label htmlFor="pendingInvites" className="mb-1 block text-sm font-medium text-foreground">Invitar por email (separados por coma)</Label>
-              <Controller name="pendingInvites" control={control} render={({ field }) => <Textarea id="pendingInvites" placeholder="email1@ejemplo.com, email2@ejemplo.com" {...field} rows={3} />} />
-              {errors.pendingInvites && <p className="text-sm text-destructive mt-1">{errors.pendingInvites.message}</p>}
-              <p className="text-xs text-muted-foreground mt-1">Los usuarios invitados podrán ver y editar este viaje una vez que acepten la invitación.</p>
+              <Label className="mb-2 block text-sm font-medium text-foreground">Invitar por email</Label>
+              <div className="space-y-3">
+                {inviteFields.map((field, index) => (
+                  <div key={field.id} className="flex items-center gap-2 animate-fadeInEnter">
+                    <FormField
+                      control={control}
+                      name={`pendingInvites.${index}.email`}
+                      render={({ field: formField }) => (
+                        <FormItem className="flex-grow">
+                          <FormControl>
+                            <Input placeholder="email@ejemplo.com" {...formField} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeInvite(index)}
+                      className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10"
+                      aria-label="Eliminar email"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => appendInvite({ email: "" })}
+                className="mt-3"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Añadir otro email
+              </Button>
+              <p className="text-xs text-muted-foreground mt-2">Los usuarios invitados podrán ver y editar este viaje una vez que acepten la invitación.</p>
             </div>
           </div>
         );
@@ -596,7 +641,9 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
         </div>
 
         <div className="px-6 pb-6 space-y-6 overflow-y-auto max-h-[60vh]">
-          {renderStepContent()}
+          <Form {...form}>
+            {renderStepContent()}
+          </Form>
         </div>
 
         <DialogFooter className="p-6 pt-4 border-t flex justify-between w-full">
