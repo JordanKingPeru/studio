@@ -324,15 +324,13 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
       onDragEnd={handleDragEnd}
     >
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row justify-end items-center gap-2 mb-4 sticky top-0 bg-background/80 backdrop-blur-sm py-2 z-10">
-            <div className="flex gap-2 w-full sm:w-auto">
-                <Button variant="outline" size="sm" onClick={() => handleToggleAllWeeks(true)} className="flex-1 sm:flex-initial">
-                    <ChevronDown className="mr-2 h-4 w-4" /> Expandir Todo
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => handleToggleAllWeeks(false)} className="flex-1 sm:flex-initial">
-                    <ChevronUp className="mr-2 h-4 w-4" /> Colapsar Todo
-                </Button>
-            </div>
+        <div className="grid grid-cols-2 sm:flex sm:justify-end gap-2 mb-4 sticky top-0 bg-background/80 backdrop-blur-sm py-2 z-10">
+          <Button variant="outline" size="sm" onClick={() => handleToggleAllWeeks(true)} className="w-full sm:w-auto">
+              <ChevronDown className="mr-2 h-4 w-4" /> Expandir Todo
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleToggleAllWeeks(false)} className="w-full sm:w-auto">
+              <ChevronUp className="mr-2 h-4 w-4" /> Colapsar Todo
+          </Button>
         </div>
         <Accordion type="multiple" value={openWeekKeys} onValueChange={setOpenWeekKeys} className="w-full space-y-4">
           {processedWeeks.map((week) => (
