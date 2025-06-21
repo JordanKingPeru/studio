@@ -51,6 +51,8 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
   const [suggestedTime, setSuggestedTime] = useState('12:00');
   
   const currentTripCities = useMemo(() => cities.filter(c => c.tripId === tripId), [cities, tripId]);
+  
+  const formId = useMemo(() => `ai-suggestion-form-${Math.random().toString(36).substring(2, 9)}`, []);
 
   const form = useForm<SuggestionFormData>({
     resolver: zodResolver(suggestionSchema),
@@ -161,7 +163,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
         
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleGenerateSuggestion)} className="space-y-6">
+              <form id={formId} onSubmit={form.handleSubmit(handleGenerateSuggestion)} className="space-y-6">
                 <FormField
                   control={form.control}
                   name="city"
@@ -223,10 +225,6 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
                       <FormMessage />
                     </FormItem>
                 )} />
-                <Button type="submit" disabled={isLoading} className="w-full">
-                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
-                  {isLoading ? 'Generando...' : 'Obtener Sugerencia'}
-                </Button>
               </form>
             </Form>
             {error && (<Alert variant="destructive" className="mt-4"><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>)}
@@ -247,8 +245,12 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
             )}
         </div>
         
-        <DialogFooter className="p-6 pt-4 border-t flex-shrink-0">
-            <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cerrar</Button></DialogClose>
+        <DialogFooter className="p-6 pt-4 border-t flex-shrink-0 bg-background sticky bottom-0">
+            <DialogClose asChild><Button type="button" variant="outline">Cerrar</Button></DialogClose>
+            <Button type="submit" form={formId} disabled={isLoading}>
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
+                {isLoading ? 'Generando...' : 'Obtener Sugerencia'}
+            </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
