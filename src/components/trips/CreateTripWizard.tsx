@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { CreateTripWizardData } from '@/lib/types';
@@ -85,6 +85,10 @@ function DateRangePicker({ className, dateRange, onDateChange, tripStartDate }: 
   );
 }
 
+const childAgeSchema = z.object({
+  age: z.number().min(2, "La edad debe ser entre 2 y 11.").max(11, "La edad debe ser entre 2 y 11."),
+});
+
 
 const tripWizardSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres.").max(100),
@@ -94,7 +98,8 @@ const tripWizardSchema = z.object({
   numAdults: z.number().min(1, "Debe haber al menos 1 adulto.").optional().nullable(),
   numChildren: z.number().min(0, "El número de niños no puede ser negativo.").optional().nullable(),
   numInfants: z.number().min(0, "El número de bebés no puede ser negativo.").optional().nullable(),
-  childrenAges: z.string().optional(),
+  childrenAges: z.string().optional(), // This will be constructed on submit
+  childAgesArray: z.array(childAgeSchema).optional(), // This is used by useFieldArray
   coverImageUrl: z.string().optional().or(z.literal('')),
   tripType: z.nativeEnum(TripType),
   tripStyle: z.nativeEnum(TripStyle),
@@ -114,15 +119,6 @@ const tripWizardSchema = z.object({
 }).refine(data => (data.numInfants ?? 0) <= (data.numAdults ?? 0), {
     message: "Debe haber al menos un adulto por cada bebé.",
     path: ["numInfants"],
-}).refine(data => {
-    if ((data.numChildren ?? 0) > 0 && data.childrenAges) {
-        const ageCount = data.childrenAges.split(',').map(s => s.trim()).filter(Boolean).length;
-        return ageCount === data.numChildren;
-    }
-    return true;
-}, {
-    message: "El número de edades debe coincidir con el número de niños.",
-    path: ["childrenAges"],
 });
 
 type TripWizardFormDataInternal = z.infer<typeof tripWizardSchema>;
@@ -155,6 +151,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
       numInfants: 0,
       numTravelers: 1,
       childrenAges: '',
+      childAgesArray: [],
       coverImageUrl: '',
       tripType: TripType.LEISURE,
       tripStyle: TripStyle.FAMILY,
@@ -164,6 +161,10 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
   
   const { control, handleSubmit, formState: { errors, isValid: isFormValid }, trigger, watch, reset, setValue, getValues } = form;
 
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "childAgesArray",
+  });
 
   const watchedCoverImageUrl = watch('coverImageUrl');
   const numAdults = watch('numAdults') ?? 1;
@@ -172,6 +173,22 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
   
   const startDateValue = watch('startDate');
   const endDateValue = watch('endDate');
+
+  useEffect(() => {
+    const currentCount = fields.length;
+    const targetCount = numChildren;
+
+    if (currentCount < targetCount) {
+      for (let i = currentCount; i < targetCount; i++) {
+        append({ age: 2 }); // Default age to 2 years for new child
+      }
+    } else if (currentCount > targetCount) {
+      for (let i = currentCount; i > targetCount; i--) {
+        remove(i - 1);
+      }
+    }
+  }, [numChildren, fields.length, append, remove]);
+
 
   const dateRangeForPicker: DateRange | undefined = useMemo(() => {
       try {
@@ -202,6 +219,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
             numInfants: 0,
             numTravelers: 1,
             childrenAges: '',
+            childAgesArray: [],
             coverImageUrl: '',
             tripType: TripType.LEISURE,
             tripStyle: TripStyle.FAMILY,
@@ -220,7 +238,8 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
 
   const handleGenerateCoverImage = async () => {
     const currentValues = getValues();
-    const { name, startDate, endDate, tripType, tripStyle, numTravelers, numAdults, numChildren, numInfants, childrenAges } = currentValues;
+    const { name, startDate, endDate, tripType, tripStyle, numTravelers, numAdults, numChildren, numInfants, childAgesArray } = currentValues;
+    const childrenAges = childAgesArray?.map(c => c.age).join(', ') ?? '';
 
     if (!name || !startDate || !endDate || !tripType || !tripStyle ) {
         toast({
@@ -241,7 +260,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
       numAdults: numAdults ?? 1,
       numChildren: numChildren ?? 0,
       numInfants: numInfants ?? 0,
-      childrenAges: childrenAges || '',
+      childrenAges: childrenAges,
     };
 
     setIsGeneratingCoverImage(true);
@@ -270,7 +289,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
 
   const nextStep = async () => {
     let fieldsToValidate: (keyof TripWizardFormDataInternal)[] = [];
-    if (step === 1) fieldsToValidate = ['name', 'startDate', 'endDate', 'numAdults', 'numChildren', 'numInfants', 'childrenAges'];
+    if (step === 1) fieldsToValidate = ['name', 'startDate', 'endDate', 'numAdults', 'numChildren', 'numInfants', 'childAgesArray'];
     if (step === 2) fieldsToValidate = ['tripType', 'tripStyle', 'coverImageUrl'];
 
     const isValidStep = await trigger(fieldsToValidate);
@@ -283,6 +302,8 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
 
   const onSubmitHandler = (data: TripWizardFormDataInternal) => {
     const parsedPendingInvites = data.pendingInvites ? data.pendingInvites.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const agesString = data.childAgesArray?.map(item => item.age).join(', ') ?? '';
+
     const tripCoreData: CreateTripWizardData = {
       name: data.name,
       startDate: data.startDate,
@@ -295,7 +316,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
       numAdults: data.numAdults ?? undefined,
       numChildren: data.numChildren ?? undefined,
       numInfants: data.numInfants ?? undefined,
-      childrenAges: data.childrenAges ?? undefined,
+      childrenAges: agesString,
     };
     onTripCreated(tripCoreData);
     onClose();
@@ -382,15 +403,40 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setValue('numChildren', Math.max(0, numChildren - 1))} disabled={numChildren <= 0}>
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setValue('numChildren', Math.max(0, numChildren - 1), { shouldValidate: true })} disabled={numChildren <= 0}>
                                         <Minus className="h-4 w-4"/>
                                     </Button>
                                     <span className="w-8 text-center font-bold">{numChildren}</span>
-                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setValue('numChildren', numChildren + 1)}>
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setValue('numChildren', numChildren + 1, { shouldValidate: true })}>
                                         <Plus className="h-4 w-4"/>
                                     </Button>
                                 </div>
                            </div>
+                           
+                            {fields.length > 0 && <Separator />}
+                            <div className="space-y-3 pl-4">
+                              {fields.map((field, index) => (
+                                <div key={field.id} className="flex items-center justify-between">
+                                  <Label htmlFor={`child-age-${index}`} className="text-sm text-muted-foreground">{`Edad del niño ${index + 1}`}</Label>
+                                  <Controller
+                                    control={control}
+                                    name={`childAgesArray.${index}.age`}
+                                    render={({ field: controllerField }) => (
+                                      <Select onValueChange={(value) => controllerField.onChange(parseInt(value, 10))} value={String(controllerField.value)}>
+                                        <SelectTrigger id={`child-age-${index}`} className="w-[80px]">
+                                          <SelectValue placeholder="Edad" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {Array.from({ length: 10 }, (_, i) => i + 2).map(age => (
+                                            <SelectItem key={age} value={String(age)}>{age}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    )}
+                                  />
+                                </div>
+                              ))}
+                            </div>
 
                            <Separator/>
 
@@ -430,14 +476,6 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
                 </p>
               )}
             </div>
-
-            {numChildren > 0 && (
-              <div>
-                <Label htmlFor="childrenAges" className="mb-1 block text-sm font-medium text-foreground">Edades de los Niños (separadas por coma)</Label>
-                <Controller name="childrenAges" control={control} render={({ field }) => <Input id="childrenAges" placeholder="Ej: 5, 10" {...field} />} />
-                {errors.childrenAges && <p className="text-sm text-destructive mt-1">{errors.childrenAges.message}</p>}
-              </div>
-            )}
           </div>
         );
       case 2: // Portada y Contexto
