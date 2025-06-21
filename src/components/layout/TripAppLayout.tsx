@@ -13,6 +13,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/AuthContext'; // Import useAuth
 import SignOutButton from '@/components/auth/SignOutButton'; // Import SignOutButton
 import UserAvatar from '@/components/auth/UserAvatar'; // Import UserAvatar
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface TripAppLayoutProps {
   children: React.ReactNode;
@@ -27,39 +29,31 @@ export default function TripAppLayout({ children, tripId }: TripAppLayoutProps) 
   const [isLoadingName, setIsLoadingName] = useState(true); 
 
   useEffect(() => {
-    const fetchTripDetails = async () => {
-        setIsLoadingName(true);
-        // Attempt to get trip name from Firestore if possible, or fallback.
-        // This localStorage logic is a placeholder and might not be robust for shared trips.
-        // A better approach would be to fetch the trip name directly from Firestore
-        // using the tripId, but that would require making TripAppLayout an async component
-        // or having a separate context/store for trip details.
-        const storedTrips = localStorage.getItem('familyTrips'); // This is a weak dependency
-        if (storedTrips && currentUser) {
-            try {
-                const trips: Array<{id: string, name: string, userId: string}> = JSON.parse(storedTrips);
-                const currentTripObj = trips.find(t => t.id === tripId && t.userId === currentUser.uid);
-                setTripName(currentTripObj?.name || `Viaje de ${currentUser.displayName?.split(' ')[0] || 'Usuario'}`);
-            } catch (e) {
-                 setTripName(`Viaje de ${currentUser.displayName?.split(' ')[0] || 'Usuario'}`);
-            }
-        } else if (currentUser) {
-            setTripName(`Viaje de ${currentUser.displayName?.split(' ')[0] || 'Usuario'}`);
+    const fetchTripName = async () => {
+      if (!tripId) {
+        setIsLoadingName(false);
+        return;
+      }
+      setIsLoadingName(true);
+      try {
+        const tripRef = doc(db, "trips", tripId);
+        const tripSnap = await getDoc(tripRef);
+
+        if (tripSnap.exists()) {
+          setTripName(tripSnap.data().name);
         } else {
-            setTripName('Detalles del Viaje');
+          setTripName("Viaje no encontrado");
         }
+      } catch (error) {
+        console.error("Error fetching trip name for layout:", error);
+        setTripName("Error al cargar nombre");
+      } finally {
         setIsLoadingName(false);
+      }
     };
-    if (currentUser) { 
-        fetchTripDetails();
-    } else if (!currentUser && !isLoadingName) { 
-        // Reset if user logs out while viewing a trip
-        setIsLoadingName(true); 
-        setTripName('Detalles del Viaje');
-        setIsLoadingName(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripId, currentUser]); // Added currentUser to dependency array
+
+    fetchTripName();
+  }, [tripId]);
 
 
   const navItems = [
@@ -132,11 +126,25 @@ export default function TripAppLayout({ children, tripId }: TripAppLayoutProps) 
             <Compass className="h-7 w-7 mr-2" />
             <span className="self-center text-xl font-headline whitespace-nowrap">OriGo</span>
           </Link>
-          <div className="px-2.5 mb-3">
-            {isLoadingName || !currentUser ? (
-                <Skeleton className="h-7 w-48 rounded-md" />
+          <div className="px-2.5 mb-3 space-y-1">
+             {currentUser ? (
+              <>
+                <h2 className="text-md font-semibold text-muted-foreground">
+                  Plan de {currentUser.displayName?.split(' ')[0] || 'Usuario'}
+                </h2>
+                {isLoadingName ? (
+                  <Skeleton className="h-7 w-48 rounded-md" />
+                ) : (
+                  <p className="text-xl font-bold text-primary truncate" title={tripName || ""}>
+                    {tripName}
+                  </p>
+                )}
+              </>
             ) : (
-                 <h2 className="text-lg font-semibold text-foreground truncate" title={tripName || ""}>{tripName || "Cargando..."}</h2>
+              <div className="space-y-2">
+                  <Skeleton className="h-6 w-32 rounded-md" />
+                  <Skeleton className="h-7 w-48 rounded-md" />
+              </div>
             )}
           </div>
           <ul className="space-y-2 font-medium flex-grow">
