@@ -49,7 +49,7 @@ function DateRangePicker({ className, dateRange, onDateChange, tripStartDate }: 
             )}
           >
             <div className="flex items-center divide-x divide-border w-full">
-              <div className="flex items-center gap-2 px-3 py-2">
+              <div className="flex items-center gap-2 px-3 py-2 w-1/2">
                  <CalendarIcon className="h-4 w-4" />
                  {dateRange?.from ? (
                     format(dateRange.from, "d MMM, yyyy", { locale: es })
@@ -57,7 +57,7 @@ function DateRangePicker({ className, dateRange, onDateChange, tripStartDate }: 
                     <span>Fecha de inicio</span>
                  )}
               </div>
-              <div className="flex items-center gap-2 px-3 py-2">
+              <div className="flex items-center gap-2 px-3 py-2 w-1/2">
                   <CalendarIcon className="h-4 w-4" />
                   {dateRange?.to ? (
                     format(dateRange.to, "d MMM, yyyy", { locale: es })
