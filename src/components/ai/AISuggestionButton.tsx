@@ -15,6 +15,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Sparkles, BrainCircuit, Lightbulb, Loader2, Calendar as CalendarIcon, ClockIcon } from 'lucide-react';
 import { recommendActivity, type RecommendActivityInput, type RecommendActivityOutput } from '@/ai/flows/recommend-activity';
 import type { City, Activity, ActivityCategory } from '@/lib/types';
+import { activityCategories } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { format, parseISO, isWithinInterval } from 'date-fns';
@@ -23,6 +24,7 @@ import { Label } from '@/components/ui/label';
 
 const suggestionSchema = z.object({
   city: z.string().min(1, "Selecciona una ciudad."),
+  category: z.string().optional(),
   interests: z.string().optional(),
   tripDetails: z.string().min(1, "Los detalles del viaje son necesarios."),
 });
@@ -54,6 +56,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
     resolver: zodResolver(suggestionSchema),
     defaultValues: {
       city: '',
+      category: '',
       interests: '',
       tripDetails: '',
     },
@@ -75,6 +78,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
         
         form.reset({
             city: initialCityName,
+            category: '',
             interests: '',
             tripDetails: detailsText,
         });
@@ -84,6 +88,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
         setSuggestedDate(forDate); // The suggested activity will default to this day
         setSuggestedTime("12:00");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, forDate, currentTripCities, tripFamilia, form.reset]);
 
 
@@ -115,7 +120,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
         date: suggestedDate, 
         time: suggestedTime,
         title: suggestion.activity,
-        category: 'Ocio' as ActivityCategory, 
+        category: (suggestion.category as ActivityCategory) || (form.getValues("category") as ActivityCategory) || ('Ocio' as ActivityCategory),
         notes: suggestion.reason,
         city: selectedCityName,
         order: Date.now(), 
@@ -175,6 +180,24 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
                   </Select>
                   <FormMessage />
                 </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                  <FormItem>
+                      <FormLabel>Categoría (Opcional)</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Cualquier categoría" /></SelectTrigger></FormControl>
+                          <SelectContent>
+                              <SelectItem value="">Cualquier categoría</SelectItem>
+                              {activityCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                          </SelectContent>
+                      </Select>
+                      <FormDescription>Filtra la sugerencia por una categoría específica.</FormDescription>
+                      <FormMessage />
+                  </FormItem>
               )}
             />
             <FormField control={form.control} name="interests" render={({ field }) => (
