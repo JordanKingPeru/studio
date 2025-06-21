@@ -1,4 +1,3 @@
-
 import type { Activity, ActivityCategory, ActivityAttachment } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -61,7 +60,7 @@ export default function ActivityCard({ activity, onEdit, onDelete }: ActivityCar
                 <GripVertical size={20} />
               </button>
               <div className='flex-grow min-w-0'>
-                <CardTitle className="text-lg font-headline text-primary-foreground bg-primary py-1.5 px-3 rounded-t-md -mt-1 -mx-3 mb-1.5 truncate">
+                <CardTitle className="text-lg font-headline text-primary-foreground bg-primary py-1.5 px-3 rounded-t-md -mt-1 -mx-3 mb-1.5 whitespace-normal break-words">
                   {activity.title}
                 </CardTitle>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
