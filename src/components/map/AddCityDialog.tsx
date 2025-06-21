@@ -237,19 +237,27 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
           <DialogDescription>Busca una ciudad y luego completa los detalles.</DialogDescription>
         </DialogHeader>
 
-        <div className="flex-shrink-0 pt-2 pb-4 grid grid-cols-1 sm:grid-cols-4 items-end gap-2 sm:gap-4">
-            <div className="sm:col-span-3 space-y-1">
-              <Label htmlFor="city-search-input" className="flex items-center text-sm font-medium">
-                  <Search className="mr-2 h-4 w-4 text-muted-foreground" />Buscar Ciudad
-              </Label>
-              <ShadcnInput id="city-search-input" placeholder="Ej., París, Lima" value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); }}}
-                  className="text-base sm:text-sm" />
+        <div className="flex-shrink-0 pt-2 pb-4">
+            <Label htmlFor="city-search-input" className="flex items-center text-sm font-medium mb-2">
+                <Search className="mr-2 h-4 w-4 text-muted-foreground" />Buscar Ciudad
+            </Label>
+            <div className="flex flex-col sm:flex-row gap-2">
+                <ShadcnInput 
+                    id="city-search-input" 
+                    placeholder="Ej., París, Lima" 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); }}}
+                    className="flex-grow text-base sm:text-sm" 
+                />
+                <Button 
+                    onClick={handleSearch} 
+                    disabled={!searchTerm.trim() || !placesLibrary || isSearching} 
+                    className="shrink-0"
+                >
+                  {isSearching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isSearching ? 'Buscando...' : 'Buscar'}
+                </Button>
             </div>
-            <Button onClick={handleSearch} disabled={!searchTerm.trim() || !placesLibrary || isSearching} className="w-full sm:w-auto">
-              {isSearching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isSearching ? 'Buscando...' : 'Buscar'}
-            </Button>
         </div>
         
         <div className="flex-1 min-h-0"> {/* Scroll container */}
@@ -263,7 +271,7 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
                     </ShadcnCardTitle>
                     <ShadcnCardDescription className="text-xs sm:text-sm">Haz clic en un lugar.</ShadcnCardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-2 max-h-[250px] sm:max-h-[300px] overflow-y-auto py-2">
+                  <CardContent className="space-y-2 py-2">
                     {searchResults.map((place) => (
                       <Button key={place.id} variant="outline" className="w-full justify-start text-left h-auto py-1.5 sm:py-2 px-2 sm:px-3"
                         onClick={() => handlePlaceSelect(place)}>
