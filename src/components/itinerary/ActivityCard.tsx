@@ -50,15 +50,12 @@ export default function ActivityCard({ activity, onEdit, onDelete }: ActivityCar
       )}>
         <CardHeader className="pb-3 pt-3">
           <div className="flex justify-between items-start">
-            <div className="flex items-center flex-grow min-w-0 mr-2">
-              <button
-                {...attributes}
-                {...listeners}
-                className="p-2 cursor-grab active:cursor-grabbing touch-none text-muted-foreground hover:text-primary mr-1"
-                aria-label="Arrastrar actividad para reordenar"
-              >
-                <GripVertical size={20} />
-              </button>
+            <div 
+              {...attributes}
+              {...listeners}
+              className="flex items-center flex-grow min-w-0 mr-2 cursor-grab active:cursor-grabbing"
+            >
+              <GripVertical size={20} className="text-muted-foreground mr-2 shrink-0"/>
               <div className='flex-grow min-w-0'>
                 <CardTitle className="text-lg font-headline text-primary-foreground bg-primary py-1.5 px-3 rounded-t-md -mt-1 -mx-3 mb-1.5 whitespace-normal break-words">
                   {activity.title}
@@ -95,9 +92,9 @@ export default function ActivityCard({ activity, onEdit, onDelete }: ActivityCar
         {(activity.notes || hasAttachments) && (
           <CardContent className="pt-0 pb-3 space-y-2">
             {activity.notes && (
-              <p className="text-sm text-foreground/80 flex items-start whitespace-normal break-words">
+              <p className="text-sm text-foreground/80 flex items-start">
                 <FileText size={15} className="mr-1.5 mt-0.5 shrink-0 text-muted-foreground" /> 
-                {activity.notes}
+                <span className="break-words">{activity.notes}</span>
               </p>
             )}
             {hasAttachments && (
