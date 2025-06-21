@@ -8,25 +8,30 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { useForm, Controller, useWatch } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { CreateTripWizardData } from '@/lib/types'; // Usar el nuevo tipo para el formulario
+import type { CreateTripWizardData } from '@/lib/types';
 import { TripType, TripStyle, tripTypeTranslations, tripStyleTranslations } from '@/lib/types';
-import { ChevronLeft, ChevronRight, ArrowRight, Rocket, Palette, Users, Sparkles, Image as ImageIconLucide, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowRight, Rocket, Palette, Users, Sparkles, Image as ImageIconLucide, Loader2, Minus, Plus, User, Child, Baby, Info } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { generateTripCoverImage, type GenerateTripCoverImageInput } from '@/ai/flows/generate-trip-cover-image';
 import { useToast } from "@/hooks/use-toast";
-import NextImage from 'next/image'; // Renombrado para evitar conflicto con IconLucide
+import NextImage from 'next/image';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 
 const tripWizardSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres.").max(100),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha de inicio inválida."),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha de fin inválida."),
   numTravelers: z.number().min(1, "Debe haber al menos 1 viajero.").optional().nullable(),
-  numAdults: z.number().min(0, "Número de adultos no puede ser negativo.").optional().nullable(),
-  numChildren: z.number().min(0, "Número de niños no puede ser negativo.").optional().nullable(),
+  numAdults: z.number().min(1, "Debe haber al menos 1 adulto.").optional().nullable(),
+  numChildren: z.number().min(0, "El número de niños no puede ser negativo.").optional().nullable(),
+  numInfants: z.number().min(0, "El número de bebés no puede ser negativo.").optional().nullable(),
   childrenAges: z.string().optional(),
   coverImageUrl: z.string().optional().or(z.literal('')),
   tripType: z.nativeEnum(TripType),
@@ -36,15 +41,17 @@ const tripWizardSchema = z.object({
   message: "La fecha de fin debe ser posterior o igual a la fecha de inicio.",
   path: ["endDate"],
 }).refine(data => {
-  if (data.numTravelers !== undefined && data.numTravelers !== null &&
-      data.numAdults !== undefined && data.numAdults !== null &&
-      data.numChildren !== undefined && data.numChildren !== null) {
-    return data.numTravelers === data.numAdults + data.numChildren;
-  }
-  return true;
+    const adults = data.numAdults ?? 0;
+    const children = data.numChildren ?? 0;
+    const infants = data.numInfants ?? 0;
+    const total = adults + children + infants;
+    return total > 0;
 }, {
-  message: "El total de viajeros debe ser la suma de adultos y niños.",
-  path: ["numTravelers"],
+    message: "Debe haber al menos un viajero.",
+    path: ["numAdults"],
+}).refine(data => (data.numInfants ?? 0) <= (data.numAdults ?? 0), {
+    message: "Debe haber al menos un adulto por cada bebé.",
+    path: ["numInfants"],
 });
 
 type TripWizardFormDataInternal = z.infer<typeof tripWizardSchema>;
@@ -52,7 +59,7 @@ type TripWizardFormDataInternal = z.infer<typeof tripWizardSchema>;
 interface CreateTripWizardProps {
   isOpen: boolean;
   onClose: () => void;
-  onTripCreated: (tripData: CreateTripWizardData) => void; // Usar el tipo específico para el wizard
+  onTripCreated: (tripData: CreateTripWizardData) => void;
 }
 
 const todayDate = new Date().toISOString().split('T')[0];
@@ -65,16 +72,17 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
   const [isGeneratingCoverImage, setIsGeneratingCoverImage] = useState(false);
   const [generatedCoverImagePreview, setGeneratedCoverImagePreview] = useState<string | null>(null);
 
-  const { control, handleSubmit, formState: { errors, isValid: isFormValid }, trigger, watch, reset, setValue, getValues } = useForm<TripWizardFormDataInternal>({
+  const form = useForm<TripWizardFormDataInternal>({
     resolver: zodResolver(tripWizardSchema),
     mode: 'onChange',
     defaultValues: {
       name: '',
       startDate: todayDate,
       endDate: oneWeekLaterDate,
-      numTravelers: 1,
       numAdults: 1,
       numChildren: 0,
+      numInfants: 0,
+      numTravelers: 1,
       childrenAges: '',
       coverImageUrl: '',
       tripType: TripType.LEISURE,
@@ -82,8 +90,18 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
       pendingInvites: '',
     }
   });
+  
+  const { control, handleSubmit, formState: { errors, isValid: isFormValid }, trigger, watch, reset, setValue, getValues } = form;
+
 
   const watchedCoverImageUrl = watch('coverImageUrl');
+  const numAdults = watch('numAdults') ?? 1;
+  const numChildren = watch('numChildren') ?? 0;
+  const numInfants = watch('numInfants') ?? 0;
+
+  useEffect(() => {
+     setValue('numTravelers', (numAdults) + (numChildren) + (numInfants));
+  }, [numAdults, numChildren, numInfants, setValue]);
 
   useEffect(() => {
     if (isOpen) {
@@ -91,9 +109,10 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
             name: '',
             startDate: todayDate,
             endDate: oneWeekLaterDate,
-            numTravelers: 1,
             numAdults: 1,
             numChildren: 0,
+            numInfants: 0,
+            numTravelers: 1,
             childrenAges: '',
             coverImageUrl: '',
             tripType: TripType.LEISURE,
@@ -113,7 +132,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
 
   const handleGenerateCoverImage = async () => {
     const currentValues = getValues();
-    const { name, startDate, endDate, tripType, tripStyle, numTravelers, numAdults, numChildren, childrenAges } = currentValues;
+    const { name, startDate, endDate, tripType, tripStyle, numTravelers, numAdults, numChildren, numInfants, childrenAges } = currentValues;
 
     if (!name || !startDate || !endDate || !tripType || !tripStyle ) {
         toast({
@@ -133,6 +152,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
       numTravelers: numTravelers ?? 1,
       numAdults: numAdults ?? 1,
       numChildren: numChildren ?? 0,
+      numInfants: numInfants ?? 0,
       childrenAges: childrenAges || '',
     };
 
@@ -162,7 +182,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
 
   const nextStep = async () => {
     let fieldsToValidate: (keyof TripWizardFormDataInternal)[] = [];
-    if (step === 1) fieldsToValidate = ['name', 'startDate', 'endDate', 'numTravelers', 'numAdults', 'numChildren', 'childrenAges'];
+    if (step === 1) fieldsToValidate = ['name', 'startDate', 'endDate', 'numAdults', 'numChildren', 'numInfants'];
     if (step === 2) fieldsToValidate = ['tripType', 'tripStyle', 'coverImageUrl'];
 
     const isValidStep = await trigger(fieldsToValidate);
@@ -182,10 +202,11 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
       coverImageUrl: data.coverImageUrl,
       tripType: data.tripType,
       tripStyle: data.tripStyle,
-      pendingInvites: parsedPendingInvites, // Array de emails
+      pendingInvites: parsedPendingInvites,
       numTravelers: data.numTravelers ?? undefined,
       numAdults: data.numAdults ?? undefined,
       numChildren: data.numChildren ?? undefined,
+      numInfants: data.numInfants ?? undefined,
       childrenAges: data.childrenAges ?? undefined,
     };
     onTripCreated(tripCoreData);
@@ -193,6 +214,14 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
   };
 
   const progressPercentage = (step / totalSteps) * 100;
+
+  const travelerSummary = () => {
+    const parts = [];
+    if (numAdults > 0) parts.push(`${numAdults} adulto${numAdults > 1 ? 's' : ''}`);
+    if (numChildren > 0) parts.push(`${numChildren} niño${numChildren > 1 ? 's' : ''}`);
+    if (numInfants > 0) parts.push(`${numInfants} bebé${numInfants > 1 ? 's' : ''}`);
+    return parts.join(', ') || "Seleccionar viajeros";
+  }
 
   const renderStepContent = () => {
     switch (step) {
@@ -217,92 +246,98 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
                 {errors.endDate && <p className="text-sm text-destructive mt-1">{errors.endDate.message}</p>}
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="numTravelers" className="mb-1 block text-sm font-medium text-foreground">Total Viajeros</Label>
-                <Controller
-                  name="numTravelers"
-                  control={control}
-                  render={({ field: { onChange, onBlur, value, name, ref } }) => (
-                    <Input
-                      id="numTravelers"
-                      type="number"
-                      placeholder="1"
-                      ref={ref}
-                      name={name}
-                      value={value ?? ''}
-                      onChange={e => {
-                        const rawValue = e.target.value;
-                        if (rawValue === '') {
-                          onChange(null);
-                        } else {
-                          const num = parseInt(rawValue, 10);
-                          onChange(isNaN(num) ? null : num);
-                        }
-                      }}
-                      onBlur={onBlur}
-                    />
-                  )}
-                />
-                {errors.numTravelers && <p className="text-sm text-destructive mt-1">{errors.numTravelers.message}</p>}
-              </div>
-              <div>
-                <Label htmlFor="numAdults" className="mb-1 block text-sm font-medium text-foreground">Adultos</Label>
-                 <Controller
-                  name="numAdults"
-                  control={control}
-                  render={({ field: { onChange, onBlur, value, name, ref } }) => (
-                    <Input
-                      id="numAdults"
-                      type="number"
-                      placeholder="1"
-                      ref={ref}
-                      name={name}
-                      value={value ?? ''}
-                      onChange={e => {
-                        const rawValue = e.target.value;
-                        if (rawValue === '') {
-                          onChange(null);
-                        } else {
-                          const num = parseInt(rawValue, 10);
-                          onChange(isNaN(num) ? null : num);
-                        }
-                      }}
-                      onBlur={onBlur}
-                    />
-                  )}
-                />
-                {errors.numAdults && <p className="text-sm text-destructive mt-1">{errors.numAdults.message}</p>}
-              </div>
-              <div>
-                <Label htmlFor="numChildren" className="mb-1 block text-sm font-medium text-foreground">Niños</Label>
-                <Controller
-                  name="numChildren"
-                  control={control}
-                  render={({ field: { onChange, onBlur, value, name, ref } }) => (
-                    <Input
-                      id="numChildren"
-                      type="number"
-                      placeholder="0"
-                      ref={ref}
-                      name={name}
-                      value={value ?? ''}
-                      onChange={e => {
-                        const rawValue = e.target.value;
-                        if (rawValue === '') {
-                          onChange(null);
-                        } else {
-                          const num = parseInt(rawValue, 10);
-                          onChange(isNaN(num) ? null : num);
-                        }
-                      }}
-                      onBlur={onBlur}
-                    />
-                  )}
-                />
-                {errors.numChildren && <p className="text-sm text-destructive mt-1">{errors.numChildren.message}</p>}
-              </div>
+
+            <div>
+              <Label>Viajeros</Label>
+              <Popover>
+                  <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal">
+                          {travelerSummary()}
+                      </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 p-0" align="start">
+                      <div className="p-4 space-y-4">
+                           {/* Adults */}
+                           <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <User className="h-5 w-5 text-muted-foreground"/>
+                                    <div>
+                                        <p className="font-medium">Adultos</p>
+                                        <p className="text-xs text-muted-foreground">12 o más años</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setValue('numAdults', Math.max(1, numAdults - 1))} disabled={numAdults <= 1}>
+                                        <Minus className="h-4 w-4"/>
+                                    </Button>
+                                    <span className="w-8 text-center font-bold">{numAdults}</span>
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setValue('numAdults', numAdults + 1)}>
+                                        <Plus className="h-4 w-4"/>
+                                    </Button>
+                                </div>
+                           </div>
+
+                           <Separator/>
+
+                           {/* Children */}
+                           <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <Child className="h-5 w-5 text-muted-foreground"/>
+                                    <div>
+                                        <p className="font-medium">Niños</p>
+                                        <p className="text-xs text-muted-foreground">De 2 a 11 años</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setValue('numChildren', Math.max(0, numChildren - 1))} disabled={numChildren <= 0}>
+                                        <Minus className="h-4 w-4"/>
+                                    </Button>
+                                    <span className="w-8 text-center font-bold">{numChildren}</span>
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setValue('numChildren', numChildren + 1)}>
+                                        <Plus className="h-4 w-4"/>
+                                    </Button>
+                                </div>
+                           </div>
+
+                           <Separator/>
+
+                            {/* Infants */}
+                           <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <Baby className="h-5 w-5 text-muted-foreground"/>
+                                    <div>
+                                        <p className="font-medium">Bebés</p>
+                                        <p className="text-xs text-muted-foreground">Menores de 2 años</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setValue('numInfants', Math.max(0, numInfants - 1))} disabled={numInfants <= 0}>
+                                        <Minus className="h-4 w-4"/>
+                                    </Button>
+                                    <span className="w-8 text-center font-bold">{numInfants}</span>
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setValue('numInfants', numInfants + 1)} disabled={numInfants >= numAdults}>
+                                        <Plus className="h-4 w-4"/>
+                                    </Button>
+                                </div>
+                           </div>
+                      </div>
+                      {errors.numInfants?.message && (
+                        <Alert variant="destructive" className="m-4 mt-0 rounded-md border-red-500/50 text-red-900 dark:text-red-200 [&>svg]:text-red-500 dark:[&>svg]:text-red-300">
+                          <Info className="h-4 w-4" />
+                          <AlertDescription className="text-xs">
+                            {errors.numInfants.message}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                  </PopoverContent>
+              </Popover>
+              {(errors.numAdults || errors.numChildren || errors.numTravelers) && (
+                <p className="text-sm text-destructive mt-1">
+                    {errors.numAdults?.message || errors.numChildren?.message || errors.numTravelers?.message}
+                </p>
+              )}
             </div>
+
             <div>
               <Label htmlFor="childrenAges" className="mb-1 block text-sm font-medium text-foreground">Edades de los Niños (opcional, sep. por coma)</Label>
               <Controller name="childrenAges" control={control} render={({ field }) => <Input id="childrenAges" placeholder="Ej: 5, 10" {...field} />} />
@@ -427,9 +462,9 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
             <p className="text-sm text-muted-foreground text-center">Paso {step} de {totalSteps}</p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmitHandler)} className="px-6 pb-6 space-y-6 overflow-y-auto max-h-[60vh]">
+        <div className="px-6 pb-6 space-y-6 overflow-y-auto max-h-[60vh]">
           {renderStepContent()}
-        </form>
+        </div>
 
         <DialogFooter className="p-6 pt-4 border-t flex justify-between w-full">
           {step > 1 ? (

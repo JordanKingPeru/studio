@@ -147,6 +147,8 @@ export interface TripDetails extends Omit<Trip, 'ownerUid'> {
   paises: string[];
   activities: Activity[];
   expenses: Expense[];
+  trabajo_ini?: string;
+  trabajo_fin?: string;
 }
 
 
@@ -192,6 +194,7 @@ export interface CreateTripWizardData {
   numTravelers?: number;
   numAdults?: number;
   numChildren?: number;
+  numInfants?: number;
   childrenAges?: string;
 }
 
@@ -208,4 +211,3 @@ export type ExpenseFormData = {
     tripId: string;
     id?: string;
 };
-

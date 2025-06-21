@@ -21,6 +21,7 @@ const GenerateTripCoverImageInputSchema = z.object({
   numTravelers: z.number().optional().describe('Número total de personas que viajan.'),
   numAdults: z.number().optional().describe('Número de adultos.'),
   numChildren: z.number().optional().describe('Número de niños.'),
+  numInfants: z.number().optional().describe('Número de bebés (menores de 2 años).'),
   childrenAges: z.string().optional().describe('Edades de los niños, separadas por coma (ej: "5, 8, 12").'),
 });
 export type GenerateTripCoverImageInput = z.infer<typeof GenerateTripCoverImageInputSchema>;
@@ -52,6 +53,7 @@ Detalles del Viaje:
 - Grupo de Viajeros: {{numTravelers}} personas en total.
   {{#if numAdults}} - Adultos: {{numAdults}}{{/if}}
   {{#if numChildren}} - Niños: {{numChildren}}{{#if childrenAges}} (Edades: {{childrenAges}}){{/if}}{{/if}}
+  {{#if numInfants}} - Bebés: {{numInfants}}{{/if}}
 {{/if}}
 
 Consideraciones para la imagen:
@@ -90,7 +92,7 @@ const generateTripCoverImageFlow = ai.defineFlow(
 
     // 3. Pass the extracted text prompt directly to ai.generate for image generation.
     const { media } = await ai.generate({
-      model: 'googleai/gemini-2.0-flash-exp',
+      model: 'googleai/gemini-2.0-flash-preview-image-generation',
       prompt: promptText, // Use the rendered text prompt
       config: {
         responseModalities: ['TEXT', 'IMAGE'], // Crucial for image generation

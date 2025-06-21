@@ -271,23 +271,22 @@ export default function MyTripsPage() {
       return;
     }
     
-    // Re-check limit before actual creation as a safeguard
     const currentOwnedCount = trips.filter(trip => trip.ownerUid === currentUser.uid).length;
     const currentMaxTrips = typeof currentUser.subscription.maxTrips === 'number' ? currentUser.subscription.maxTrips : 1;
 
     if (currentOwnedCount >= currentMaxTrips) {
-        toast({
-            variant: "destructive",
-            title: "Límite Alcanzado",
-            description: `Has alcanzado el límite de ${currentMaxTrips} viajes para tu plan. No se pudo crear el viaje.`,
-        });
-        setIsWizardOpen(false);
+        setIsLimitReachedDialogOpen(true);
         return;
     }
 
     let finalCoverImageUrl = wizardData.coverImageUrl || '';
     const base64CoverImage = wizardData.coverImageUrl && wizardData.coverImageUrl.startsWith('data:image') ? wizardData.coverImageUrl : null;
 
+    const familiaParts = [];
+    if (wizardData.numAdults) familiaParts.push(`${wizardData.numAdults} Adulto${wizardData.numAdults > 1 ? 's' : ''}`);
+    if (wizardData.numChildren) familiaParts.push(`${wizardData.numChildren} Niño${wizardData.numChildren > 1 ? 's' : ''}`);
+    if (wizardData.numInfants) familiaParts.push(`${wizardData.numInfants} Bebé${wizardData.numInfants > 1 ? 's' : ''}`);
+    
     const tripToSaveInFirestore = {
       name: wizardData.name,
       startDate: wizardData.startDate,
@@ -297,7 +296,7 @@ export default function MyTripsPage() {
       ownerUid: currentUser.uid,
       editorUids: [],
       pendingInvites: wizardData.pendingInvites || [],
-      familia: `${wizardData.numAdults || 0} Adultos, ${wizardData.numChildren || 0} Niños`,
+      familia: familiaParts.join(', ') || 'Viajeros no especificados',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       coverImageUrl: base64CoverImage ? '' : finalCoverImageUrl,
