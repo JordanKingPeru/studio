@@ -13,7 +13,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { CreateTripWizardData } from '@/lib/types';
 import { TripType, TripStyle, tripTypeTranslations, tripStyleTranslations } from '@/lib/types';
-import { ChevronLeft, ChevronRight, ArrowRight, Rocket, Palette, Users, Sparkles, Image as ImageIconLucide, Loader2, Minus, Plus, User, Child, Baby, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowRight, Rocket, Palette, Users, Sparkles, Image as ImageIconLucide, Loader2, Minus, Plus, User, UserRound, Baby, Info } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { generateTripCoverImage, type GenerateTripCoverImageInput } from '@/ai/flows/generate-trip-cover-image';
 import { useToast } from "@/hooks/use-toast";
@@ -282,7 +282,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
                            {/* Children */}
                            <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <Child className="h-5 w-5 text-muted-foreground"/>
+                                    <UserRound className="h-5 w-5 text-muted-foreground"/>
                                     <div>
                                         <p className="font-medium">Niños</p>
                                         <p className="text-xs text-muted-foreground">De 2 a 11 años</p>
