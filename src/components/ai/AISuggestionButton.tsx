@@ -61,20 +61,23 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
       tripDetails: '',
     },
   });
+
+  const formattedDateForTitle = useMemo(() => {
+    if (!forDate) return '';
+    const formatted = format(parseISO(forDate), "EEEE, d 'de' MMMM", { locale: es });
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+  }, [forDate]);
   
   useEffect(() => {
     if (isOpen) {
-        // Determine the city for the given date to pre-select it
         const cityForDate = currentTripCities.find(c => {
             const arrival = parseISO(c.arrivalDate);
             const departure = parseISO(c.departureDate);
             return isWithinInterval(parseISO(forDate), { start: arrival, end: departure });
-        }) || currentTripCities[0]; // Fallback to the first city
+        }) || currentTripCities[0];
 
         const initialCityName = cityForDate?.name || '';
-        const formattedDate = format(parseISO(forDate), "EEEE, d 'de' MMMM", { locale: es });
-
-        const detailsText = `Viaje para ${tripFamilia} a ${initialCityName}. La sugerencia debe ser específicamente para el día ${formattedDate}.`;
+        const detailsText = `Viaje para ${tripFamilia} a ${initialCityName}.`;
         
         form.reset({
             city: initialCityName,
@@ -85,7 +88,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
         setSuggestion(null);
         setError(null);
         
-        setSuggestedDate(forDate); // The suggested activity will default to this day
+        setSuggestedDate(forDate);
         setSuggestedTime("12:00");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -149,103 +152,102 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
           Recomendar con IA
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg rounded-xl shadow-2xl">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-lg rounded-xl shadow-2xl p-0 flex flex-col max-h-[90vh]">
+        <DialogHeader className="p-6 pb-4 border-b flex-shrink-0">
           <DialogTitle className="font-headline text-2xl text-primary flex items-center">
-            <BrainCircuit className="mr-2" />Sugerencia de Actividad con IA
+            <BrainCircuit className="mr-2" />Sugerencia de IA para {formattedDateForTitle}
           </DialogTitle>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleGenerateSuggestion)} className="space-y-6 py-2">
-            <FormField
-              control={form.control}
-              name="city"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Ciudad</FormLabel>
-                  <Select 
-                    onValueChange={(value) => {
-                      field.onChange(value); 
-                      const formattedDate = format(parseISO(forDate), "EEEE, d 'de' MMMM", { locale: es });
-                      const citySpecificTripDetails = `Viaje para ${tripFamilia} a ${value}. La sugerencia debe ser específicamente para el día ${formattedDate}.`;
-                      form.setValue('tripDetails', citySpecificTripDetails, { shouldValidate: true, shouldDirty: true });
-                      setSuggestedDate(forDate);
-                    }} 
-                    value={field.value}
-                  >
-                    <FormControl><SelectTrigger><SelectValue placeholder="Selecciona ciudad" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      {currentTripCities.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                  <FormItem>
-                      <FormLabel>Categoría (Opcional)</FormLabel>
+        
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleGenerateSuggestion)} className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="city"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ciudad</FormLabel>
                       <Select 
-                        onValueChange={(value) => field.onChange(value === 'any' ? '' : value)} 
-                        value={field.value || 'any'}
+                        onValueChange={(value) => {
+                          field.onChange(value); 
+                          const citySpecificTripDetails = `Viaje para ${tripFamilia} a ${value}.`;
+                          form.setValue('tripDetails', citySpecificTripDetails, { shouldValidate: true, shouldDirty: true });
+                          setSuggestedDate(forDate);
+                        }} 
+                        value={field.value}
                       >
-                          <FormControl><SelectTrigger><SelectValue placeholder="Cualquier categoría" /></SelectTrigger></FormControl>
-                          <SelectContent>
-                              <SelectItem value="any">Cualquier categoría</SelectItem>
-                              {activityCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-                          </SelectContent>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Selecciona ciudad" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          {currentTripCities.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                        </SelectContent>
                       </Select>
-                      <FormDescription>Filtra la sugerencia por una categoría específica.</FormDescription>
                       <FormMessage />
-                  </FormItem>
-              )}
-            />
-            <FormField control={form.control} name="interests" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Intereses (opcional)</FormLabel>
-                  <FormControl><Input placeholder="Ej: arte, parques" {...field} /></FormControl>
-                  <FormDescription>Ayuda a la IA a encontrar mejores actividades.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-            )} />
-            <FormField control={form.control} name="tripDetails" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Detalles del Viaje</FormLabel>
-                  <FormControl><Textarea rows={3} {...field} /></FormControl>
-                  <FormDescription>Contexto para la IA.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-            )} />
-            <Button type="submit" disabled={isLoading} className="w-full">
-              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
-              {isLoading ? 'Generando...' : 'Obtener Sugerencia'}
-            </Button>
-          </form>
-        </Form>
-        {error && (<Alert variant="destructive" className="mt-4"><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>)}
-        {suggestion && !isLoading && (
-          <div className="mt-6 p-4 border rounded-lg bg-muted/50 space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold font-headline text-primary">{suggestion.activity}</h3>
-              <p className="text-sm text-foreground/80">{suggestion.reason}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                    <Label htmlFor="suggestedDateAI" className="flex items-center text-sm font-medium"><CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />Fecha</Label>
-                    <Input id="suggestedDateAI" type="date" value={suggestedDate} onChange={(e) => setSuggestedDate(e.target.value)} min={tripDates.inicio} max={tripDates.fin} className="text-sm"/>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="category"
+                  render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Categoría (Opcional)</FormLabel>
+                          <Select 
+                            onValueChange={(value) => field.onChange(value === 'any' ? '' : value)} 
+                            value={field.value || 'any'}
+                          >
+                              <FormControl><SelectTrigger><SelectValue placeholder="Cualquier categoría" /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                  <SelectItem value="any">Cualquier categoría</SelectItem>
+                                  {activityCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                              </SelectContent>
+                          </Select>
+                          <FormDescription>Filtra la sugerencia por una categoría específica.</FormDescription>
+                          <FormMessage />
+                      </FormItem>
+                  )}
+                />
+                <FormField control={form.control} name="interests" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Intereses (opcional)</FormLabel>
+                      <FormControl><Input placeholder="Ej: arte, parques" {...field} /></FormControl>
+                      <FormDescription>Ayuda a la IA a encontrar mejores actividades.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="tripDetails" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Detalles del Viaje</FormLabel>
+                      <FormControl><Textarea rows={3} {...field} /></FormControl>
+                      <FormDescription>Contexto para la IA.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                )} />
+                <Button type="submit" disabled={isLoading} className="w-full">
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
+                  {isLoading ? 'Generando...' : 'Obtener Sugerencia'}
+                </Button>
+              </form>
+            </Form>
+            {error && (<Alert variant="destructive" className="mt-4"><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>)}
+            {suggestion && !isLoading && (
+              <div className="mt-6 p-4 border rounded-lg bg-muted/50 space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold font-headline text-primary">{suggestion.activity}</h3>
+                  <p className="text-sm text-foreground/80">{suggestion.reason}</p>
                 </div>
+                
                 <div className="space-y-1">
-                    <Label htmlFor="suggestedTimeAI" className="flex items-center text-sm font-medium"><ClockIcon className="mr-2 h-4 w-4 text-muted-foreground" />Hora</Label>
+                    <Label htmlFor="suggestedTimeAI" className="flex items-center text-sm font-medium"><ClockIcon className="mr-2 h-4 w-4 text-muted-foreground" />Confirmar Hora</Label>
                     <Input id="suggestedTimeAI" type="time" value={suggestedTime} onChange={(e) => setSuggestedTime(e.target.value)} className="text-sm"/>
                 </div>
-            </div>
-            <Button onClick={handleAddSuggestedActivity} className="w-full" variant="default" disabled={isLoading}>Añadir al Itinerario</Button>
-          </div>
-        )}
-        <DialogFooter className="mt-4">
+
+                <Button onClick={handleAddSuggestedActivity} className="w-full" variant="default" disabled={isLoading}>Añadir al Itinerario</Button>
+              </div>
+            )}
+        </div>
+        
+        <DialogFooter className="p-6 pt-4 border-t flex-shrink-0">
             <DialogClose asChild><Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cerrar</Button></DialogClose>
         </DialogFooter>
       </DialogContent>
