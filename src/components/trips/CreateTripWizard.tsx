@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { CreateTripWizardData } from '@/lib/types';
 import { TripType, TripStyle, tripTypeTranslations, tripStyleTranslations } from '@/lib/types';
-import { ChevronLeft, ChevronRight, ArrowRight, Rocket, Palette, Users, Sparkles, Image as ImageIconLucide, Loader2, Minus, Plus, User, UserRound, Baby, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowRight, Rocket, Palette, Users, Sparkles, Image as ImageIconLucide, Loader2, Minus, Plus, User, UserRound, Baby, Info, Calendar as CalendarIcon } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { generateTripCoverImage, type GenerateTripCoverImageInput } from '@/ai/flows/generate-trip-cover-image';
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +23,68 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
+import { Calendar } from '@/components/ui/calendar';
+import type { DateRange } from 'react-day-picker';
+import { format, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
+
+// --- New DateRangePicker Component ---
+interface DateRangePickerProps extends React.ComponentProps<'div'> {
+  dateRange: DateRange | undefined;
+  onDateChange: (dateRange: DateRange | undefined) => void;
+  tripStartDate: string;
+}
+
+function DateRangePicker({ className, dateRange, onDateChange, tripStartDate }: DateRangePickerProps) {
+  return (
+    <div className={cn('grid gap-2', className)}>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            id="date"
+            variant={'outline'}
+            className={cn(
+              'w-full justify-start text-left font-normal h-auto p-0',
+              !dateRange?.from && 'text-muted-foreground'
+            )}
+          >
+            <div className="flex items-center divide-x divide-border w-full">
+              <div className="flex items-center gap-2 px-3 py-2">
+                 <CalendarIcon className="h-4 w-4" />
+                 {dateRange?.from ? (
+                    format(dateRange.from, "d MMM, yyyy", { locale: es })
+                 ) : (
+                    <span>Fecha de inicio</span>
+                 )}
+              </div>
+              <div className="flex items-center gap-2 px-3 py-2">
+                  <CalendarIcon className="h-4 w-4" />
+                  {dateRange?.to ? (
+                    format(dateRange.to, "d MMM, yyyy", { locale: es })
+                  ) : (
+                    <span>Fecha de fin</span>
+                  )}
+              </div>
+            </div>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            initialFocus
+            mode="range"
+            defaultMonth={dateRange?.from || parseISO(tripStartDate)}
+            selected={dateRange}
+            onSelect={onDateChange}
+            numberOfMonths={2}
+            locale={es}
+            disabled={{ before: new Date() }}
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 
 const tripWizardSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres.").max(100),
@@ -98,6 +160,23 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
   const numAdults = watch('numAdults') ?? 1;
   const numChildren = watch('numChildren') ?? 0;
   const numInfants = watch('numInfants') ?? 0;
+  
+  const startDateValue = watch('startDate');
+  const endDateValue = watch('endDate');
+
+  const dateRangeForPicker: DateRange | undefined = useMemo(() => {
+      try {
+          const from = startDateValue ? parseISO(startDateValue) : undefined;
+          const to = endDateValue ? parseISO(endDateValue) : undefined;
+          if (from && isNaN(from.getTime())) throw new Error("Invalid start date");
+          if (to && isNaN(to.getTime())) throw new Error("Invalid end date");
+          return { from, to };
+      } catch(e) {
+          console.error("Error parsing date range for picker:", e);
+          return { from: undefined, to: undefined };
+      }
+  }, [startDateValue, endDateValue]);
+
 
   useEffect(() => {
      setValue('numTravelers', (numAdults) + (numChildren) + (numInfants));
@@ -234,17 +313,22 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
               <Controller name="name" control={control} render={({ field }) => <Input id="name" placeholder="Ej: Aventura por el Sudeste Asiático" {...field} />} />
               {errors.name && <p className="text-sm text-destructive mt-1">{errors.name.message}</p>}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="startDate" className="mb-1 block text-sm font-medium text-foreground">Fecha de Inicio</Label>
-                <Controller name="startDate" control={control} render={({ field }) => <Input id="startDate" type="date" {...field} />} />
-                {errors.startDate && <p className="text-sm text-destructive mt-1">{errors.startDate.message}</p>}
-              </div>
-              <div>
-                <Label htmlFor="endDate" className="mb-1 block text-sm font-medium text-foreground">Fecha de Fin</Label>
-                <Controller name="endDate" control={control} render={({ field }) => <Input id="endDate" type="date" {...field} />} />
-                {errors.endDate && <p className="text-sm text-destructive mt-1">{errors.endDate.message}</p>}
-              </div>
+            
+            <div className="space-y-1">
+                <Label className="text-sm font-medium text-foreground">Fechas del Viaje</Label>
+                <DateRangePicker
+                    dateRange={dateRangeForPicker}
+                    onDateChange={(newRange) => {
+                        setValue('startDate', newRange?.from ? format(newRange.from, 'yyyy-MM-dd') : '', { shouldValidate: true });
+                        setValue('endDate', newRange?.to ? format(newRange.to, 'yyyy-MM-dd') : '', { shouldValidate: true });
+                    }}
+                    tripStartDate={todayDate}
+                />
+                {(errors.startDate || errors.endDate) && (
+                    <p className="text-sm text-destructive mt-1">
+                        {errors.startDate?.message || errors.endDate?.message}
+                    </p>
+                )}
             </div>
 
             <div>
