@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { addDays, format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input as ShadcnInput } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -72,17 +73,20 @@ interface AddCityDialogProps {
   onOpenChange: (isOpen: boolean) => void;
   onSaveCity: (cityData: CityFormData) => Promise<void>;
   initialData?: City | null;
-  tripId: string; // Added tripId
+  tripId: string;
+  tripStartDate: string;
+  existingCities: City[];
 }
 
-const defaultNewCityRHFValues: Omit<CityFormData, 'id' | 'name' | 'country' | 'lat' | 'lng' | 'tripId'> = {
-  arrivalDate: new Date().toISOString().split('T')[0],
-  departureDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  notes: '',
-  budget: undefined,
-};
-
-export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initialData, tripId }: AddCityDialogProps) {
+export default function AddCityDialog({ 
+    isOpen, 
+    onOpenChange, 
+    onSaveCity, 
+    initialData, 
+    tripId,
+    tripStartDate,
+    existingCities
+}: AddCityDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -96,14 +100,27 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
 
   const form = useForm<CityFormData>({
     resolver: zodResolver(citySaveSchema),
-    defaultValues: initialData 
-      ? { ...initialData, tripId: initialData.tripId || tripId, lat: initialData.coordinates.lat, lng: initialData.coordinates.lng, budget: initialData.budget ?? undefined }
-      : { ...defaultNewCityRHFValues, tripId: tripId, name: '', country: '', lat: 0, lng: 0 },
+    defaultValues: { 
+      tripId: tripId, 
+      name: '', 
+      country: '', 
+      lat: 0, 
+      lng: 0,
+      arrivalDate: tripStartDate,
+      departureDate: format(addDays(parseISO(tripStartDate), 4), 'yyyy-MM-dd'),
+      notes: '',
+      budget: undefined,
+    },
   });
 
   useEffect(() => {
     if (isOpen) {
+      // Clear previous search state regardless of mode
+      setSearchResults([]);
+      setIsSearching(false);
+      
       if (initialData) {
+        // Logic for editing an existing city
         form.reset({
           id: initialData.id,
           tripId: initialData.tripId || tripId,
@@ -127,15 +144,43 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         });
         setAccordionValue(["city-details-item"]);
       } else {
-        form.reset({ ...defaultNewCityRHFValues, tripId: tripId, name: '', country: '', lat: 0, lng: 0 });
+        // NEW LOGIC for adding a new city
+        let defaultArrivalDate: string;
+        let defaultDepartureDate: string;
+
+        const sortedCities = [...existingCities]
+            .filter(c => c.tripId === tripId)
+            .sort((a, b) => new Date(a.departureDate).getTime() - new Date(b.departureDate).getTime());
+
+        if (sortedCities.length > 0) {
+            const lastCity = sortedCities[sortedCities.length - 1];
+            const lastDepartureDate = parseISO(lastCity.departureDate);
+            defaultArrivalDate = format(addDays(lastDepartureDate, 1), 'yyyy-MM-dd');
+            defaultDepartureDate = format(addDays(lastDepartureDate, 5), 'yyyy-MM-dd'); // Default to a 4-day trip
+        } else {
+            defaultArrivalDate = tripStartDate;
+            defaultDepartureDate = format(addDays(parseISO(tripStartDate), 4), 'yyyy-MM-dd'); // Default to a 4-day trip
+        }
+        
+        form.reset({ 
+            tripId: tripId, 
+            name: '', 
+            country: '', 
+            lat: 0, 
+            lng: 0,
+            arrivalDate: defaultArrivalDate,
+            departureDate: defaultDepartureDate,
+            notes: '',
+            budget: undefined,
+        });
+        
+        // Reset UI state for new city
         setSearchTerm('');
         setSelectedPlaceDetails(null);
         setAccordionValue([]);
       }
-      setSearchResults([]);
-      setIsSearching(false);
     }
-  }, [isOpen, initialData, form, tripId]);
+  }, [isOpen, initialData, form, tripId, tripStartDate, existingCities]);
 
   const handleSearch = useCallback(async () => {
     if (!placesLibrary) {

@@ -89,7 +89,9 @@ export default function MapSection({
           onOpenChange={setIsCityFormOpen}
           onSaveCity={onSaveCity}
           initialData={editingCity}
-          tripId={tripId} // Pass tripId to AddCityDialog
+          tripId={tripId}
+          tripStartDate={tripData.startDate}
+          existingCities={currentTripCities}
       />
     </SectionCard>
   );
