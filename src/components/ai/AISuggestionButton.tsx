@@ -245,7 +245,7 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
             )}
         </div>
         
-        <DialogFooter className="p-6 pt-4 border-t flex-shrink-0 bg-background sticky bottom-0">
+        <DialogFooter className="p-6 pt-4 border-t flex-shrink-0 bg-background">
             <DialogClose asChild><Button type="button" variant="outline">Cerrar</Button></DialogClose>
             <Button type="submit" form={formId} disabled={isLoading}>
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
