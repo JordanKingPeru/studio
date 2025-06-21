@@ -27,7 +27,6 @@ import {
   CardDescription as ShadcnCardDescription
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import Image from 'next/image';
 import { Map, AdvancedMarker, InfoWindow, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -229,140 +228,140 @@ export default function AddCityDialog({ isOpen, onOpenChange, onSaveCity, initia
         }
         onOpenChange(open);
     }}>
-      <DialogContent className="sm:max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] p-4 sm:p-6 overflow-hidden">
-        <DialogHeader className="flex-shrink-0 pb-2">
-          <DialogTitle className="font-headline text-2xl text-primary flex items-center">
-            <FormIcon size={22} className="mr-2" />{dialogTitleText}
-          </DialogTitle>
-          <DialogDescription>Busca una ciudad y luego completa los detalles.</DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-2xl p-0">
+        <div className="flex flex-col h-full max-h-[90vh]">
+            <DialogHeader className="p-4 sm:p-6 pb-2 flex-shrink-0">
+                <DialogTitle className="font-headline text-2xl text-primary flex items-center">
+                    <FormIcon size={22} className="mr-2" />{dialogTitleText}
+                </DialogTitle>
+                <DialogDescription>Busca una ciudad y luego completa los detalles.</DialogDescription>
+            </DialogHeader>
 
-        <div className="flex-shrink-0 pt-2 pb-4">
-            <Label htmlFor="city-search-input" className="flex items-center text-sm font-medium mb-2">
-                <Search className="mr-2 h-4 w-4 text-muted-foreground" />Buscar Ciudad
-            </Label>
-            <div className="flex flex-col sm:flex-row gap-2">
-                <ShadcnInput 
-                    id="city-search-input" 
-                    placeholder="Ej., París, Lima" 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); }}}
-                    className="flex-grow text-base sm:text-sm" 
-                />
-                <Button 
-                    onClick={handleSearch} 
-                    disabled={!searchTerm.trim() || !placesLibrary || isSearching} 
-                    className="shrink-0"
-                >
-                  {isSearching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isSearching ? 'Buscando...' : 'Buscar'}
-                </Button>
+            <div className="px-4 sm:px-6 pt-2 pb-4 flex-shrink-0">
+                <Label htmlFor="city-search-input" className="flex items-center text-sm font-medium mb-2">
+                    <Search className="mr-2 h-4 w-4 text-muted-foreground" />Buscar Ciudad
+                </Label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <ShadcnInput 
+                        id="city-search-input" 
+                        placeholder="Ej., París, Lima" 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); }}}
+                        className="flex-grow text-base sm:text-sm" 
+                    />
+                    <Button 
+                        onClick={handleSearch} 
+                        disabled={!searchTerm.trim() || !placesLibrary || isSearching} 
+                        className="shrink-0"
+                    >
+                    {isSearching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isSearching ? 'Buscando...' : 'Buscar'}
+                    </Button>
+                </div>
             </div>
-        </div>
-        
-        <div className="flex-1 min-h-0"> {/* Scroll container */}
-          <ScrollArea className="h-full w-full">
-            <div className="px-1 py-4 space-y-4">
-              {searchResults.length > 0 && !selectedPlaceDetails && (
-                <Card className="shadow-md">
-                  <CardHeader className="pb-2 pt-3">
-                    <ShadcnCardTitle className="text-base sm:text-lg flex items-center">
-                        <List className="mr-2 h-5 w-5 text-primary" />Resultados ({searchResults.length})
-                    </ShadcnCardTitle>
-                    <ShadcnCardDescription className="text-xs sm:text-sm">Haz clic en un lugar.</ShadcnCardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2 py-2">
-                    {searchResults.map((place) => (
-                      <Button key={place.id} variant="outline" className="w-full justify-start text-left h-auto py-1.5 sm:py-2 px-2 sm:px-3"
-                        onClick={() => handlePlaceSelect(place)}>
-                        <div className="flex flex-col min-w-0">
-                            <span className="font-semibold text-sm text-foreground truncate">{place.displayName || 'N/A'}</span>
-                            <span className="text-xs text-muted-foreground truncate">{place.formattedAddress || 'N/A'}</span>
-                        </div>
-                      </Button>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
 
-              {selectedPlaceDetails && (
-                <Accordion type="multiple" value={accordionValue} onValueChange={setAccordionValue} className="w-full">
-                  <AccordionItem value="city-details-item" className="border-b-0">
-                     <Card className="shadow-lg border-primary">
-                      <AccordionTrigger className="w-full px-4 py-3 hover:no-underline data-[state=open]:bg-muted/10 rounded-t-lg">
-                          <div className="flex justify-between items-center w-full min-w-0">
-                              <div className="flex items-center text-base sm:text-lg min-w-0">
-                                  <Info className="mr-2 h-5 w-5 text-primary shrink-0" />
-                                  <span className="font-semibold truncate" title={accordionTriggerTitle}>{accordionTriggerTitle}</span>
-                              </div>
-                          </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="border-t">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs sm:text-sm py-3 px-4">
-                            <div className="space-y-2">
-                                <p className="flex items-start"><Earth className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground shrink-0" /><strong className="mr-1.5">País:</strong> <span className="break-words">{selectedPlaceDetails.country || 'N/A'}</span></p>
-                                <p className="flex items-start"><MapPinIconLucide className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground shrink-0" /><strong className="mr-1.5">Lugar:</strong> <span className="break-words">{selectedPlaceDetails.formattedAddress || selectedPlaceDetails.displayName || 'N/A'}</span></p>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="px-4 sm:px-6 py-4 space-y-4">
+                  {searchResults.length > 0 && !selectedPlaceDetails && (
+                    <Card className="shadow-md">
+                      <CardHeader className="pb-2 pt-3">
+                        <ShadcnCardTitle className="text-base sm:text-lg flex items-center">
+                            <List className="mr-2 h-5 w-5 text-primary" />Resultados ({searchResults.length})
+                        </ShadcnCardTitle>
+                        <ShadcnCardDescription className="text-xs sm:text-sm">Haz clic en un lugar.</ShadcnCardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-2 py-2">
+                        {searchResults.map((place) => (
+                          <Button key={place.id} variant="outline" className="w-full justify-start text-left h-auto py-1.5 sm:py-2 px-2 sm:px-3"
+                            onClick={() => handlePlaceSelect(place)}>
+                            <div className="flex flex-col min-w-0">
+                                <span className="font-semibold text-sm text-foreground truncate">{place.displayName || 'N/A'}</span>
+                                <span className="text-xs text-muted-foreground truncate">{place.formattedAddress || 'N/A'}</span>
                             </div>
-                            <div className="space-y-2">
-                                <p className="flex items-start"><LocateFixed className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground shrink-0" /><strong className="mr-1.5">Lat:</strong> {selectedPlaceDetails.latitude !== undefined ? selectedPlaceDetails.latitude.toFixed(6) : 'N/A'}</p>
-                                <p className="flex items-start"><LocateFixed className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground shrink-0" /><strong className="mr-1.5">Lng:</strong> {selectedPlaceDetails.longitude !== undefined ? selectedPlaceDetails.longitude.toFixed(6) : 'N/A'}</p>
-                            </div>
-                            {selectedPlaceDetails.photos && selectedPlaceDetails.photos.length > 0 && (
-                              <div className="sm:col-span-2 pt-1">
-                                <Label className="font-semibold flex items-center text-xs sm:text-sm mb-1"><Camera className="mr-2 h-4 w-4" />Fotos:</Label>
-                                <div className="flex flex-wrap gap-2">
-                                    {selectedPlaceDetails.photos.slice(0, 5).map((photo, idx) => (
-                                        <Image key={idx} src={photo.getURI({ maxWidthPx: 100, maxHeightPx: 100 })} alt={`Foto ${idx + 1}`} width={80} height={80} className="rounded-md object-cover" data-ai-hint="city photo"/>
-                                    ))}
-                                </div>
-                              </div>
-                            )}
-                            {selectedPlaceDetails.latitude !== undefined && selectedPlaceDetails.longitude !== undefined && (
-                              <div className="sm:col-span-2 pt-1">
-                                <Label className="font-semibold flex items-center text-xs sm:text-sm mb-1"><Globe className="mr-2 h-4 w-4" />Mapa:</Label>
-                                <div className="mt-1 h-[180px] sm:h-[200px] w-full rounded-md overflow-hidden border">
-                                    <Map mapId={`dialog-map-${selectedPlaceDetails.id || Date.now()}`} center={{ lat: selectedPlaceDetails.latitude, lng: selectedPlaceDetails.longitude }} zoom={12} gestureHandling={'greedy'} disableDefaultUI={true} clickableIcons={false} zoomControl={true} className="h-full w-full">
-                                        <AdvancedMarker position={{ lat: selectedPlaceDetails.latitude, lng: selectedPlaceDetails.longitude }} />
-                                    </Map>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                      </AccordionContent>
+                          </Button>
+                        ))}
+                      </CardContent>
                     </Card>
-                  </AccordionItem>
-                </Accordion>
-              )}
-              <Separator className="my-3" />
-              <Form {...form}>
-                <form className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <FormField control={form.control} name="arrivalDate" render={({ field }) => (
-                          <FormItem><FormLabel className="flex items-center text-xs sm:text-sm"><CalendarIcon className="mr-2 h-4 w-4" />Llegada</FormLabel><FormControl><ShadcnInput type="date" {...field} className="text-sm" /></FormControl><FormMessage /></FormItem>
-                      )} />
-                      <FormField control={form.control} name="departureDate" render={({ field }) => (
-                          <FormItem><FormLabel className="flex items-center text-xs sm:text-sm"><CalendarIcon className="mr-2 h-4 w-4" />Salida</FormLabel><FormControl><ShadcnInput type="date" {...field} className="text-sm" /></FormControl><FormMessage /></FormItem>
-                      )} />
-                    </div>
-                    <FormField control={form.control} name="budget" render={({ field }) => (
-                        <FormItem><FormLabel className="flex items-center text-xs sm:text-sm"><MapPinIconLucide className="mr-2 h-4 w-4" />Presupuesto (opc.)</FormLabel>
-                        <FormControl><ShadcnInput type="number" placeholder="Ej: 1500" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} className="text-sm" /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="notes" render={({ field }) => (
-                        <FormItem><FormLabel className="flex items-center text-xs sm:text-sm"><StickyNote className="mr-2 h-4 w-4" />Notas (opc.)</FormLabel><FormControl><Textarea placeholder="Info adicional..." {...field} className="text-sm" rows={3} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                </form>
-              </Form>
+                  )}
+
+                  {selectedPlaceDetails && (
+                    <Accordion type="multiple" value={accordionValue} onValueChange={setAccordionValue} className="w-full">
+                      <AccordionItem value="city-details-item" className="border-b-0">
+                         <Card className="shadow-lg border-primary">
+                          <AccordionTrigger className="w-full px-4 py-3 hover:no-underline data-[state=open]:bg-muted/10 rounded-t-lg">
+                              <div className="flex justify-between items-center w-full min-w-0">
+                                  <div className="flex items-center text-base sm:text-lg min-w-0">
+                                      <Info className="mr-2 h-5 w-5 text-primary shrink-0" />
+                                      <span className="font-semibold truncate" title={accordionTriggerTitle}>{accordionTriggerTitle}</span>
+                                  </div>
+                              </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="border-t">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs sm:text-sm py-3 px-4">
+                                <div>
+                                    <p className="flex items-start"><Earth className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground shrink-0" /><strong className="mr-1.5 shrink-0">País:</strong> <span className="break-words">{selectedPlaceDetails.country || 'N/A'}</span></p>
+                                    <p className="flex items-start mt-2"><MapPinIconLucide className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground shrink-0" /><strong className="mr-1.5 shrink-0">Lugar:</strong> <span className="break-words">{selectedPlaceDetails.formattedAddress || selectedPlaceDetails.displayName || 'N/A'}</span></p>
+                                </div>
+                                <div>
+                                    <p className="flex items-start"><LocateFixed className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground shrink-0" /><strong className="mr-1.5">Lat:</strong> {selectedPlaceDetails.latitude !== undefined ? selectedPlaceDetails.latitude.toFixed(6) : 'N/A'}</p>
+                                    <p className="flex items-start mt-2"><LocateFixed className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground shrink-0" /><strong className="mr-1.5">Lng:</strong> {selectedPlaceDetails.longitude !== undefined ? selectedPlaceDetails.longitude.toFixed(6) : 'N/A'}</p>
+                                </div>
+                                {selectedPlaceDetails.photos && selectedPlaceDetails.photos.length > 0 && (
+                                  <div className="sm:col-span-2 pt-1">
+                                    <Label className="font-semibold flex items-center text-xs sm:text-sm mb-1"><Camera className="mr-2 h-4 w-4" />Fotos:</Label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {selectedPlaceDetails.photos.slice(0, 5).map((photo, idx) => (
+                                            <Image key={idx} src={photo.getURI({ maxWidthPx: 100, maxHeightPx: 100 })} alt={`Foto ${idx + 1}`} width={80} height={80} className="rounded-md object-cover" data-ai-hint="city photo"/>
+                                        ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {selectedPlaceDetails.latitude !== undefined && selectedPlaceDetails.longitude !== undefined && (
+                                  <div className="sm:col-span-2 pt-1">
+                                    <Label className="font-semibold flex items-center text-xs sm:text-sm mb-1"><Globe className="mr-2 h-4 w-4" />Mapa:</Label>
+                                    <div className="mt-1 h-[180px] sm:h-[200px] w-full rounded-md overflow-hidden border">
+                                        <Map mapId={`dialog-map-${selectedPlaceDetails.id || Date.now()}`} center={{ lat: selectedPlaceDetails.latitude, lng: selectedPlaceDetails.longitude }} zoom={12} gestureHandling={'greedy'} disableDefaultUI={true} clickableIcons={false} zoomControl={true} className="h-full w-full">
+                                            <AdvancedMarker position={{ lat: selectedPlaceDetails.latitude, lng: selectedPlaceDetails.longitude }} />
+                                        </Map>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                          </AccordionContent>
+                        </Card>
+                      </AccordionItem>
+                    </Accordion>
+                  )}
+                  <Separator className="my-3" />
+                  <Form {...form}>
+                    <form className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <FormField control={form.control} name="arrivalDate" render={({ field }) => (
+                              <FormItem><FormLabel className="flex items-center text-xs sm:text-sm"><CalendarIcon className="mr-2 h-4 w-4" />Llegada</FormLabel><FormControl><ShadcnInput type="date" {...field} className="text-sm" /></FormControl><FormMessage /></FormItem>
+                          )} />
+                          <FormField control={form.control} name="departureDate" render={({ field }) => (
+                              <FormItem><FormLabel className="flex items-center text-xs sm:text-sm"><CalendarIcon className="mr-2 h-4 w-4" />Salida</FormLabel><FormControl><ShadcnInput type="date" {...field} className="text-sm" /></FormControl><FormMessage /></FormItem>
+                          )} />
+                        </div>
+                        <FormField control={form.control} name="budget" render={({ field }) => (
+                            <FormItem><FormLabel className="flex items-center text-xs sm:text-sm"><MapPinIconLucide className="mr-2 h-4 w-4" />Presupuesto (opc.)</FormLabel>
+                            <FormControl><ShadcnInput type="number" placeholder="Ej: 1500" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} className="text-sm" /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name="notes" render={({ field }) => (
+                            <FormItem><FormLabel className="flex items-center text-xs sm:text-sm"><StickyNote className="mr-2 h-4 w-4" />Notas (opc.)</FormLabel><FormControl><Textarea placeholder="Info adicional..." {...field} className="text-sm" rows={3} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                    </form>
+                  </Form>
+                </div>
             </div>
-          </ScrollArea>
+            
+            <DialogFooter className="p-4 sm:p-6 pt-4 mt-auto border-t flex-shrink-0">
+              <DialogClose asChild><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button></DialogClose>
+              <Button type="button" onClick={form.handleSubmit(handleFormSubmitInternal)} disabled={isSubmitting || isSearching || (!selectedPlaceDetails && !initialData?.coordinates) || !form.formState.isValid}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{initialData ? 'Guardar Cambios' : 'Añadir Ciudad'}
+              </Button>
+            </DialogFooter>
         </div>
-        
-        <DialogFooter className="flex-shrink-0 pt-4 mt-auto border-t">
-          <DialogClose asChild><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button></DialogClose>
-          <Button type="button" onClick={form.handleSubmit(handleFormSubmitInternal)} disabled={isSubmitting || isSearching || (!selectedPlaceDetails && !initialData?.coordinates) || !form.formState.isValid}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{initialData ? 'Guardar Cambios' : 'Añadir Ciudad'}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
