@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, Plane, Briefcase, CalendarRange, ChevronDown, ChevronUp } from 'lucide-react'; // Removed RotateCcw, GripVertical
+import { CalendarDays, Plane, Briefcase, CalendarRange, ChevronDown, ChevronUp, PlusCircle } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import {
   DndContext,
@@ -29,15 +29,17 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
+import AISuggestionButton from '../ai/AISuggestionButton';
 
 interface ActivityListProps {
   activities: Activity[];
   tripData: TripDetails;
-  onEditActivity: (activity: Activity) => void;
+  onEditActivity: (activity: Partial<Activity>) => void;
   onDeleteActivity: (activityId: string) => void;
   onSetActivities: (activities: Activity[]) => void; 
   tripId: string; 
-  scrollToTodaySignal: number; // Signal to trigger scroll
+  scrollToTodaySignal: number;
+  onAddOrUpdateActivity: (activity: Activity) => Promise<void>;
 }
 
 const groupActivitiesByWeekAndDay = (
@@ -105,11 +107,9 @@ const groupActivitiesByWeekAndDay = (
         sum + day.activities.reduce((daySum, act) => daySum + (act.cost || 0), 0), 0);
 
       let isDefaultExpanded = false;
-      // Expand current week by default
       if (isWithinInterval(today, { start: weekStartDate, end: weekEndDate })) {
         isDefaultExpanded = true;
       }
-      // If today is before trip, expand first week
       else if (isBefore(today, tripStartDate) && weekStartDateStr === firstTripWeekStartDateStr) {
           isDefaultExpanded = true;
       }
@@ -130,7 +130,7 @@ const groupActivitiesByWeekAndDay = (
 };
 
 
-export default function ActivityList({ activities, tripData, onEditActivity, onDeleteActivity, onSetActivities, tripId, scrollToTodaySignal }: ActivityListProps) {
+export default function ActivityList({ activities, tripData, onEditActivity, onDeleteActivity, onSetActivities, tripId, scrollToTodaySignal, onAddOrUpdateActivity }: ActivityListProps) {
   const [processedWeeks, setProcessedWeeks] = useState<ItineraryWeek[]>([]);
   const [openWeekKeys, setOpenWeekKeys] = useState<string[]>([]);
   const [openDayKeys, setOpenDayKeys] = useState<Record<string, string[]>>({});
@@ -151,7 +151,7 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
       const week = newProcessedWeeks.find(w => w.weekStartDate === weekKey);
       if (week) {
         initialOpenDays[weekKey] = week.days
-          .filter(d => d.activities.length > 0 || dateFnsIsToday(parseISO(d.date))) // Also expand today if it has no activities
+          .filter(d => d.activities.length > 0 || dateFnsIsToday(parseISO(d.date)))
           .map(d => d.date);
       }
     });
@@ -270,11 +270,9 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
     if (todayElement) {
       const weekOfToday = processedWeeks.find(w => w.days.some(d => d.date === todayStr));
       if (weekOfToday) {
-        // Ensure week is open
         if (!openWeekKeys.includes(weekOfToday.weekStartDate)) {
           setOpenWeekKeys(prevOpenWeeks => {
             const newOpenWeeks = [...prevOpenWeeks, weekOfToday.weekStartDate];
-            // Ensure day is open after week is set to open
             setOpenDayKeys(prevOpenDays => ({
               ...prevOpenDays,
               [weekOfToday.weekStartDate]: Array.from(new Set([...(prevOpenDays[weekOfToday.weekStartDate] || []), todayStr]))
@@ -282,14 +280,12 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
             return newOpenWeeks;
           });
         } else {
-          // Week is already open, ensure day is open
           setOpenDayKeys(prevOpenDays => ({
             ...prevOpenDays,
             [weekOfToday.weekStartDate]: Array.from(new Set([...(prevOpenDays[weekOfToday.weekStartDate] || []), todayStr]))
           }));
         }
         
-        // Delay scroll to allow accordions to open
         setTimeout(() => {
           todayElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 300); 
@@ -299,15 +295,13 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
     }
   };
   
-  // Scroll on initial mount if today is in itinerary
   useEffect(() => {
-    if (processedWeeks.length > 0) { // Ensure weeks are processed
+    if (processedWeeks.length > 0) {
         attemptScrollToToday();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [processedWeeks]); // Only on initial processedWeeks, not on openWeekKeys/openDayKeys to avoid loops
+  }, [processedWeeks]);
 
-  // Scroll when signal changes (button click)
   useEffect(() => {
     if (scrollToTodaySignal > 0 && processedWeeks.length > 0) {
       attemptScrollToToday();
@@ -331,7 +325,6 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
     >
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-end items-center gap-2 mb-4 sticky top-0 bg-background/80 backdrop-blur-sm py-2 z-10">
-            {/* Removed "Ir a Hoy" button from here, it's now in ItinerarySection headerActions */}
             <div className="flex gap-2 w-full sm:w-auto">
                 <Button variant="outline" size="sm" onClick={() => handleToggleAllWeeks(true)} className="flex-1 sm:flex-initial">
                     <ChevronDown className="mr-2 h-4 w-4" /> Expandir Todo
@@ -404,7 +397,7 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
                                           <ActivityCard
                                             key={activity.id}
                                             activity={activity}
-                                            onEdit={onEditActivity}
+                                            onEdit={() => onEditActivity(activity)}
                                             onDelete={onDeleteActivity}
                                           />
                                         ))
@@ -412,6 +405,42 @@ export default function ActivityList({ activities, tripData, onEditActivity, onD
                                         <p className="text-muted-foreground text-sm py-3 px-1">Día libre o sin actividades específicas.</p>
                                       )}
                                     </SortableContext>
+                                    <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center border-t border-dashed pt-4">
+                                      <Button 
+                                          variant="outline" 
+                                          size="sm" 
+                                          className="w-full sm:w-auto"
+                                          onClick={() => {
+                                              const lastActivity = day.activities.length > 0 ? day.activities[day.activities.length - 1] : null;
+                                              let newTime = '09:00';
+                                              if (lastActivity && lastActivity.time) {
+                                                  try {
+                                                      const [hours, minutes] = lastActivity.time.split(':').map(Number);
+                                                      const lastActivityDate = new Date();
+                                                      lastActivityDate.setHours(hours + 1, minutes, 0, 0);
+                                                      newTime = format(lastActivityDate, 'HH:mm');
+                                                  } catch(e) { console.error("Could not parse time", e); }
+                                              }
+                                              
+                                              const newActivityPartial: Partial<Activity> = {
+                                                  date: day.date,
+                                                  time: newTime,
+                                                  city: day.cityInfo.split(',')[0].trim() || tripData.ciudades.find(c => c.tripId === tripId)?.[0]?.name || '',
+                                              };
+                                              onEditActivity(newActivityPartial);
+                                          }}
+                                      >
+                                          <PlusCircle size={16} className="mr-2" />
+                                          Añadir Actividad
+                                      </Button>
+                                      <AISuggestionButton 
+                                          cities={tripData.ciudades.filter(c => c.tripId === tripId)}
+                                          tripFamilia={tripData.familia || tripData.name}
+                                          tripDates={{ inicio: tripData.startDate, fin: tripData.endDate }}
+                                          onAddActivity={onAddOrUpdateActivity}
+                                          tripId={tripId}
+                                      />
+                                    </div>
                                   </div>
                                 </AccordionContent>
                               </Card>

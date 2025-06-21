@@ -47,7 +47,7 @@ interface ActivityFormProps {
   onClose: () => void;
   onSubmit: (data: Activity) => void;
   cities: City[];
-  initialData?: Activity | null;
+  initialData?: Partial<Activity> | null;
   tripId: string; 
 }
 
@@ -57,12 +57,9 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
   const [uploadError, setUploadError] = useState<string | null>(null);
   const { toast } = useToast();
   
-  const formActivityId = useMemo(() => initialData?.id || `temp-${Date.now().toString()}`, [initialData?.id]);
-
   const form = useForm<ActivityFormData>({
     resolver: zodResolver(activitySchema),
-    defaultValues: { // Default values will be overridden by useEffect if isOpen
-      id: formActivityId,
+    defaultValues: {
       tripId: tripId,
       title: '',
       date: new Date().toISOString().split('T')[0],
@@ -78,40 +75,29 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
 
   useEffect(() => {
     if (isOpen) {
-      const idToUseInForm = initialData?.id || formActivityId;
+      const idToUseInForm = initialData?.id || `temp-${Date.now().toString()}`;
       const currentTripCities = cities.filter(c => c.tripId === tripId);
       const defaultCity = currentTripCities[0]?.name || cities[0]?.name || '';
 
-      if (initialData) {
-        form.reset({
-          ...initialData,
-          tripId: initialData.tripId || tripId,
-          id: initialData.id, 
-          cost: initialData.cost ?? undefined,
-          order: initialData.order ?? Date.now(),
-          attachments: initialData.attachments || [],
-          city: initialData.city || defaultCity,
-        });
-      } else {
-         form.reset({ 
-          id: idToUseInForm, 
-          tripId: tripId,
-          title: '',
-          date: new Date().toISOString().split('T')[0],
-          time: new Date().toTimeString().substring(0,5),
-          category: 'Ocio',
-          city: defaultCity,
-          notes: '',
-          cost: undefined,
-          order: Date.now(),
-          attachments: [],
-        });
-      }
+      form.reset({
+        id: idToUseInForm,
+        tripId: tripId,
+        title: initialData?.title || '',
+        date: initialData?.date || new Date().toISOString().split('T')[0],
+        time: initialData?.time || new Date().toTimeString().substring(0, 5),
+        category: initialData?.category || 'Ocio',
+        city: initialData?.city || defaultCity,
+        notes: initialData?.notes || '',
+        cost: initialData?.cost ?? undefined,
+        order: initialData?.order ?? Date.now(),
+        attachments: initialData?.attachments || [],
+      });
+      
       setUploadingFile(null);
       setUploadProgress(null);
       setUploadError(null);
     }
-  }, [isOpen, initialData, cities, formActivityId, tripId, form.reset]);
+  }, [isOpen, initialData, cities, tripId, form]);
 
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,7 +176,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
   };
 
   const handleSubmitInternal = (data: ActivityFormData) => {
-    const finalActivityId = data.id || (initialData?.id || formActivityId);
+    const finalActivityId = initialData?.id || data.id || `temp-${Date.now()}`;
     onSubmit({
       ...data,
       id: finalActivityId,
@@ -199,11 +185,11 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
       order: data.order ?? Date.now(),
       attachments: data.attachments || [],
     });
-    onClose(); // onClose will trigger useEffect if isOpen changes
+    onClose();
   };
 
   const tripSpecificCities = useMemo(() => cities.filter(c => c.tripId === tripId), [cities, tripId]);
-
+  const activityIdForInput = form.getValues('id') || 'new';
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -211,7 +197,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
         <DialogHeader>
           <DialogTitle className="font-headline text-2xl text-primary flex items-center">
             <Edit3 className="mr-2" />
-            {initialData ? 'Editar Actividad' : 'Añadir Nueva Actividad'}
+            {initialData && initialData.id ? 'Editar Actividad' : 'Añadir Nueva Actividad'}
           </DialogTitle>
         </DialogHeader>
         <Form {...form}>
@@ -290,11 +276,11 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
             )} />
             <div className="space-y-3">
               <FormLabel className="flex items-center"><Paperclip className="mr-2 h-4 w-4 text-muted-foreground" />Adjuntos</FormLabel>
-              <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`file-upload-input-${formActivityId}`)?.click()} disabled={!!uploadingFile}>
+              <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`file-upload-input-${activityIdForInput}`)?.click()} disabled={!!uploadingFile}>
                 {uploadingFile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
                 {uploadingFile ? 'Subiendo...' : 'Seleccionar Archivo'}
               </Button>
-              <Input id={`file-upload-input-${formActivityId}`} type="file" className="hidden" onChange={handleFileSelect} disabled={!!uploadingFile} />
+              <Input id={`file-upload-input-${activityIdForInput}`} type="file" className="hidden" onChange={handleFileSelect} disabled={!!uploadingFile} />
               {uploadingFile && uploadProgress !== null && (
                 <div className="space-y-1"><div className="flex justify-between text-sm"><span className="truncate max-w-[200px]">{uploadingFile.name}</span><span>{Math.round(uploadProgress)}%</span></div><Progress value={uploadProgress} className="h-2" /></div>
               )}
@@ -319,7 +305,7 @@ export default function ActivityForm({ isOpen, onClose, onSubmit, cities, initia
               <DialogClose asChild><Button type="button" variant="outline" onClick={onClose}>Cancelar</Button></DialogClose>
               <Button type="submit" variant="default" disabled={!!uploadingFile || !form.formState.isValid}>
                 {uploadingFile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {initialData ? 'Guardar Cambios' : 'Añadir Actividad'}
+                {initialData && initialData.id ? 'Guardar Cambios' : 'Añadir Actividad'}
               </Button>
             </DialogFooter>
           </form>

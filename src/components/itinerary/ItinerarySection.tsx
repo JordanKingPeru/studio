@@ -9,7 +9,7 @@ import ActivityList from './ActivityList';
 import ActivityForm from './ActivityForm';
 import AISuggestionButton from '@/components/ai/AISuggestionButton';
 import { Button } from '@/components/ui/button';
-import { ListChecks, PlusCircle, RotateCcw, MapPinned } from 'lucide-react'; // Added MapPinned
+import { ListChecks, PlusCircle, RotateCcw, MapPinned } from 'lucide-react';
 
 interface ItinerarySectionProps {
   tripData: TripDetails; 
@@ -29,7 +29,7 @@ export default function ItinerarySection({
   tripId 
 }: ItinerarySectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [editingActivity, setEditingActivity] = useState<Partial<Activity> | null>(null);
   const [scrollToTodaySignal, setScrollToTodaySignal] = useState(0);
 
   const currentTripCities = useMemo(() => {
@@ -44,7 +44,7 @@ export default function ItinerarySection({
     setIsFormOpen(false);
   };
   
-  const handleOpenForm = (activity?: Activity) => {
+  const handleOpenForm = (activity?: Partial<Activity>) => {
     setEditingActivity(activity || null);
     setIsFormOpen(true);
   };
@@ -62,18 +62,6 @@ export default function ItinerarySection({
        <Button onClick={triggerScrollToToday} variant="outline" className="w-full sm:w-auto" disabled={!hasCities}>
         <RotateCcw size={18} className="mr-2" />
         Ir a Hoy
-      </Button>
-      <AISuggestionButton 
-        cities={currentTripCities} 
-        tripFamilia={tripData.familia || tripData.name}
-        tripDates={{ inicio: tripData.startDate, fin: tripData.endDate }}
-        onAddActivity={handleFormSubmit} 
-        tripId={tripId}
-        // disabled={!hasCities} // AISuggestionButton internally handles empty cities in dropdown
-      />
-      <Button onClick={() => handleOpenForm()} className="w-full sm:w-auto" disabled={!hasCities}>
-        <PlusCircle size={20} className="mr-2" />
-        Añadir Actividad
       </Button>
     </div>
   );
@@ -109,9 +97,10 @@ export default function ItinerarySection({
           onSetActivities={onSetActivities} 
           tripId={tripId} 
           scrollToTodaySignal={scrollToTodaySignal}
+          onAddOrUpdateActivity={onAddOrUpdateActivity}
         />
       )}
-      {hasCities && ( // Only render form if there are cities
+      {hasCities && (
         <ActivityForm 
           isOpen={isFormOpen} 
           onClose={() => { setIsFormOpen(false); setEditingActivity(null); }} 
@@ -124,5 +113,3 @@ export default function ItinerarySection({
     </SectionCard>
   );
 }
-
-    
