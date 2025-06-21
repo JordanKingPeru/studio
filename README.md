@@ -3,13 +3,13 @@
 
 ## 1. Introducción
 
-**Family Trip Planner** es una aplicación de planificación de viajes inteligente y colaborativa diseñada para ayudar a familias y grupos a organizar sus aventuras sin esfuerzo. Desde la planificación de destinos en un mapa hasta el detalle de las actividades diarias y el seguimiento de los presupuestos, esta aplicación aprovecha las tecnologías web modernas y la IA generativa para crear una experiencia de planificación fluida y atractiva.
+**Family Trip Planner** es una aplicación de planificación de viajes inteligente y colaborativa diseñada para ayudar a familias y grupos a organizar sus aventuras sin esfuerzo. Desde la planificación de destinos en un mapa hasta el detalle de las actividades diarias y el seguimiento de los presupuestos, esta aplicación aprovecha las tecnologías web modernas y la IA generativa para crear una experiencia de planificación fluida, inmersiva y atractiva.
 
 ---
 
 ## 2. Tabla de Contenidos
 
-- [Características Principales](#3-características-principales)
+- [Características Principales y Funcionalidades](#3-características-principales-y-funcionalidades)
 - [Stack Tecnológico](#4-stack-tecnológico)
 - [Paleta de Colores](#5-paleta-de-colores)
 - [Estructura del Proyecto](#6-estructura-del-proyecto)
@@ -19,19 +19,32 @@
 
 ---
 
-## 3. Características Principales
+## 3. Características Principales y Funcionalidades
 
--   **Autenticación Segura**: Registro e inicio de sesión con email/contraseña y cuenta de Google.
--   **Gestión de Viajes**: Crea, visualiza y gestiona múltiples viajes desde un panel central.
--   **Planificación Colaborativa**: Invita a amigos y familiares a ver y editar los detalles del viaje en tiempo real.
--   **Mapa Interactivo**: Añade y visualiza los destinos del viaje en un mapa dinámico de Google Maps.
--   **Itinerario Dinámico**: Organiza las actividades diarias con una intuitiva interfaz de arrastrar y soltar (drag-and-drop).
--   **Seguimiento de Presupuesto**: Registra los gastos por categoría y visualiza el consumo con gráficos interactivos.
--   **Asistencia con IA**:
-    -   **Generación de Portadas**: Crea imágenes de portada únicas y motivadoras para tus viajes.
-    -   **Recomendación de Actividades**: Obtén sugerencias inteligentes de actividades basadas en el contexto de tu viaje.
--   **Diseño Responsivo**: Totalmente funcional y estético en ordenadores, tabletas y dispositivos móviles.
--   **Tiers de Suscripción**: Sistema base para planes de usuario gratuito y pro.
+### Planificación Inteligente y Centralizada
+
+-   🚀 **Creación de Viajes Guiada**: Inicia cada nueva aventura con un asistente intuitivo que te guía paso a paso. Define el nombre, las fechas, el número de viajeros y el contexto de tu viaje (tipo y estilo), sentando las bases para una planificación personalizada desde el primer momento.
+-   🗂️ **Dashboard de Viajes Unificado**: Tu centro de mando personal. Visualiza todos tus viajes —los que creaste, a los que te invitaron y los que están pendientes de aceptación— en una única interfaz elegante. Cada viaje se presenta como una tarjeta interactiva, mostrando su portada, nombre y fechas, facilitando el acceso inmediato a tus planes.
+-   🔐 **Autenticación Segura y Sencilla**: Un portal de acceso robusto y fácil de usar. Ofrecemos registro e inicio de sesión con email/contraseña, así como una integración fluida con **Google Sign-In** para un acceso rápido y seguro, protegiendo tus planes y datos personales con los estándares de Firebase Authentication.
+-   👑 **Sistema de Suscripciones (Base)**: La aplicación está construida sobre una arquitectura que soporta diferentes niveles de usuario. El plan gratuito inicial tiene un límite de viajes, sentando las bases para futuros **planes Pro** con características ilimitadas y funcionalidades avanzadas, creando un modelo de negocio escalable.
+
+### Visualización y Organización Inmersiva
+
+-   🌍 **Mapa Interactivo Inteligente**: Transforma tu lista de destinos en un lienzo visual y dinámico. Con la potencia de **Google Maps Platform**, puedes buscar y añadir ciudades con autocompletado, visualizar tu ruta completa con marcadores y líneas conectadas, y obtener una perspectiva geográfica de tu aventura. Edita, elimina y gestiona tus paradas directamente sobre el mapa para una planificación fluida y contextual.
+-   📋 **Itinerario Dinámico con Arrastrar y Soltar**: El corazón de tu viaje. Organiza las actividades de cada día en una interfaz de arrastrar y soltar (drag-and-drop) que permite reordenar planes sobre la marcha. Cada actividad (comida, vuelo, tour, etc.) se gestiona con detalles como hora, notas, coste y adjuntos, haciendo que la planificación sea tan flexible como tu viaje.
+-   📊 **Seguimiento de Presupuesto Visual**: Mantén tus finanzas bajo control sin esfuerzo. Registra gastos manuales o importa automáticamente los costes de las actividades del itinerario. Visualiza tus gastos con **gráficos interactivos** que desglosan el consumo por ciudad y muestran la tendencia de gasto acumulado, permitiéndote tomar decisiones informadas en tiempo real.
+-   ✅ **Checklists y Herramientas Adicionales**: Asegúrate de que no se te olvide nada. Utiliza checklists personalizables para organizar tu equipaje y tareas pendientes. La sección "Más" también alberga la gestión de colaboradores y es el espacio para futuras herramientas como la gestión de documentos y resúmenes post-viaje.
+
+### Asistencia con Inteligencia Artificial Generativa
+
+-   🎨 **Generación de Portadas con IA**: Dale vida a tus viajes antes de empezar. Nuestra IA generativa, impulsada por **Google AI (Genkit)**, crea imágenes de portada únicas y motivadoras basadas en los detalles de tu viaje (destino, estilo, fechas). Cada plan tendrá una identidad visual inspiradora y fotorrealista.
+-   💡 **Recomendación Inteligente de Actividades**: ¿No sabes qué hacer en tu destino? Deja que nuestra IA te ayude. Basándose en la ciudad, tus intereses y el contexto del viaje, el sistema te sugiere actividades relevantes y emocionantes. Con un solo clic, puedes añadir estas sugerencias directamente a tu itinerario.
+
+### Colaboración y Experiencia de Usuario Superior
+
+-   🧑‍🤝‍🧑 **Planificación en Tiempo Real y Colaborativa**: Viajar en grupo nunca fue tan fácil. Invita a amigos y familiares a tu viaje por email. Los colaboradores pueden ver y editar el itinerario, el presupuesto y otros detalles en tiempo real gracias a la sincronización con **Firestore**, asegurando que todos estén siempre en la misma página.
+-   📱 **Diseño Totalmente Responsivo**: Una experiencia impecable en cualquier dispositivo. La interfaz ha sido cuidadosamente diseñada para ser tan funcional y estética en un ordenador de escritorio como en una tableta o un smartphone, permitiéndote planificar desde casa o sobre la marcha.
+-   🌗 **Temas Claro y Oscuro**: Personaliza tu entorno de planificación. Cambia entre un tema claro, limpio y enfocado, y un tema oscuro, elegante y cómodo para la vista, que se adapta a tus preferencias y al entorno de luz.
 
 ---
 
@@ -258,4 +271,3 @@ GOOGLE_AI_API_KEY=TU_GOOGLE_AI_API_KEY
 -   El código de la IA se encuentra en `src/ai/`.
 -   La variable `GOOGLE_AI_API_KEY` en tu `.env.local` es necesaria para que los flujos funcionen.
 -   Para inspeccionar los flujos de Genkit, con el servidor de desarrollo (`genkit:dev`) en marcha, ve a `http://localhost:4000`.
-
