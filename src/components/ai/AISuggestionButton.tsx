@@ -188,10 +188,13 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
               render={({ field }) => (
                   <FormItem>
                       <FormLabel>Categoría (Opcional)</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select 
+                        onValueChange={(value) => field.onChange(value === 'any' ? '' : value)} 
+                        value={field.value || 'any'}
+                      >
                           <FormControl><SelectTrigger><SelectValue placeholder="Cualquier categoría" /></SelectTrigger></FormControl>
                           <SelectContent>
-                              <SelectItem value="">Cualquier categoría</SelectItem>
+                              <SelectItem value="any">Cualquier categoría</SelectItem>
                               {activityCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                           </SelectContent>
                       </Select>
