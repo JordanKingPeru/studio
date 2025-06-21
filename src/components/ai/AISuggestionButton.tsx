@@ -12,12 +12,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Sparkles, BrainCircuit, Lightbulb, Loader2, CalendarIcon, ClockIcon } from 'lucide-react';
+import { Sparkles, BrainCircuit, Lightbulb, Loader2, Calendar as CalendarIcon, ClockIcon } from 'lucide-react';
 import { recommendActivity, type RecommendActivityInput, type RecommendActivityOutput } from '@/ai/flows/recommend-activity';
 import type { City, Activity, ActivityCategory } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isWithinInterval } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { Label } from '@/components/ui/label';
 
 const suggestionSchema = z.object({
@@ -29,14 +30,15 @@ const suggestionSchema = z.object({
 type SuggestionFormData = z.infer<typeof suggestionSchema>;
 
 interface AISuggestionButtonProps {
-  cities: City[]; // Cities for the current trip
-  tripFamilia: string; // Context for the trip (e.g. "Familia Pérez")
-  tripDates: { inicio: string; fin: string }; // Overall trip start/end dates
+  cities: City[];
+  tripFamilia: string;
+  tripDates: { inicio: string; fin: string };
   onAddActivity: (activity: Activity) => Promise<void>;
-  tripId: string; // Added tripId
+  tripId: string;
+  forDate: string; // The specific date for the suggestion
 }
 
-export default function AISuggestionButton({ cities, tripFamilia, tripDates, onAddActivity, tripId }: AISuggestionButtonProps) {
+export default function AISuggestionButton({ cities, tripFamilia, tripDates, onAddActivity, tripId, forDate }: AISuggestionButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<RecommendActivityOutput | null>(null);
@@ -51,24 +53,26 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
   const form = useForm<SuggestionFormData>({
     resolver: zodResolver(suggestionSchema),
     defaultValues: {
-      city: '', // Will be set in useEffect
+      city: '',
       interests: '',
-      tripDetails: '', // Will be set in useEffect
+      tripDetails: '',
     },
   });
   
   useEffect(() => {
     if (isOpen) {
-        const initialCityName = currentTripCities[0]?.name || '';
-        const selectedCityObject = currentTripCities.find(c => c.name === initialCityName);
+        // Determine the city for the given date to pre-select it
+        const cityForDate = currentTripCities.find(c => {
+            const arrival = parseISO(c.arrivalDate);
+            const departure = parseISO(c.departureDate);
+            return isWithinInterval(parseISO(forDate), { start: arrival, end: departure });
+        }) || currentTripCities[0]; // Fallback to the first city
 
-        let detailsText;
-        if (selectedCityObject) {
-            detailsText = `Viaje para ${tripFamilia} a ${selectedCityObject.name} (llegada: ${format(parseISO(selectedCityObject.arrivalDate), "dd/MM/yyyy")}, salida: ${format(parseISO(selectedCityObject.departureDate), "dd/MM/yyyy")}).`;
-        } else {
-            detailsText = `Viaje para ${tripFamilia} desde ${format(parseISO(tripDates.inicio), "dd/MM/yyyy")} hasta ${format(parseISO(tripDates.fin), "dd/MM/yyyy")}.`;
-        }
+        const initialCityName = cityForDate?.name || '';
+        const formattedDate = format(parseISO(forDate), "EEEE, d 'de' MMMM", { locale: es });
 
+        const detailsText = `Viaje para ${tripFamilia} a ${initialCityName}. La sugerencia debe ser específicamente para el día ${formattedDate}.`;
+        
         form.reset({
             city: initialCityName,
             interests: '',
@@ -77,12 +81,11 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
         setSuggestion(null);
         setError(null);
         
-        const cityForDate = selectedCityObject || (currentTripCities.length > 0 ? currentTripCities[0] : undefined);
-        const initialDateForOutput = cityForDate?.arrivalDate || tripDates.inicio;
-        setSuggestedDate(initialDateForOutput);
+        setSuggestedDate(forDate); // The suggested activity will default to this day
         setSuggestedTime("12:00");
     }
-  }, [isOpen, currentTripCities, tripFamilia, tripDates.inicio, tripDates.fin, form.reset]);
+  }, [isOpen, forDate, currentTripCities, tripFamilia, form.reset]);
+
 
   const handleGenerateSuggestion: SubmitHandler<SuggestionFormData> = async (data) => {
     setIsLoading(true);
@@ -91,12 +94,8 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
     try {
       const result = await recommendActivity(data); 
       setSuggestion(result);
-
-      const selectedCityInForm = form.getValues('city');
-      const selectedCityObject = currentTripCities.find(c => c.name === selectedCityInForm);
-      let initialDateForSuggestionOutput = selectedCityObject?.arrivalDate || tripDates.inicio;
       
-      setSuggestedDate(initialDateForSuggestionOutput);
+      setSuggestedDate(forDate);
       setSuggestedTime(result.suggestedTime || '12:00');
 
     } catch (err) {
@@ -140,9 +139,9 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="bg-accent hover:bg-accent/90 text-accent-foreground border-accent-foreground/20">
-          <Sparkles className="mr-2 h-5 w-5" />
-          Recomendar Actividad (IA)
+        <Button variant="outline" size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground border-accent-foreground/20 w-full sm:w-auto">
+          <Sparkles className="mr-2 h-4 w-4" />
+          Recomendar con IA
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg rounded-xl shadow-2xl">
@@ -162,18 +161,12 @@ export default function AISuggestionButton({ cities, tripFamilia, tripDates, onA
                   <Select 
                     onValueChange={(value) => {
                       field.onChange(value); 
-                      const selectedCityObject = currentTripCities.find(c => c.name === value);
-                      setSuggestedDate(selectedCityObject?.arrivalDate || tripDates.inicio); 
-                      
-                      let citySpecificTripDetails;
-                      if (selectedCityObject) {
-                        citySpecificTripDetails = `Viaje para ${tripFamilia} a ${selectedCityObject.name} (llegada: ${format(parseISO(selectedCityObject.arrivalDate), "dd/MM/yyyy")}, salida: ${format(parseISO(selectedCityObject.departureDate), "dd/MM/yyyy")}).`;
-                      } else {
-                        citySpecificTripDetails = `Viaje para ${tripFamilia} desde ${format(parseISO(tripDates.inicio), "dd/MM/yyyy")} hasta ${format(parseISO(tripDates.fin), "dd/MM/yyyy")}.`;
-                      }
+                      const formattedDate = format(parseISO(forDate), "EEEE, d 'de' MMMM", { locale: es });
+                      const citySpecificTripDetails = `Viaje para ${tripFamilia} a ${value}. La sugerencia debe ser específicamente para el día ${formattedDate}.`;
                       form.setValue('tripDetails', citySpecificTripDetails, { shouldValidate: true, shouldDirty: true });
+                      setSuggestedDate(forDate);
                     }} 
-                    value={field.value} // Use value instead of defaultValue for controlled component
+                    value={field.value}
                   >
                     <FormControl><SelectTrigger><SelectValue placeholder="Selecciona ciudad" /></SelectTrigger></FormControl>
                     <SelectContent>
