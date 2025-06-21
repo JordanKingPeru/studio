@@ -114,6 +114,15 @@ const tripWizardSchema = z.object({
 }).refine(data => (data.numInfants ?? 0) <= (data.numAdults ?? 0), {
     message: "Debe haber al menos un adulto por cada bebé.",
     path: ["numInfants"],
+}).refine(data => {
+    if ((data.numChildren ?? 0) > 0 && data.childrenAges) {
+        const ageCount = data.childrenAges.split(',').map(s => s.trim()).filter(Boolean).length;
+        return ageCount === data.numChildren;
+    }
+    return true;
+}, {
+    message: "El número de edades debe coincidir con el número de niños.",
+    path: ["childrenAges"],
 });
 
 type TripWizardFormDataInternal = z.infer<typeof tripWizardSchema>;
@@ -261,7 +270,7 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
 
   const nextStep = async () => {
     let fieldsToValidate: (keyof TripWizardFormDataInternal)[] = [];
-    if (step === 1) fieldsToValidate = ['name', 'startDate', 'endDate', 'numAdults', 'numChildren', 'numInfants'];
+    if (step === 1) fieldsToValidate = ['name', 'startDate', 'endDate', 'numAdults', 'numChildren', 'numInfants', 'childrenAges'];
     if (step === 2) fieldsToValidate = ['tripType', 'tripStyle', 'coverImageUrl'];
 
     const isValidStep = await trigger(fieldsToValidate);
@@ -422,11 +431,13 @@ export default function CreateTripWizard({ isOpen, onClose, onTripCreated }: Cre
               )}
             </div>
 
-            <div>
-              <Label htmlFor="childrenAges" className="mb-1 block text-sm font-medium text-foreground">Edades de los Niños (opcional, sep. por coma)</Label>
-              <Controller name="childrenAges" control={control} render={({ field }) => <Input id="childrenAges" placeholder="Ej: 5, 10" {...field} />} />
-              {errors.childrenAges && <p className="text-sm text-destructive mt-1">{errors.childrenAges.message}</p>}
-            </div>
+            {numChildren > 0 && (
+              <div>
+                <Label htmlFor="childrenAges" className="mb-1 block text-sm font-medium text-foreground">Edades de los Niños (separadas por coma)</Label>
+                <Controller name="childrenAges" control={control} render={({ field }) => <Input id="childrenAges" placeholder="Ej: 5, 10" {...field} />} />
+                {errors.childrenAges && <p className="text-sm text-destructive mt-1">{errors.childrenAges.message}</p>}
+              </div>
+            )}
           </div>
         );
       case 2: // Portada y Contexto
